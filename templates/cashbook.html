@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Cash Book</h1>
+<form method="POST" action="{{ url_for('add_cash_entry') }}">
+    <select name="entry_type" required>
+        <option value="in">Cash In</option>
+        <option value="out">Cash Out</option>
+    </select>
+    <input type="text" name="category" placeholder="Category (e.g., Rent, Sales, Loan)" required>
+    <input type="text" name="description" placeholder="Description">
+    <input type="number" step="any" name="amount" placeholder="Amount" required>
+    <input type="date" name="date">
+    <button type="submit">Add Entry</button>
+</form>
+
+<h2>Entries</h2>
+<table border="1">
+    <tr><th>Type</th><th>Category</th><th>Description</th><th>Amount</th><th>Date</th><th>Action</th></tr>
+    {% for entry in entries %}
+    <tr>
+        <td>{{ entry.entry_type }}</td>
+        <td>{{ entry.category }}</td>
+        <td>{{ entry.description }}</td>
+        <td>${{ "%.2f"|format(entry.amount) }}</td>
+        <td>{{ entry.date }}</td>
+        <td><a href="{{ url_for('delete_cash_entry', id=entry.id) }}" onclick="return confirm('Delete?')">Delete</a></td>
+        <a href="{{ url_for('edit_cash_entry', id=entry.id) }}">Edit</a>
+    </tr>
+    {% endfor %}
+</table>
+{% endblock %}

@@ -1,0 +1,21 @@
+<svg width="200" height="200" viewbox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <lineargradient id="grad" x1="0%" y1="0%" x2="100%">
+            <stop offset="0%" stop colour="#c90b0b"/>
+            <stop offset="100%" stop colour="#000000"/>
+        <lineargradient>
+    </defs>
+
+<!-- Background rounded rect -->
+<rect width="200" height"200" rx="40" fill="url(#grad)"/>
+
+<!-- Chart line (upward arrow) -->
+<path d="M 40 140 L 70 110 L 100 120 L 130 70 L 160 80"
+        stroke="white" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+ <!-- Arrowhead (small triangle at end of line) -->
+ <polygon points="160,80 150,90 165,95" fill="white"/>
+  
+ <!-- Dollar sign -->
+ <text x="100" y="170" font-family="Arial, sans-serif" font-size="64" font-weight="bold" fill="white" text-anchor="middle">$</text>
+</svg>

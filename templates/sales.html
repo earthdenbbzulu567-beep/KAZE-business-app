@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Sales</h1>
+
+<!-- Chart: Revenue over time -->
+{% if sales_by_date %}
+<div class="chart-container">
+    <canvas id="salesRevenueChart"></canvas>
+</div>
+{% endif %}
+
+<!-- Add Sale Form -->
+<form method="POST" action="{{ url_for('add_sale') }}">
+    <select name="stock_id" required>
+        <option value="">Select product</option>
+        {% for item in stock_items %}
+        <option value="{{ item.id }}">{{ item.product_name }} (stock: {{ item.quantity }}, price: ${{ "%.2f"|format(item.selling_price) }})</option>
+        {% endfor %}
+    </select>
+    <input type="number" step="any" name="quantity" placeholder="Quantity sold" required>
+    <input type="text" name="customer_name" placeholder="Customer name (optional)">
+    <input type="email" name="customer_email" placeholder="Customer email (optional)">
+    <input type="date" name="date">
+    <button type="submit">Record Sale</button>
+</form>
+
+<!-- Sales History Table -->
+<h2>Sales History</h2>
+<table border="1">
+    <thead>
+        <tr>
+            <th>Product</th>
+            <th>Quantity</th>
+            <th>Selling Price</th>
+            <th>Total</th>
+            <th>Profit</th>
+            <th>Date</th>
+            <th>Customer</th>
+            <th>Customer Email</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for sale in sales %}
+        <tr>
+            <td>{{ sale.product_name }}</td>
+            <td>{{ sale.quantity_sold }}</td>
+            <td>${{ "%.2f"|format(sale.selling_price_at_time) }}</td>
+            <td>${{ "%.2f"|format(sale.total_amount) }}</td>
+            <td>${{ "%.2f"|format(sale.profit) }}</td>
+            <td>{{ sale.sale_date }}</td>
+            <td>{{ sale.customer_name or '—' }}</td>
+            <td>{{ sale.customer_email or '—' }}</td>
+            <td><a href="{{ url_for('delete_sale', id=sale.id) }}" onclick="return confirm('Delete? This will restore stock.')">Delete</a></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<script>
+    const salesData = {{ sales_by_date | tojson }};
+    const labels = Object.keys(salesData).sort();
+    const revenue = labels.map(date => salesData[date]);
+    
+    const ctx = document.getElementById('salesRevenueChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Sales Revenue ($)',
+                data: revenue,
+                borderColor: '#c0392b',
+                backgroundColor: 'rgba(192, 57, 43, 0.1)',
+                tension: 0.3,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: { display: true, text: 'Daily Sales Revenue' }
+            },
+            scales: {
+                y: { ticks: { callback: v => '$' + v } }
+            }
+        }
+    });
+</script>
+{% endblock %}

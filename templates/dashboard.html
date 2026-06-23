@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ current_user.username }}'s Dashboard</h1>
+
+<!-- Summary Cards -->
+<div style="margin-bottom: 1rem; text-align: right;">
+    <a href="{{ url_for('send_daily_summary') }}" class="btn-secondary" style="background: #27ae60; color: rgb(0, 0, 0); padding: 10px 20px; border-radius: 8px; text-decoration: none;">📧 Send Today's Sales Summary</a>
+</div>
+
+<div class="summary-container">
+    <div class="summary-card">
+        <h3>Total Income</h3>
+        <div class="amount income-amount">${{ "%.2f"|format(total_income) }}</div>
+    </div>
+    <div class="summary-card">
+        <h3>Total Expenses</h3>
+        <div class="amount expense-amount">${{ "%.2f"|format(total_expenses) }}</div>
+    </div>
+    <div class="summary-card">
+        <h3>Profit / Loss</h3>
+        <div class="amount {% if profit >= 0 %}profit-positive{% else %}profit-negative{% endif %}">
+            ${{ "%.2f"|format(profit) }}
+        </div>
+    </div>
+</div>
+
+<!-- Chart -->
+{% if income or expenses %}
+<div class="chart-container">
+    <canvas id="financeChart"></canvas>
+</div>
+
+<script>
+    // Prepare data for chart
+    const incomeData = {{ income_by_date | tojson }};
+    const expenseData = {{ expense_by_date | tojson }};
+    
+    // Get all unique dates
+    const allDates = [...new Set([...Object.keys(incomeData), ...Object.keys(expenseData)])].sort();
+    
+    // Build arrays for chart
+    const incomeValues = allDates.map(date => incomeData[date] || 0);
+    const expenseValues = allDates.map(date => expenseData[date] || 0);
+    
+    // Create chart
+    const ctx = document.getElementById('financeChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: allDates,
+            datasets: [
+                {
+                    label: 'Income',
+                    data: incomeValues,
+                    borderColor: '#28a745',
+                    backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                },
+                {
+                    label: 'Expenses',
+                    data: expenseValues,
+                    borderColor: '#dc3545',
+                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                title: {
+                    display: true,
+                    text: 'Income vs Expenses Over Time'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + value;
+                        }
+                    }
+                }
+            }
+        }
+    });
+</script>
+{% endif %}
+
+<!-- Dashboard Widgets -->
+{% if user_settings and user_settings.show_low_stock_widget %}
+<div class="widget">
+    <h2>⚠️ Low Stock Alerts</h2>
+    <div class="table-wrapper">
+        <table>
+            <thead><tr><th>Product</th><th>Quantity</th><th>Unit</th></tr></thead>
+            <tbody>
+            {% for item in low_stock_items %}
+            <tr style="background-color: var(--danger-dim);">
+                <td>{{ item.product_name }}</td>
+                <td>{{ item.quantity }}</td>
+                <td>{{ item.unit or '-' }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3">All stock levels are healthy.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% if user_settings and user_settings.show_sales_trend %}
+<div class="widget">
+    <h2>📈 Sales Trend (Last 7 Days)</h2>
+    <div class="chart-container">
+        <canvas id="salesTrendChart"></canvas>
+    </div>
+</div>
+<script>
+    const salesTrendData = {{ sales_trend_data | tojson }};
+    const trendLabels = Object.keys(salesTrendData).sort();
+    const trendValues = trendLabels.map(d => salesTrendData[d]);
+    const chartType = '{{ user_settings.default_chart_type if user_settings else "line" }}';
+    const ctxTrend = document.getElementById('salesTrendChart').getContext('2d');
+    new Chart(ctxTrend, {
+        type: chartType,
+        data: { labels: trendLabels, datasets: [{ label: 'Revenue', data: trendValues, borderColor: '#27ae60', backgroundColor: 'rgba(39,174,96,0.2)' }] },
+        options: { responsive: true, scales: { y: { ticks: { callback: v => '$' + v } } } }
+    });
+</script>
+{% endif %}
+
+<!-- Add Forms -->
+<div class="action-buttons">
+    <details>
+        <summary style="cursor: pointer; padding: 10px 20px; background: #28a745; color: white; border-radius: 10px; display: inline-block;">
+            ➕ Add Income
+        </summary>
+        <div style="margin-top: 1rem;">
+            <form method="POST" action="{{ url_for('add_income') }}">
+                <div class="form-group">
+                    <input type="text" name="source" placeholder="Source (e.g., Client A)" required>
+                </div>
+                <div class="form-group">
+                    <input type="number" step="0.01" name="amount" placeholder="Amount" required>
+                </div>
+                <div class="form-group">
+                    <input type="date" name="date">
+                </div>
+                <button type="submit">Add Income</button>
+            </form>
+        </div>
+    </details>
+
+    <details>
+        <summary style="cursor: pointer; padding: 10px 20px; background: #dc3545; color: white; border-radius: 10px; display: inline-block;">
+            ➕ Add Expense
+        </summary>
+        <div style="margin-top: 1rem;">
+            <form method="POST" action="{{ url_for('add_expense') }}">
+                <div class="form-group">
+                    <input type="text" name="name" placeholder="Expense name" required>
+                </div>
+                <div class="form-group">
+                    <input type="number" step="0.01" name="amount" placeholder="Amount" required>
+                </div>
+                <div class="form-group">
+                    <select name="category">
+                        <option>Food</option>
+                        <option>Rent</option>
+                        <option>Supplies</option>
+                        <option>Marketing</option>
+                        <option>Other</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <input type="date" name="date">
+                </div>
+                <button type="submit">Add Expense</button>
+            </form>
+        </div>
+    </details>
+</div>
+
+<!-- Income Table -->
+<h2>💰 Income History</h2>
+<div class="table-wrapper">
+    <table>
+        <thead>
+            <tr><th>Source</th><th>Amount</th><th>Date</th><th>Action</th></tr>
+        </thead>
+        <tbody>
+            {% for item in income %}
+            <tr>
+                <td>{{ item.source }}</td>
+                <td class="income-amount">${{ "%.2f"|format(item.amount) }}</td>
+                <td>{{ item.date }}</td>
+                <td><a href="{{ url_for('delete_income', id=item.id) }}" class="delete-btn" onclick="return confirm('Delete this income?')">Delete</a></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4">No income recorded</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Expense Table -->
+<h2>💸 Expense History</h2>
+<div class="table-wrapper">
+    <table>
+        <thead>
+            <tr><th>Name</th><th>Amount</th><th>Category</th><th>Date</th><th>Action</th></tr>
+        </thead>
+        <tbody>
+            {% for item in expenses %}
+            <tr>
+                <td>{{ item.name }}</td>
+                <td class="expense-amount">${{ "%.2f"|format(item.amount) }}</td>
+                <td>{{ item.category }}</td>
+                <td>{{ item.date }}</td>
+                <td><a href="{{ url_for('delete_expense', id=item.id) }}" class="delete-btn" onclick="return confirm('Delete this expense?')">Delete</a></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5">No expenses recorded</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

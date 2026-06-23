@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Settings</h1>
+<form method="POST">
+    <h2>Notification Settings</h2>
+    <div class="form-group">
+        <label>Low stock threshold (units)</label>
+        <input type="number" step="1" name="low_stock_threshold" value="{{ settings.low_stock_threshold }}" required>
+    </div>
+    <div class="form-group">
+        <label>Email notifications</label>
+        <input type="checkbox" name="email_notifications" {% if settings.email_notifications %}checked{% endif %}>
+    </div>
+    <div class="form-group">
+        <label>Send alerts to email</label>
+        <input type="email" name="notify_email" value="{{ settings.notify_email }}">
+    </div>
+
+    <h2>Appearance</h2>
+    <div class="form-group">
+        <label>Theme</label>
+        <select name="theme">
+            <option value="dark" {% if settings.theme == 'dark' %}selected{% endif %}>Dark (default)</option>
+            <option value="light" {% if settings.theme == 'light' %}selected{% endif %}>Light</option>
+            <option value="matrix" {% if settings.theme == 'matrix' %}selected{% endif %}>Matrix Green</option>
+        </select>
+    </div>
+    <div class="form-group">
+        <label>Font Family</label>
+        <select name="font_family">
+            <option value="Inter" {% if settings.font_family == 'Inter' %}selected{% endif %}>Inter</option>
+            <option value="Roboto" {% if settings.font_family == 'Roboto' %}selected{% endif %}>Roboto</option>
+            <option value="'Courier New', monospace" {% if settings.font_family == "'Courier New', monospace" %}selected{% endif %}>Monospace</option>
+        </select>
+    </div>
+    <div class="form-group">
+        <label>Font Size</label>
+        <select name="font_size">
+            <option value="small" {% if settings.font_size == 'small' %}selected{% endif %}>Small</option>
+            <option value="medium" {% if settings.font_size == 'medium' %}selected{% endif %}>Medium</option>
+            <option value="large" {% if settings.font_size == 'large' %}selected{% endif %}>Large</option>
+        </select>
+    </div>
+    <div class="form-group">
+        <label>Animations</label>
+        <input type="checkbox" name="animations_enabled" {% if settings.animations_enabled %}checked{% endif %}>
+    </div>
+
+    <h2>Dashboard Widgets</h2>
+    <div class="form-group">
+        <label>Show Low Stock Widget</label>
+        <input type="checkbox" name="show_low_stock_widget" {% if settings.show_low_stock_widget %}checked{% endif %}>
+    </div>
+    <div class="form-group">
+        <label>Show Sales Trend Chart</label>
+        <input type="checkbox" name="show_sales_trend" {% if settings.show_sales_trend %}checked{% endif %}>
+    </div>
+    <div class="form-group">
+        <label>Default Chart Type</label>
+        <select name="default_chart_type">
+            <option value="line" {% if settings.default_chart_type == 'line' %}selected{% endif %}>Line Chart</option>
+            <option value="bar" {% if settings.default_chart_type == 'bar' %}selected{% endif %}>Bar Chart</option>
+        </select>
+    </div>
+
+    <h2>About the App</h2>
+    <div class="form-group">
+        <textarea name="about_text" rows="4" cols="50" placeholder="Write something about your business...">{{ settings.about_text or '' }}</textarea>
+    </div>
+
+    <button type="submit">Save All Settings</button>
+</form>
+{% endblock %}
