@@ -229,16 +229,20 @@ def login():
         conn.close()
         if user and check_password_hash(user['password'], password):
             login_user(User(user['id'], user['username'], user['email']))
-            # Log activity
-            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            ip = request.headers.get('X-Forwarded-For', request.remote_addr)
-            conn = get_db()
-            cur = conn.cursor()
-            cur.execute('INSERT INTO user_activity (user_id, username, login_time, ip_address) VALUES (%s, %s, %s, %s)',
-                        (user['id'], user['username'], now, ip))
-            conn.commit()
-            cur.close()
-            conn.close()
+            # Log activity – catches any error so login never fails
+            try:
+                now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+                conn = get_db()
+                cur = conn.cursor()
+                cur.execute('INSERT INTO user_activity (user_id, username, login_time, ip_address) VALUES (%s, %s, %s, %s)',
+                            (user['id'], user['username'], now, ip))
+                conn.commit()
+                cur.close()
+                conn.close()
+            except Exception as e:
+                # Log the error but don't block login
+                print(f"Activity log error: {e}")
             return redirect(url_for('dashboard'))
         else:
             flash('Invalid credentials', 'danger')
