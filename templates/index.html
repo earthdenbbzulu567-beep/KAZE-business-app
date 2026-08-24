@@ -1,7 +1,162 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Asset tracker</h1>
-<p>Observe, Manage and Maintain all your business expenses, profits, assets and many more — all in one place.</p>
-<p>Easy. Secure. Free to start.</p>
-<a href="{{ url_for('signup') }}"><button>Get Started</button></a>
+
+<section class="hero">
+    <svg class="hero-logo" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <linearGradient id="heroLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#e74c3c"/>
+                <stop offset="100%" stop-color="#7b1a14"/>
+            </linearGradient>
+        </defs>
+        <rect x="1" y="1" width="38" height="38" rx="10" fill="url(#heroLogoGrad)" stroke="#1a1a1a" stroke-width="1"/>
+        <path d="M13 9 L13 31 M13 20 L23 9 M15.5 22.5 L23 31"
+              fill="none" stroke="white" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="30" cy="10" r="3" fill="#e74c3c"/>
+    </svg>
+    <h1 class="hero-title">Run your whole business<br>from one place</h1>
+    <p class="hero-subtitle">
+        Track income and expenses, manage stock, record sales, bill customers,
+        and keep your cash book — all in one clean dashboard.
+    </p>
+    <div class="hero-cta">
+        {% if current_user.is_authenticated %}
+        <a href="{{ url_for('dashboard') }}"><button>Go to Dashboard</button></a>
+        {% else %}
+        <a href="{{ url_for('signup') }}"><button>Get Started — It's Free</button></a>
+        <a href="{{ url_for('login') }}"><button class="btn-secondary">Log In</button></a>
+        {% endif %}
+    </div>
+</section>
+
+<h2>Everything your business needs</h2>
+<div class="feature-grid">
+    <div class="feature-card">
+        <div class="feature-icon">💰</div>
+        <h3>Income &amp; Expenses</h3>
+        <p>Log every dollar in and out, see profit/loss at a glance, and track trends over time with built-in charts.</p>
+    </div>
+    <div class="feature-card">
+        <div class="feature-icon">📦</div>
+        <h3>Stock &amp; Inventory</h3>
+        <p>Keep tabs on quantity, cost, and selling price per product, with automatic low-stock alerts.</p>
+    </div>
+    <div class="feature-card">
+        <div class="feature-icon">🧾</div>
+        <h3>Sales &amp; Customers</h3>
+        <p>Record sales against your inventory, attach them to saved customers, and see lifetime spend per client.</p>
+    </div>
+    <div class="feature-card">
+        <div class="feature-icon">📄</div>
+        <h3>Invoices &amp; Receipts</h3>
+        <p>Generate polished, downloadable PDF invoices and sales receipts with your business name and tax rate applied.</p>
+    </div>
+    <div class="feature-card">
+        <div class="feature-icon">📒</div>
+        <h3>Cash Book</h3>
+        <p>Track cash in and out separately from your income statement, categorized and dated.</p>
+    </div>
+    <div class="feature-card">
+        <div class="feature-icon">⬇️</div>
+        <h3>Export Anywhere</h3>
+        <p>Download income, expenses, sales, stock, cash book, and customer data as CSV whenever you need it.</p>
+    </div>
+</div>
+
+<section class="cta-band">
+    <h2 style="border:none;">Ready to get organized?</h2>
+    <p>Free to start. Set up your business in under two minutes.</p>
+    {% if current_user.is_authenticated %}
+    <a href="{{ url_for('dashboard') }}"><button>Go to Dashboard</button></a>
+    {% else %}
+    <a href="{{ url_for('signup') }}"><button>Create Your Account</button></a>
+    {% endif %}
+</section>
+
+<style>
+    .hero {
+        text-align: center;
+        padding: 4rem 1rem 3rem;
+        position: relative;
+    }
+    .hero-logo {
+        width: 56px;
+        height: 56px;
+        margin: 0 auto 1.5rem;
+        display: block;
+        filter: drop-shadow(0 0 10px rgba(231, 76, 60, 0.5));
+    }
+    .hero-title {
+        font-size: 2.6rem;
+        font-weight: 700;
+        letter-spacing: -1px;
+        line-height: 1.15;
+        margin-bottom: 1rem;
+    }
+    .hero-subtitle {
+        max-width: 560px;
+        margin: 0 auto 2rem;
+        font-size: 1.05rem;
+        color: var(--text2);
+    }
+    .hero-cta {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    .hero-cta button {
+        padding: 12px 28px;
+        font-size: 0.95rem;
+    }
+
+    .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        gap: 1.25rem;
+        margin: 1.5rem 0 3rem;
+    }
+    .feature-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.75rem 1.5rem;
+        transition: border-color 0.2s, transform 0.2s;
+    }
+    .feature-card:hover {
+        border-color: var(--red-dim);
+        transform: translateY(-4px);
+    }
+    .feature-icon {
+        font-size: 1.8rem;
+        margin-bottom: 0.75rem;
+    }
+    .feature-card h3 {
+        font-size: 1rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        color: var(--text);
+    }
+    .feature-card p {
+        font-size: 0.88rem;
+        color: var(--text2);
+        line-height: 1.55;
+    }
+
+    .cta-band {
+        text-align: center;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 3rem 1.5rem;
+        margin-bottom: 2rem;
+    }
+    .cta-band p {
+        margin-bottom: 1.5rem;
+    }
+
+    @media (max-width: 600px) {
+        .hero-title { font-size: 1.9rem; }
+    }
+</style>
 {% endblock %}

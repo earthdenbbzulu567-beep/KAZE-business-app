@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Cash Book</h1>
+<div class="page-header">
+    <h1>Cash Book</h1>
+    <a href="{{ url_for('export_cashbook_csv') }}" class="btn-secondary" style="padding:10px 20px; border-radius:8px; text-decoration:none;">⬇️ Export CSV</a>
+</div>
 <form method="POST" action="{{ url_for('add_cash_entry') }}">
     <select name="entry_type" required>
         <option value="in">Cash In</option>
@@ -23,8 +26,12 @@
         <td>{{ entry.description }}</td>
         <td>${{ "%.2f"|format(entry.amount) }}</td>
         <td>{{ entry.date }}</td>
-        <td><a href="{{ url_for('delete_cash_entry', id=entry.id) }}" onclick="return confirm('Delete?')">Delete</a></td>
-        <a href="{{ url_for('edit_cash_entry', id=entry.id) }}">Edit</a>
+        <td>
+            <a href="{{ url_for('delete_cash_entry', id=entry.id) }}" onclick="return confirm('Delete?')">Delete</a>
+        </td>
+        <td>
+            <a href="{{ url_for('edit_cash_entry', id=entry.id) }}">Edit</a>
+        </td>
     </tr>
     {% endfor %}
 </table>

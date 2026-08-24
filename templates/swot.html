@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>🧭 SWOT Analysis</h1>
+        <p>Assess your business's Strengths, Weaknesses, Opportunities, and Threats.</p>
+    </div>
+</div>
+
+<details style="margin-bottom:1.5rem;" {% if not analyses %}open{% endif %}>
+    <summary style="cursor:pointer; padding:10px 20px; background:linear-gradient(135deg,#667eea,#764ba2); color:white; border-radius:10px; display:inline-block; font-weight:500;">
+        ➕ New SWOT Analysis
+    </summary>
+    <div style="margin-top:1rem; background:white; padding:1.5rem; border-radius:15px; box-shadow:0 5px 15px rgba(0,0,0,0.1);">
+        <form method="POST" action="{{ url_for('add_swot') }}">
+            <div class="form-group" style="display:block; width:100%; margin-bottom:1rem;">
+                <label style="display:block; color:#555; font-size:0.85rem; margin-bottom:4px;">Title</label>
+                <input type="text" name="title" placeholder="e.g. Q3 2026 Strategy Review" style="width:100%; max-width:400px;">
+            </div>
+            <div class="swot-grid">
+                <div class="swot-box swot-strengths">
+                    <label>💪 Strengths</label>
+                    <textarea name="strengths" rows="5" placeholder="What do you do well? What advantages do you have over competitors?"></textarea>
+                </div>
+                <div class="swot-box swot-weaknesses">
+                    <label>⚠️ Weaknesses</label>
+                    <textarea name="weaknesses" rows="5" placeholder="Where could you improve? What resources are you lacking?"></textarea>
+                </div>
+                <div class="swot-box swot-opportunities">
+                    <label>🚀 Opportunities</label>
+                    <textarea name="opportunities" rows="5" placeholder="What trends or gaps in the market could you take advantage of?"></textarea>
+                </div>
+                <div class="swot-box swot-threats">
+                    <label>🔻 Threats</label>
+                    <textarea name="threats" rows="5" placeholder="What could hurt your business? Competitors, regulations, market shifts?"></textarea>
+                </div>
+            </div>
+            <button type="submit" style="margin-top:1rem;">💾 Save Analysis</button>
+        </form>
+    </div>
+</details>
+
+<h2>Saved Analyses</h2>
+{% for a in analyses %}
+<div class="widget">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+        <h3 style="margin:0;">{{ a.title }} <span style="font-weight:400; color:#888; font-size:0.85rem;">({{ a.created_date }})</span></h3>
+        <div>
+            <a href="{{ url_for('swot_pdf', id=a.id) }}">PDF</a>
+            &nbsp;
+            <a href="{{ url_for('delete_swot', id=a.id) }}" class="delete-btn" onclick="return confirm('Delete this analysis?')">Delete</a>
+        </div>
+    </div>
+    <div class="swot-grid" style="margin-top:1rem;">
+        <div class="swot-box swot-strengths"><label>💪 Strengths</label><p>{{ a.strengths or '—' }}</p></div>
+        <div class="swot-box swot-weaknesses"><label>⚠️ Weaknesses</label><p>{{ a.weaknesses or '—' }}</p></div>
+        <div class="swot-box swot-opportunities"><label>🚀 Opportunities</label><p>{{ a.opportunities or '—' }}</p></div>
+        <div class="swot-box swot-threats"><label>🔻 Threats</label><p>{{ a.threats or '—' }}</p></div>
+    </div>
+</div>
+{% else %}
+<p style="color:#888;">No SWOT analyses yet. Create your first one above.</p>
+{% endfor %}
+
+<style>
+    .swot-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+    }
+    .swot-box {
+        border-radius: 10px;
+        padding: 1rem;
+        border: 2px solid transparent;
+    }
+    .swot-box label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        font-size: 0.9rem;
+    }
+    .swot-box textarea {
+        width: 100%;
+        resize: vertical;
+        border-radius: 8px;
+        border: 1px solid #ddd;
+        padding: 8px 10px;
+        font-family: inherit;
+    }
+    .swot-box p {
+        font-size: 0.88rem;
+        white-space: pre-wrap;
+        margin: 0;
+    }
+    .swot-strengths { background: rgba(39,174,96,0.08); border-color: rgba(39,174,96,0.3); }
+    .swot-weaknesses { background: rgba(230,126,34,0.08); border-color: rgba(230,126,34,0.3); }
+    .swot-opportunities { background: rgba(52,152,219,0.08); border-color: rgba(52,152,219,0.3); }
+    .swot-threats { background: rgba(192,57,43,0.08); border-color: rgba(192,57,43,0.3); }
+
+    @media (max-width: 600px) {
+        .swot-grid { grid-template-columns: 1fr; }
+    }
+</style>
+{% endblock %}

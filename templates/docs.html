@@ -1,7 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>📄 Business Documents</h1>
-<p style="color:#555; margin-bottom:1.5rem;">Create, manage and export invoices, contracts and reports.</p>
+<div class="page-header">
+    <div>
+        <h1>📄 Business Documents</h1>
+        <p style="color:#555;">Create, manage and export invoices, contracts and reports.</p>
+    </div>
+</div>
 
 <!-- Doc Type Tabs -->
 <div style="display:flex; gap:0.5rem; margin-bottom:1.5rem; flex-wrap:wrap;">
@@ -93,6 +97,7 @@
                 <td>{{ doc.date }}</td>
                 <td style="max-width:200px; font-size:0.85rem; color:#666;">{{ doc.notes or '—' }}</td>
                 <td>
+                    <a href="{{ url_for('doc_pdf', id=doc.id) }}">PDF</a>
                     <a href="{{ url_for('delete_doc', id=doc.id) }}" class="delete-btn"
                        onclick="return confirm('Delete this document?')">Delete</a>
                 </td>

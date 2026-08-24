@@ -2,8 +2,42 @@
 {% block content %}
 <h1>{{ current_user.username }}'s Dashboard</h1>
 
+{% if not tutorial_completed %}
+<div id="onboarding-banner" class="widget" style="border:2px solid var(--red-bright, #c0392b); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+    <div>
+        <h3 style="margin:0 0 4px 0;">👋 New here?</h3>
+        <p style="margin:0; font-size:0.9rem; color:#666;">Take a 2-minute tour of the app so you know where everything lives.</p>
+    </div>
+    <div style="display:flex; gap:0.75rem;">
+        <a href="{{ url_for('tutorial') }}"><button>Take the Tour</button></a>
+        <button type="button" class="btn-secondary" onclick="dismissOnboarding()">Dismiss</button>
+    </div>
+</div>
+<script>
+function dismissOnboarding() {
+    document.getElementById('onboarding-banner').style.display = 'none';
+    fetch("{{ url_for('dismiss_tutorial') }}");
+}
+</script>
+{% endif %}
+
+{% if monthly_goal and monthly_goal > 0 %}
+<div class="widget">
+    <h3 style="margin:0 0 8px 0;">🎯 Monthly Revenue Goal</h3>
+    <div style="display:flex; justify-content:space-between; font-size:0.85rem; color:#666; margin-bottom:4px;">
+        <span>${{ "%.2f"|format(month_revenue) }} of ${{ "%.2f"|format(monthly_goal) }}</span>
+        <span>{{ goal_progress_pct }}%</span>
+    </div>
+    <div style="background:rgba(0,0,0,0.08); border-radius:8px; height:14px; overflow:hidden;">
+        <div style="background: var(--red-bright, #c0392b); height:100%; width:{{ goal_progress_pct }}%; transition: width 0.4s;"></div>
+    </div>
+</div>
+{% endif %}
+
 <!-- Summary Cards -->
-<div style="margin-bottom: 1rem; text-align: right;">
+<div style="margin-bottom: 1rem; display:flex; justify-content:flex-end; gap:0.75rem; flex-wrap:wrap;">
+    <a href="{{ url_for('export_income_csv') }}" class="btn-secondary" style="padding: 10px 20px; border-radius: 8px; text-decoration: none;">⬇️ Income CSV</a>
+    <a href="{{ url_for('export_expenses_csv') }}" class="btn-secondary" style="padding: 10px 20px; border-radius: 8px; text-decoration: none;">⬇️ Expenses CSV</a>
     <a href="{{ url_for('send_daily_summary') }}" class="btn-secondary" style="background: #27ae60; color: rgb(0, 0, 0); padding: 10px 20px; border-radius: 8px; text-decoration: none;">📧 Send Today's Sales Summary</a>
 </div>
 

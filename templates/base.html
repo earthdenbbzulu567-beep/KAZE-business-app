@@ -2,7 +2,9 @@
 <html>
 <head>
     <title>KAZE Traders Business Manager</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23e74c3c'/%3E%3Cstop offset='100%25' stop-color='%237b1a14'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='1' y='1' width='38' height='38' rx='10' fill='url(%23g)' stroke='%231a1a1a' stroke-width='1'/%3E%3Cpath d='M13 9 L13 31 M13 20 L23 9 M15.5 22.5 L23 31' fill='none' stroke='white' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='30' cy='10' r='3' fill='white'/%3E%3C/svg%3E">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23e74c3c'/%3E%3Cstop offset='100%25' stop-color='%237b1a14'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='1' y='1' width='38' height='38' rx='10' fill='url(%23g)'/%3E%3Cpath d='M13 9 L13 31 M13 20 L23 9 M15.5 22.5 L23 31' fill='none' stroke='white' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='30' cy='10' r='3' fill='%23e74c3c'/%3E%3C/svg%3E">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     {% if user_settings and user_settings.font_family == 'Roboto' %}
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
@@ -70,6 +72,17 @@
             background: var(--red-bright);
             border-radius: 50%;
             box-shadow: 0 0 8px var(--red-bright);
+        }
+
+        .brand-logo {
+            width: 34px;
+            height: 34px;
+            flex-shrink: 0;
+        }
+
+        .brand-logo circle {
+            fill: var(--red-bright);
+            filter: drop-shadow(0 0 4px var(--red-bright));
         }
 
         .nav-links {
@@ -452,10 +465,15 @@
             0%, 100% { box-shadow: 0 0 6px var(--red-bright); }
             50%       { box-shadow: 0 0 16px var(--red-bright), 0 0 28px var(--red-dim); }
         }
+        @keyframes pulse-dot-glow {
+            0%, 100% { filter: drop-shadow(0 0 4px var(--red-bright)); }
+            50%       { filter: drop-shadow(0 0 9px var(--red-bright)); }
+        }
 
         nav { animation: slideDown 0.4s ease both; }
 
         .brand-dot { animation: pulse-dot 2.5s ease-in-out infinite; }
+        .brand-logo circle { animation: pulse-dot-glow 2.5s ease-in-out infinite; }
 
         .container { animation: fadeUp 0.5s ease 0.15s both; }
 
@@ -582,7 +600,18 @@
 <body>
     <nav>
         <div class="brand">
-            <div class="brand-dot"></div>
+            <svg class="brand-logo" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#e74c3c"/>
+                        <stop offset="100%" stop-color="#7b1a14"/>
+                    </linearGradient>
+                </defs>
+                <rect x="1" y="1" width="38" height="38" rx="10" fill="url(#logoGrad)" stroke="#1a1a1a" stroke-width="1"/>
+                <path d="M13 9 L13 31 M13 20 L23 9 M15.5 22.5 L23 31"
+                      fill="none" stroke="white" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="30" cy="10" r="3"/>
+            </svg>
             KAZE Traders
         </div>
         <div class="nav-links">
@@ -591,10 +620,19 @@
             <a href="{{ url_for('stock') }}">Stock</a>
             <a href="{{ url_for('cashbook') }}">Cash Book</a>
             <a href="{{ url_for('sales') }}">Sales</a>
+            <a href="{{ url_for('customers') }}">Customers</a>
+            <div class="dropdown">
+                <button class="dropbtn">Planning ▼</button>
+                <div class="dropdown-content">
+                    <a href="{{ url_for('swot') }}">🧭 SWOT Analysis</a>
+                    <a href="{{ url_for('business_plan') }}">📈 Business Plan</a>
+                </div>
+            </div>
             <div class="dropdown">
                 <button class="dropbtn">{{ current_user.username }} ▼</button>
                 <div class="dropdown-content">
                     <a href="{{ url_for('dashboard') }}">Dashboard</a>
+                    <a href="{{ url_for('tutorial') }}">❓ Help / Tutorial</a>
                     <a href="{{ url_for('settings') }}">Settings</a>
                     <a href="{{ url_for('logout') }}">Logout</a>
                 </div>

@@ -2,6 +2,34 @@
 {% block content %}
 <h1>Settings</h1>
 <form method="POST">
+    <h2>Business Details</h2>
+    <div class="form-group">
+        <label>Business Name (shown on PDFs)</label>
+        <input type="text" name="business_name" value="{{ settings.business_name or '' }}" placeholder="Your Business Name">
+    </div>
+    <div class="form-group">
+        <label>Currency Code</label>
+        <select name="currency_code">
+            <option value="USD" {% if settings.currency_code == 'USD' %}selected{% endif %}>USD</option>
+            <option value="ZMW" {% if settings.currency_code == 'ZMW' %}selected{% endif %}>ZMW</option>
+            <option value="EUR" {% if settings.currency_code == 'EUR' %}selected{% endif %}>EUR</option>
+            <option value="GBP" {% if settings.currency_code == 'GBP' %}selected{% endif %}>GBP</option>
+            <option value="ZAR" {% if settings.currency_code == 'ZAR' %}selected{% endif %}>ZAR</option>
+        </select>
+    </div>
+    <div class="form-group">
+        <label>Currency Symbol (used on PDFs)</label>
+        <input type="text" name="currency_symbol" value="{{ settings.currency_symbol or '$' }}" maxlength="4" style="width:70px;">
+    </div>
+    <div class="form-group">
+        <label>Tax / VAT Rate (%) (applied on invoice PDFs)</label>
+        <input type="number" step="0.01" name="tax_rate" value="{{ settings.tax_rate or 0 }}">
+    </div>
+    <div class="form-group">
+        <label>Monthly Revenue Goal (shown as a progress bar on Dashboard)</label>
+        <input type="number" step="0.01" name="monthly_revenue_goal" value="{{ settings.monthly_revenue_goal or 0 }}">
+    </div>
+
     <h2>Notification Settings</h2>
     <div class="form-group">
         <label>Low stock threshold (units)</label>

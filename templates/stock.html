@@ -1,6 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Stock / Inventory</h1>
+<div class="page-header">
+    <h1>Stock / Inventory</h1>
+    <div style="display:flex; gap:0.75rem;">
+        <a href="{{ url_for('check_low_stock') }}" class="btn-secondary" style="padding:10px 20px; border-radius:8px; text-decoration:none;">⚠️ Check Low Stock Now</a>
+        <a href="{{ url_for('export_stock_csv') }}" class="btn-secondary" style="padding:10px 20px; border-radius:8px; text-decoration:none;">⬇️ Export CSV</a>
+    </div>
+</div>
 {% if inventory_values %}
 <div class="chart-container">
     <canvas id="stockValueChart"></canvas>

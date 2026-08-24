@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Sales</h1>
+<div class="page-header">
+    <h1>Sales</h1>
+    <a href="{{ url_for('export_sales_csv') }}" class="btn-secondary" style="padding:10px 20px; border-radius:8px; text-decoration:none;">⬇️ Export CSV</a>
+</div>
 
 <!-- Chart: Revenue over time -->
 {% if sales_by_date %}
@@ -18,11 +21,18 @@
         {% endfor %}
     </select>
     <input type="number" step="any" name="quantity" placeholder="Quantity sold" required>
-    <input type="text" name="customer_name" placeholder="Customer name (optional)">
-    <input type="email" name="customer_email" placeholder="Customer email (optional)">
+    <select name="customer_id">
+        <option value="">— Walk-in / new customer —</option>
+        {% for c in customer_list %}
+        <option value="{{ c.id }}">{{ c.name }}</option>
+        {% endfor %}
+    </select>
+    <input type="text" name="customer_name" placeholder="Customer name (if new)">
+    <input type="email" name="customer_email" placeholder="Customer email (if new)">
     <input type="date" name="date">
     <button type="submit">Record Sale</button>
 </form>
+<p style="font-size:0.8rem; margin-top:0.5rem;">Tip: pick an existing customer above, or leave it as walk-in and just type a name/email — you can add them properly on the <a href="{{ url_for('customers') }}">Customers</a> page later.</p>
 
 <!-- Sales History Table -->
 <h2>Sales History</h2>
@@ -51,7 +61,10 @@
             <td>{{ sale.sale_date }}</td>
             <td>{{ sale.customer_name or '—' }}</td>
             <td>{{ sale.customer_email or '—' }}</td>
-            <td><a href="{{ url_for('delete_sale', id=sale.id) }}" onclick="return confirm('Delete? This will restore stock.')">Delete</a></td>
+            <td>
+                <a href="{{ url_for('sale_receipt', id=sale.id) }}">Receipt</a>
+                <a href="{{ url_for('delete_sale', id=sale.id) }}" onclick="return confirm('Delete? This will restore stock.')">Delete</a>
+            </td>
         </tr>
         {% endfor %}
     </tbody>
