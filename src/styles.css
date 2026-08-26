@@ -1,0 +1,174 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+:root {
+  --kaze-bg: #0b0c0b;
+  --kaze-bg-elevated: #121412;
+  --kaze-surface: #161916;
+  --kaze-surface-2: #1c201c;
+  --kaze-fg: #eef1ee;
+  --kaze-muted: #8b928b;
+  --kaze-subtle: #6a716a;
+  --kaze-border: color-mix(in oklab, #eef1ee 12%, transparent);
+  --kaze-border-strong: color-mix(in oklab, #eef1ee 22%, transparent);
+  --kaze-accent: #d7ddd6;
+  --kaze-accent-fg: #0b0c0b;
+  --kaze-brand: #4a9a62;
+  --kaze-in: #5fb87a;
+  --kaze-out: #d47a6a;
+  --kaze-warn: #c4a35a;
+  --kaze-ring: #d7ddd6;
+  --kaze-shadow: 0 0 0 1px color-mix(in oklab, #eef1ee 8%, transparent);
+  --kaze-shadow-hover: 0 0 0 1px color-mix(in oklab, #eef1ee 14%, transparent);
+  --motion-stagger: 40ms;
+  --motion-micro: 80ms;
+  --motion-quick: 150ms;
+  --motion-fast: 250ms;
+  --motion-medium: 350ms;
+  --motion-slow: 400ms;
+  --ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+[data-theme="light"] {
+  --kaze-bg: #f3f4f1;
+  --kaze-bg-elevated: #fbfbf8;
+  --kaze-surface: #ffffff;
+  --kaze-surface-2: #eef0ea;
+  --kaze-fg: #161916;
+  --kaze-muted: #5c635c;
+  --kaze-subtle: #7a817a;
+  --kaze-border: color-mix(in oklab, #161916 12%, transparent);
+  --kaze-border-strong: color-mix(in oklab, #161916 22%, transparent);
+  --kaze-accent: #1a1e1a;
+  --kaze-accent-fg: #f3f4f1;
+  --kaze-brand: #2f7a48;
+  --kaze-in: #2f7a48;
+  --kaze-out: #b55244;
+  --kaze-warn: #9a7a2e;
+  --kaze-ring: #1a1e1a;
+  --kaze-shadow:
+    0 0 0 1px rgba(22, 25, 22, 0.06),
+    0 1px 2px -1px rgba(22, 25, 22, 0.06),
+    0 2px 4px 0 rgba(22, 25, 22, 0.04);
+  --kaze-shadow-hover:
+    0 0 0 1px rgba(22, 25, 22, 0.1),
+    0 1px 2px -1px rgba(22, 25, 22, 0.08),
+    0 2px 4px 0 rgba(22, 25, 22, 0.06);
+}
+
+[data-density="small"] {
+  font-size: 14px;
+}
+[data-density="large"] {
+  font-size: 17px;
+}
+
+@theme {
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --color-bg: var(--kaze-bg);
+  --color-bg-elevated: var(--kaze-bg-elevated);
+  --color-surface: var(--kaze-surface);
+  --color-surface-2: var(--kaze-surface-2);
+  --color-fg: var(--kaze-fg);
+  --color-muted: var(--kaze-muted);
+  --color-subtle: var(--kaze-subtle);
+  --color-border: var(--kaze-border);
+  --color-border-strong: var(--kaze-border-strong);
+  --color-accent: var(--kaze-accent);
+  --color-accent-fg: var(--kaze-accent-fg);
+  --color-brand: var(--kaze-brand);
+  --color-in: var(--kaze-in);
+  --color-out: var(--kaze-out);
+  --color-warn: var(--kaze-warn);
+  --color-ring: var(--kaze-ring);
+
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --radius-2xl: 1.75rem;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  html,
+  body,
+  #app {
+    min-height: 100%;
+    background: var(--kaze-bg);
+    color: var(--kaze-fg);
+  }
+
+  body {
+    font-family: var(--font-sans);
+    line-height: 1.5;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--kaze-brand) 35%, transparent);
+    color: var(--kaze-fg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes kaze-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes kaze-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.kaze-enter {
+  animation: kaze-enter var(--motion-slow) var(--ease-smooth-out) both;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}

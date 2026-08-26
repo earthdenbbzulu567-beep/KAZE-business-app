@@ -1,0 +1,1 @@
+import{t as e}from"./jsx-runtime-CM8U5GxS.js";import{t}from"./utils-DojpP95n.js";var n=e();function r({className:e,...r}){return(0,n.jsx)(`div`,{className:t(`rounded-xl bg-surface p-5 shadow-[var(--kaze-shadow)]`,e),...r})}function i({className:e,...r}){return(0,n.jsx)(`h3`,{className:t(`text-xs font-medium uppercase tracking-[0.14em] text-subtle`,e),...r})}export{i as n,r as t};

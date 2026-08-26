@@ -13,8 +13,9 @@ from email.mime.text import MIMEText
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image as RLImage
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_LEFT
 from reportlab.graphics.shapes import Drawing, Rect, Line, Circle
 
 app = Flask(__name__)
@@ -1080,33 +1081,22 @@ def _get_settings_row(user_id):
     conn.close()
     return row
 
-def _brand_logo_drawing(size=36):
-    """Reportlab version of the app's red 'K' monogram, matching the nav bar logo."""
-    scale = size / 40.0
-    d = Drawing(size, size)
-    d.add(Rect(0, 0, size, size, rx=size * 0.25, ry=size * 0.25,
-                fillColor=colors.HexColor('#c0392b'), strokeColor=colors.HexColor('#1a1a1a'), strokeWidth=0.5))
-    lw = max(1.5, 3.4 * scale)
-    d.add(Line(13 * scale, 31 * scale, 13 * scale, 9 * scale,
-                strokeColor=colors.white, strokeWidth=lw, strokeLineCap=1))
-    d.add(Line(13 * scale, 20 * scale, 23 * scale, 31 * scale,
-                strokeColor=colors.white, strokeWidth=lw, strokeLineCap=1))
-    d.add(Line(15.5 * scale, 17.5 * scale, 23 * scale, 9 * scale,
-                strokeColor=colors.white, strokeWidth=lw, strokeLineCap=1))
-    d.add(Circle(30 * scale, 30 * scale, 3 * scale, fillColor=colors.white, strokeColor=colors.white))
-    return d
+def _brand_logo_image(size=36):
+    """Embed the actual KAZE Traders logo image in generated PDFs."""
+    logo_path = os.path.join(app.root_path, 'static', 'logo_icon.png')
+    return RLImage(logo_path, width=size, height=size)
 
 def _build_pdf(buffer, title, business_name, meta_lines, table_data, footer_lines=None):
     doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.75*inch, bottomMargin=0.75*inch)
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle('TitleStyle', parent=styles['Title'], textColor=colors.HexColor('#c0392b'))
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Title'], textColor=colors.HexColor('#1f8a3d'), alignment=TA_LEFT)
     elements = []
 
     header_text = []
     if business_name:
         header_text.append(Paragraph(business_name, styles['Heading2']))
     header_text.append(Paragraph(title, title_style))
-    header_table = Table([[_brand_logo_drawing(36), header_text]], colWidths=[50, 460])
+    header_table = Table([[_brand_logo_image(36), header_text]], colWidths=[50, 460])
     header_table.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('LEFTPADDING', (0, 0), (0, 0), 0),
@@ -1452,17 +1442,18 @@ def activity():
     cur.execute('''
         SELECT username, login_time, ip_address 
         FROM user_activity 
+        WHERE user_id = %s
         ORDER BY login_time DESC 
         LIMIT 50
-    ''')
+    ''', (current_user.id,))
     logs = cur.fetchall()
     today = datetime.now().strftime('%Y-%m-%d')
     cur.execute('''
-    SELECT COUNT(DISTINCT user_id) 
+    SELECT COUNT(*) as active_count
     FROM user_activity 
-    WHERE login_time::date = %s
-    ''', (today,))
-    active_count = cur.fetchone()[0]
+    WHERE user_id = %s AND login_time::date = %s
+    ''', (current_user.id, today))
+    active_count = cur.fetchone()['active_count']
     cur.close()
     conn.close()
     return render_template('activity.html', logs=logs, active_count=active_count)

@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>📊 Reports</h1>
+        <p>Profit trends and your best-performing products and customers.</p>
+    </div>
+</div>
+
+<div class="chart-container">
+    <canvas id="profitTrendChart"></canvas>
+</div>
+
+<div style="display:grid; grid-template-columns: 1fr 1fr; gap:1.5rem; margin-top:2rem;">
+    <div>
+        <h2>🏆 Top Products</h2>
+        <div class="table-wrapper">
+            <table>
+                <thead><tr><th>Product</th><th>Units Sold</th><th>Revenue</th><th>Profit</th></tr></thead>
+                <tbody>
+                    {% for p in top_products %}
+                    <tr>
+                        <td>{{ p.product_name }}</td>
+                        <td>{{ p.units }}</td>
+                        <td>${{ "%.2f"|format(p.revenue) }}</td>
+                        <td>${{ "%.2f"|format(p.profit) }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="4">No sales recorded yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div>
+        <h2>🙋 Top Customers</h2>
+        <div class="table-wrapper">
+            <table>
+                <thead><tr><th>Customer</th><th>Orders</th><th>Total Spent</th></tr></thead>
+                <tbody>
+                    {% for c in top_customers %}
+                    <tr>
+                        <td>{{ c.customer_name }}</td>
+                        <td>{{ c.orders }}</td>
+                        <td>${{ "%.2f"|format(c.spent) }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="3">No sales recorded yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<style>
+    @media (max-width: 800px) {
+        div[style*="grid-template-columns: 1fr 1fr"] { grid-template-columns: 1fr !important; }
+    }
+</style>
+
+<script>
+    const months = {{ months | tojson }};
+    const incomeData = {{ monthly_income | tojson }};
+    const expenseData = {{ monthly_expenses | tojson }};
+    const profitData = {{ monthly_profit | tojson }};
+
+    const ctx = document.getElementById('profitTrendChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: months,
+            datasets: [
+                { label: 'Profit', data: months.map(m => profitData[m] || 0), backgroundColor: 'rgba(46, 204, 113, 0.7)', borderColor: '#2ecc71', borderWidth: 1, type: 'line', tension: 0.3, fill: false },
+                { label: 'Income', data: months.map(m => incomeData[m] || 0), backgroundColor: 'rgba(52, 152, 219, 0.5)' },
+                { label: 'Expenses', data: months.map(m => expenseData[m] || 0), backgroundColor: 'rgba(231, 76, 60, 0.5)' }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { title: { display: true, text: 'Monthly Profit Trend (Last 6 Months)' } },
+            scales: { y: { ticks: { callback: v => '$' + v } } }
+        }
+    });
+</script>
+{% endblock %}
