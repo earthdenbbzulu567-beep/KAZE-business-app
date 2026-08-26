@@ -46,6 +46,8 @@ def init_db():
             password TEXT NOT NULL
         )
     ''')
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'owner'")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS owner_id INTEGER REFERENCES users(id)")
     cur.execute('''
         CREATE TABLE IF NOT EXISTS income (
             id SERIAL PRIMARY KEY,
@@ -194,6 +196,76 @@ def init_db():
             updated_date TEXT
         )
     ''')
+
+    # ── Recurring invoices/expenses ──
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS recurring_items (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            item_type TEXT NOT NULL,
+            name TEXT NOT NULL,
+            amount REAL NOT NULL,
+            category TEXT DEFAULT '',
+            client TEXT DEFAULT '',
+            frequency TEXT NOT NULL DEFAULT 'monthly',
+            next_run_date TEXT NOT NULL,
+            active INTEGER DEFAULT 1,
+            created_date TEXT NOT NULL
+        )
+    ''')
+
+    # ── Suppliers & purchase orders ──
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS suppliers (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            name TEXT NOT NULL,
+            email TEXT DEFAULT '',
+            phone TEXT DEFAULT '',
+            address TEXT DEFAULT '',
+            notes TEXT DEFAULT ''
+        )
+    ''')
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS purchase_orders (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            supplier_id INTEGER REFERENCES suppliers(id),
+            item_description TEXT NOT NULL,
+            quantity REAL NOT NULL,
+            unit_cost REAL NOT NULL,
+            total_cost REAL NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            order_date TEXT NOT NULL,
+            expected_date TEXT DEFAULT '',
+            stock_id INTEGER REFERENCES stock(id)
+        )
+    ''')
+
+    # ── Budgeting ──
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS budgets (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            category TEXT NOT NULL,
+            monthly_limit REAL NOT NULL,
+            created_date TEXT NOT NULL,
+            UNIQUE(user_id, category)
+        )
+    ''')
+
+    # ── Notifications ──
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS notifications (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            message TEXT NOT NULL,
+            category TEXT DEFAULT 'info',
+            is_read INTEGER DEFAULT 0,
+            created_date TEXT NOT NULL
+        )
+    ''')
+
     conn.commit()
     cur.close()
     conn.close()
@@ -223,11 +295,29 @@ def send_email(to_email, subject, body):
         return False
 
 # User class
+def _business_id_for(role, owner_id, own_id):
+    """The id all business data is scoped under: the owner's own id for owners,
+    or the linked owner's id for staff accounts."""
+    if role == 'staff' and owner_id:
+        return owner_id
+    return own_id
+
 class User(UserMixin):
-    def __init__(self, id, username, email):
-        self.id = id
+    def __init__(self, db_id, username, email, role='owner', owner_id=None):
+        self.db_id = db_id
         self.username = username
         self.email = email
+        self.role = role or 'owner'
+        self.owner_id = owner_id
+        # self.id is the *business* id used everywhere data is scoped by user_id.
+        # For staff accounts this resolves to the business owner's id, so staff
+        # transparently see and edit the same data as the owner.
+        self.id = _business_id_for(self.role, self.owner_id, self.db_id)
+
+    def get_id(self):
+        # Flask-Login needs the account's OWN row id to reload it from the DB
+        # on the next request - not the business id.
+        return str(self.db_id)
 
 @app.context_processor
 def inject_settings():
@@ -236,21 +326,23 @@ def inject_settings():
         cur = conn.cursor()
         cur.execute('SELECT * FROM settings WHERE user_id = %s', (current_user.id,))
         settings = cur.fetchone()
+        cur.execute('SELECT COUNT(*) as unread_count FROM notifications WHERE user_id = %s AND is_read = 0', (current_user.id,))
+        unread_row = cur.fetchone()
         cur.close()
         conn.close()
-        return dict(user_settings=settings)
-    return dict(user_settings=None)
+        return dict(user_settings=settings, unread_notifications=unread_row['unread_count'] if unread_row else 0)
+    return dict(user_settings=None, unread_notifications=0)
 
 @login_manager.user_loader
 def load_user(user_id):
     conn = get_db()
     cur = conn.cursor()
-    cur.execute('SELECT id, username, email FROM users WHERE id = %s', (user_id,))
+    cur.execute('SELECT id, username, email, role, owner_id FROM users WHERE id = %s', (user_id,))
     user = cur.fetchone()
     cur.close()
     conn.close()
     if user:
-        return User(user['id'], user['username'], user['email'])
+        return User(user['id'], user['username'], user['email'], user['role'], user['owner_id'])
     return None
 
 # ======================== Routes ========================
@@ -294,15 +386,16 @@ def login():
         cur.close()
         conn.close()
         if user and check_password_hash(user['password'], password):
-            login_user(User(user['id'], user['username'], user['email']))
+            login_user(User(user['id'], user['username'], user['email'], user.get('role'), user.get('owner_id')))
             # Log activity – catches any error so login never fails
             try:
                 now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+                business_id = _business_id_for(user.get('role'), user.get('owner_id'), user['id'])
                 conn = get_db()
                 cur = conn.cursor()
                 cur.execute('INSERT INTO user_activity (user_id, username, login_time, ip_address) VALUES (%s, %s, %s, %s)',
-                            (user['id'], user['username'], now, ip))
+                            (business_id, user['username'], now, ip))
                 conn.commit()
                 cur.close()
                 conn.close()
@@ -317,6 +410,7 @@ def login():
 @app.route('/dashboard')
 @login_required
 def dashboard():
+    _process_due_recurring_items(current_user.id)
     conn = get_db()
     cur = conn.cursor()
     
@@ -747,6 +841,7 @@ def check_low_stock():
     for item in low_items:
         body += f"- {item['product_name']}: {item['quantity']} {item['unit'] or ''} remaining\n"
     send_email(to_email, "Low Stock Report", body)
+    _notify(current_user.id, f"Low stock report sent: {len(low_items)} item(s) below threshold.", 'low_stock')
     flash(f'Low stock report sent to {to_email} ({len(low_items)} item(s)).', 'success')
     return redirect(url_for('stock'))
 
@@ -1394,6 +1489,428 @@ def dismiss_tutorial():
     cur.close()
     conn.close()
     return ('', 204)
+
+# ======================== Team / Staff Accounts ========================
+
+@app.route('/team')
+@login_required
+def team():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT id, username, email FROM users WHERE owner_id = %s AND role = 'staff' ORDER BY username",
+                (current_user.id,))
+    staff = cur.fetchall()
+    cur.close()
+    conn.close()
+    return render_template('team.html', staff=staff)
+
+@app.route('/team/invite', methods=['POST'])
+@login_required
+def invite_staff():
+    if current_user.role == 'staff':
+        flash('Only the account owner can invite team members.', 'danger')
+        return redirect(url_for('team'))
+    username = request.form['username']
+    email = request.form['email']
+    password = request.form['password']
+    hashed = generate_password_hash(password)
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute('''
+            INSERT INTO users (username, email, password, role, owner_id)
+            VALUES (%s, %s, %s, 'staff', %s)
+        ''', (username, email, hashed, current_user.id))
+        conn.commit()
+        flash(f'{username} added to your team. Share their username/email and password so they can log in.', 'success')
+    except psycopg2.IntegrityError:
+        conn.rollback()
+        flash('That username or email is already taken.', 'danger')
+    finally:
+        cur.close()
+        conn.close()
+    return redirect(url_for('team'))
+
+@app.route('/team/remove/<int:id>')
+@login_required
+def remove_staff(id):
+    if current_user.role == 'staff':
+        flash('Only the account owner can remove team members.', 'danger')
+        return redirect(url_for('team'))
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM users WHERE id = %s AND owner_id = %s AND role = 'staff'", (id, current_user.id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Team member removed.', 'success')
+    return redirect(url_for('team'))
+
+# ======================== Recurring Invoices / Expenses ========================
+
+def _add_months(date_str, months):
+    d = datetime.strptime(date_str, '%Y-%m-%d')
+    month = d.month - 1 + months
+    year = d.year + month // 12
+    month = month % 12 + 1
+    day = min(d.day, [31,29 if year%4==0 and (year%100!=0 or year%400==0) else 28,31,30,31,30,31,31,30,31,30,31][month-1])
+    return d.replace(year=year, month=month, day=day).strftime('%Y-%m-%d')
+
+def _advance_date(date_str, frequency):
+    if frequency == 'weekly':
+        return (datetime.strptime(date_str, '%Y-%m-%d') + timedelta(days=7)).strftime('%Y-%m-%d')
+    elif frequency == 'monthly':
+        return _add_months(date_str, 1)
+    elif frequency == 'quarterly':
+        return _add_months(date_str, 3)
+    elif frequency == 'yearly':
+        return _add_months(date_str, 12)
+    return date_str
+
+def _notify(user_id, message, category='info'):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('INSERT INTO notifications (user_id, message, category, created_date) VALUES (%s, %s, %s, %s)',
+                (user_id, message, category, datetime.today().strftime('%Y-%m-%d %H:%M:%S')))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+def _process_due_recurring_items(user_id):
+    """Auto-generate expenses/invoices for any recurring item that's come due. Safe to call often."""
+    conn = get_db()
+    cur = conn.cursor()
+    today = datetime.today().strftime('%Y-%m-%d')
+    cur.execute('SELECT * FROM recurring_items WHERE user_id = %s AND active = 1 AND next_run_date <= %s',
+                (user_id, today))
+    due_items = cur.fetchall()
+    for item in due_items:
+        if item['item_type'] == 'expense':
+            cur.execute('INSERT INTO expenses (user_id, name, amount, category, date) VALUES (%s, %s, %s, %s, %s)',
+                        (user_id, item['name'], item['amount'], item['category'] or 'Other', today))
+        else:
+            cur.execute('''
+                INSERT INTO documents (user_id, doc_type, title, client, amount, date, notes)
+                VALUES (%s, 'invoice', %s, %s, %s, %s, %s)
+            ''', (user_id, item['name'], item['client'] or 'Recurring client', item['amount'], today,
+                  'Auto-generated from a recurring invoice.'))
+        new_next = _advance_date(item['next_run_date'], item['frequency'])
+        cur.execute('UPDATE recurring_items SET next_run_date = %s WHERE id = %s', (new_next, item['id']))
+        _notify(user_id, f"Recurring {item['item_type']} \"{item['name']}\" (${item['amount']:.2f}) was generated.", 'recurring')
+    conn.commit()
+    cur.close()
+    conn.close()
+
+@app.route('/recurring')
+@login_required
+def recurring():
+    _process_due_recurring_items(current_user.id)
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM recurring_items WHERE user_id = %s ORDER BY active DESC, next_run_date', (current_user.id,))
+    items = cur.fetchall()
+    cur.close()
+    conn.close()
+    return render_template('recurring.html', items=items)
+
+@app.route('/recurring/add', methods=['POST'])
+@login_required
+def add_recurring():
+    item_type = request.form['item_type']
+    name = request.form['name']
+    amount = float(request.form['amount'])
+    category = request.form.get('category', '')
+    client = request.form.get('client', '')
+    frequency = request.form.get('frequency', 'monthly')
+    start_date = request.form.get('start_date') or datetime.today().strftime('%Y-%m-%d')
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('''
+        INSERT INTO recurring_items (user_id, item_type, name, amount, category, client, frequency, next_run_date, active, created_date)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 1, %s)
+    ''', (current_user.id, item_type, name, amount, category, client, frequency, start_date,
+          datetime.today().strftime('%Y-%m-%d')))
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Recurring item scheduled.', 'success')
+    return redirect(url_for('recurring'))
+
+@app.route('/recurring/toggle/<int:id>')
+@login_required
+def toggle_recurring(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('UPDATE recurring_items SET active = 1 - active WHERE id = %s AND user_id = %s', (id, current_user.id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for('recurring'))
+
+@app.route('/recurring/delete/<int:id>')
+@login_required
+def delete_recurring(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('DELETE FROM recurring_items WHERE id = %s AND user_id = %s', (id, current_user.id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Recurring item deleted.', 'success')
+    return redirect(url_for('recurring'))
+
+# ======================== Suppliers & Purchase Orders ========================
+
+@app.route('/suppliers')
+@login_required
+def suppliers():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM suppliers WHERE user_id = %s ORDER BY name', (current_user.id,))
+    all_suppliers = cur.fetchall()
+    cur.close()
+    conn.close()
+    return render_template('suppliers.html', suppliers=all_suppliers)
+
+@app.route('/suppliers/add', methods=['POST'])
+@login_required
+def add_supplier():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('INSERT INTO suppliers (user_id, name, email, phone, address, notes) VALUES (%s, %s, %s, %s, %s, %s)',
+                (current_user.id, request.form['name'], request.form.get('email',''), request.form.get('phone',''),
+                 request.form.get('address',''), request.form.get('notes','')))
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Supplier added.', 'success')
+    return redirect(url_for('suppliers'))
+
+@app.route('/suppliers/delete/<int:id>')
+@login_required
+def delete_supplier(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('DELETE FROM suppliers WHERE id = %s AND user_id = %s', (id, current_user.id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Supplier deleted.', 'success')
+    return redirect(url_for('suppliers'))
+
+@app.route('/purchase-orders')
+@login_required
+def purchase_orders():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('''
+        SELECT po.*, s.name as supplier_name FROM purchase_orders po
+        LEFT JOIN suppliers s ON po.supplier_id = s.id
+        WHERE po.user_id = %s ORDER BY po.order_date DESC
+    ''', (current_user.id,))
+    orders = cur.fetchall()
+    cur.execute('SELECT id, name FROM suppliers WHERE user_id = %s ORDER BY name', (current_user.id,))
+    supplier_list = cur.fetchall()
+    cur.execute('SELECT id, product_name FROM stock WHERE user_id = %s ORDER BY product_name', (current_user.id,))
+    stock_list = cur.fetchall()
+    cur.close()
+    conn.close()
+    return render_template('purchase_orders.html', orders=orders, supplier_list=supplier_list, stock_list=stock_list)
+
+@app.route('/purchase-orders/add', methods=['POST'])
+@login_required
+def add_purchase_order():
+    supplier_id = request.form.get('supplier_id') or None
+    stock_id = request.form.get('stock_id') or None
+    item_description = request.form['item_description']
+    quantity = float(request.form['quantity'])
+    unit_cost = float(request.form['unit_cost'])
+    total_cost = quantity * unit_cost
+    expected_date = request.form.get('expected_date', '')
+    order_date = datetime.today().strftime('%Y-%m-%d')
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('''
+        INSERT INTO purchase_orders (user_id, supplier_id, item_description, quantity, unit_cost, total_cost, status, order_date, expected_date, stock_id)
+        VALUES (%s, %s, %s, %s, %s, %s, 'pending', %s, %s, %s)
+    ''', (current_user.id, supplier_id, item_description, quantity, unit_cost, total_cost, order_date, expected_date, stock_id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Purchase order created.', 'success')
+    return redirect(url_for('purchase_orders'))
+
+@app.route('/purchase-orders/receive/<int:id>')
+@login_required
+def receive_purchase_order(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM purchase_orders WHERE id = %s AND user_id = %s', (id, current_user.id))
+    po = cur.fetchone()
+    if not po:
+        flash('Purchase order not found.', 'danger')
+        return redirect(url_for('purchase_orders'))
+    cur.execute("UPDATE purchase_orders SET status = 'received' WHERE id = %s", (id,))
+    if po['stock_id']:
+        cur.execute('UPDATE stock SET quantity = quantity + %s WHERE id = %s AND user_id = %s',
+                    (po['quantity'], po['stock_id'], current_user.id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    _notify(current_user.id, f"Purchase order for \"{po['item_description']}\" marked received"
+            + (" and added to stock." if po['stock_id'] else "."), 'purchase_order')
+    flash('Purchase order received.', 'success')
+    return redirect(url_for('purchase_orders'))
+
+@app.route('/purchase-orders/delete/<int:id>')
+@login_required
+def delete_purchase_order(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('DELETE FROM purchase_orders WHERE id = %s AND user_id = %s', (id, current_user.id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Purchase order deleted.', 'success')
+    return redirect(url_for('purchase_orders'))
+
+# ======================== Budgeting ========================
+
+@app.route('/budgets')
+@login_required
+def budgets():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM budgets WHERE user_id = %s ORDER BY category', (current_user.id,))
+    budget_rows = cur.fetchall()
+    month_start = datetime.today().replace(day=1).strftime('%Y-%m-%d')
+    spend_by_category = {}
+    for b in budget_rows:
+        cur.execute('SELECT COALESCE(SUM(amount),0) as spent FROM expenses WHERE user_id = %s AND category = %s AND date >= %s',
+                    (current_user.id, b['category'], month_start))
+        spend_by_category[b['category']] = cur.fetchone()['spent']
+    cur.close()
+    conn.close()
+    return render_template('budgets.html', budgets=budget_rows, spend_by_category=spend_by_category)
+
+@app.route('/budgets/add', methods=['POST'])
+@login_required
+def add_budget():
+    category = request.form['category']
+    monthly_limit = float(request.form['monthly_limit'])
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('''
+        INSERT INTO budgets (user_id, category, monthly_limit, created_date)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (user_id, category) DO UPDATE SET monthly_limit = EXCLUDED.monthly_limit
+    ''', (current_user.id, category, monthly_limit, datetime.today().strftime('%Y-%m-%d')))
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Budget saved.', 'success')
+    return redirect(url_for('budgets'))
+
+@app.route('/budgets/delete/<int:id>')
+@login_required
+def delete_budget(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('DELETE FROM budgets WHERE id = %s AND user_id = %s', (id, current_user.id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Budget removed.', 'success')
+    return redirect(url_for('budgets'))
+
+# ======================== Notifications ========================
+
+@app.route('/notifications')
+@login_required
+def notifications():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM notifications WHERE user_id = %s ORDER BY created_date DESC LIMIT 100', (current_user.id,))
+    items = cur.fetchall()
+    cur.execute('UPDATE notifications SET is_read = 1 WHERE user_id = %s AND is_read = 0', (current_user.id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return render_template('notifications.html', notifications=items)
+
+@app.route('/notifications/clear')
+@login_required
+def clear_notifications():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('DELETE FROM notifications WHERE user_id = %s', (current_user.id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Notifications cleared.', 'success')
+    return redirect(url_for('notifications'))
+
+# ======================== Reports ========================
+
+@app.route('/reports')
+@login_required
+def reports():
+    conn = get_db()
+    cur = conn.cursor()
+
+    # Monthly profit trend for the last 6 months
+    months = []
+    for i in range(5, -1, -1):
+        m = _add_months(datetime.today().replace(day=1).strftime('%Y-%m-%d'), -i)
+        months.append(m[:7])  # YYYY-MM
+
+    monthly_income = {m: 0 for m in months}
+    monthly_expenses = {m: 0 for m in months}
+    monthly_sales_profit = {m: 0 for m in months}
+
+    cur.execute('SELECT date, amount FROM income WHERE user_id = %s', (current_user.id,))
+    for row in cur.fetchall():
+        key = row['date'][:7]
+        if key in monthly_income:
+            monthly_income[key] += row['amount']
+
+    cur.execute('SELECT date, amount FROM expenses WHERE user_id = %s', (current_user.id,))
+    for row in cur.fetchall():
+        key = row['date'][:7]
+        if key in monthly_expenses:
+            monthly_expenses[key] += row['amount']
+
+    cur.execute('SELECT sale_date, profit FROM sales WHERE user_id = %s', (current_user.id,))
+    for row in cur.fetchall():
+        key = row['sale_date'][:7]
+        if key in monthly_sales_profit:
+            monthly_sales_profit[key] += row['profit']
+
+    monthly_profit = {m: monthly_income[m] - monthly_expenses[m] + monthly_sales_profit[m] for m in months}
+
+    # Top products by revenue
+    cur.execute('''
+        SELECT stock.product_name, SUM(sales.total_amount) as revenue, SUM(sales.profit) as profit, SUM(sales.quantity_sold) as units
+        FROM sales JOIN stock ON sales.stock_id = stock.id
+        WHERE sales.user_id = %s
+        GROUP BY stock.product_name ORDER BY revenue DESC LIMIT 5
+    ''', (current_user.id,))
+    top_products = cur.fetchall()
+
+    # Top customers by spend
+    cur.execute('''
+        SELECT COALESCE(NULLIF(customer_name, ''), 'Walk-in') as customer_name,
+               SUM(total_amount) as spent, COUNT(*) as orders
+        FROM sales WHERE user_id = %s
+        GROUP BY customer_name ORDER BY spent DESC LIMIT 5
+    ''', (current_user.id,))
+    top_customers = cur.fetchall()
+
+    cur.close()
+    conn.close()
+    return render_template('reports.html', months=months,
+                            monthly_income=monthly_income, monthly_expenses=monthly_expenses,
+                            monthly_profit=monthly_profit, top_products=top_products, top_customers=top_customers)
 
 # ======================== Daily Summary ========================
 
