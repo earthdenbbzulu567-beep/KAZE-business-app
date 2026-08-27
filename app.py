@@ -1,4 +1,7 @@
 # Business App - Web Version with PostgreSQL (Aiven)
+# Merged version: includes original features + activity feed, pagination, bulk stock actions,
+# global search, enhanced reports, and timesince filter.
+
 from flask import Flask, render_template, request, redirect, url_for, flash, Response, send_file
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -16,17 +19,46 @@ from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image as RLImage
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_LEFT
-from reportlab.graphics.shapes import Drawing, Rect, Line, Circle
+import re
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
-# Login setup
+# --------------------- Helper: time since (for activity feed) ---------------------
+@app.template_filter('timesince')
+def timesince_filter(dt):
+    """
+    Jinja filter to show relative time like "2 hours ago".
+    Expects dt as a datetime object or string.
+    """
+    if isinstance(dt, str):
+        try:
+            dt = datetime.fromisoformat(dt.replace('Z', '+00:00'))
+        except ValueError:
+            return dt
+    now = datetime.now()
+    diff = now - dt
+    seconds = diff.total_seconds()
+    if seconds < 60:
+        return "just now"
+    elif seconds < 3600:
+        m = int(seconds // 60)
+        return f"{m} minute{'s' if m > 1 else ''} ago"
+    elif seconds < 86400:
+        h = int(seconds // 3600)
+        return f"{h} hour{'s' if h > 1 else ''} ago"
+    elif seconds < 604800:
+        d = int(seconds // 86400)
+        return f"{d} day{'s' if d > 1 else ''} ago"
+    else:
+        return dt.strftime('%Y-%m-%d %H:%M')
+
+# --------------------- Login setup ---------------------
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
-# Database connection (Aiven PostgreSQL)
+# --------------------- Database ---------------------
 def get_db():
     DATABASE_URL = os.environ.get('DATABASE_URL')
     if not DATABASE_URL:
@@ -127,7 +159,6 @@ def init_db():
             customer_id INTEGER REFERENCES customers(id)
         )
     ''')
-    # In case sales/documents tables already existed from an earlier version, add missing columns
     cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS customer_id INTEGER REFERENCES customers(id)")
     cur.execute('''
         CREATE TABLE IF NOT EXISTS settings (
@@ -147,10 +178,11 @@ def init_db():
             currency_code TEXT DEFAULT 'USD',
             currency_symbol TEXT DEFAULT '$',
             tax_rate REAL DEFAULT 0,
-            business_name TEXT DEFAULT ''
+            business_name TEXT DEFAULT '',
+            monthly_revenue_goal REAL DEFAULT 0,
+            tutorial_completed INTEGER DEFAULT 0
         )
     ''')
-    # In case settings table already existed from an earlier version, add missing columns
     cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS currency_code TEXT DEFAULT 'USD'")
     cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS currency_symbol TEXT DEFAULT '$'")
     cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS tax_rate REAL DEFAULT 0")
@@ -167,7 +199,7 @@ def init_db():
             ip_address TEXT
         )
     ''')
-    # SWOT analyses - a business can save several over time
+    # SWOT
     cur.execute('''
         CREATE TABLE IF NOT EXISTS swot_analyses (
             id SERIAL PRIMARY KEY,
@@ -180,7 +212,7 @@ def init_db():
             created_date TEXT NOT NULL
         )
     ''')
-    # Business plan - one editable plan per user
+    # Business plan
     cur.execute('''
         CREATE TABLE IF NOT EXISTS business_plans (
             id SERIAL PRIMARY KEY,
@@ -196,8 +228,7 @@ def init_db():
             updated_date TEXT
         )
     ''')
-
-    # ── Recurring invoices/expenses ──
+    # Recurring
     cur.execute('''
         CREATE TABLE IF NOT EXISTS recurring_items (
             id SERIAL PRIMARY KEY,
@@ -213,8 +244,7 @@ def init_db():
             created_date TEXT NOT NULL
         )
     ''')
-
-    # ── Suppliers & purchase orders ──
+    # Suppliers
     cur.execute('''
         CREATE TABLE IF NOT EXISTS suppliers (
             id SERIAL PRIMARY KEY,
@@ -226,6 +256,7 @@ def init_db():
             notes TEXT DEFAULT ''
         )
     ''')
+    # Purchase orders
     cur.execute('''
         CREATE TABLE IF NOT EXISTS purchase_orders (
             id SERIAL PRIMARY KEY,
@@ -241,8 +272,7 @@ def init_db():
             stock_id INTEGER REFERENCES stock(id)
         )
     ''')
-
-    # ── Budgeting ──
+    # Budgets
     cur.execute('''
         CREATE TABLE IF NOT EXISTS budgets (
             id SERIAL PRIMARY KEY,
@@ -253,8 +283,7 @@ def init_db():
             UNIQUE(user_id, category)
         )
     ''')
-
-    # ── Notifications ──
+    # Notifications
     cur.execute('''
         CREATE TABLE IF NOT EXISTS notifications (
             id SERIAL PRIMARY KEY,
@@ -265,14 +294,36 @@ def init_db():
             created_date TEXT NOT NULL
         )
     ''')
-
+    # ─── NEW: Activities table ───
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS activities (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            username TEXT NOT NULL,
+            action TEXT NOT NULL,
+            details TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
     conn.commit()
     cur.close()
     conn.close()
 
 init_db()
 
-# Email function
+# --------------------- Helper: log activity ---------------------
+def log_activity(user_id, username, action, details=None):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('''
+        INSERT INTO activities (user_id, username, action, details, created_at)
+        VALUES (%s, %s, %s, %s, NOW())
+    ''', (user_id, username, action, details))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+# --------------------- Email function ---------------------
 def send_email(to_email, subject, body):
     from_email = os.environ.get('MAIL_USERNAME')
     password = os.environ.get('MAIL_PASSWORD')
@@ -294,10 +345,8 @@ def send_email(to_email, subject, body):
         print(f"Email error: {e}")
         return False
 
-# User class
+# --------------------- User class ---------------------
 def _business_id_for(role, owner_id, own_id):
-    """The id all business data is scoped under: the owner's own id for owners,
-    or the linked owner's id for staff accounts."""
     if role == 'staff' and owner_id:
         return owner_id
     return own_id
@@ -309,14 +358,9 @@ class User(UserMixin):
         self.email = email
         self.role = role or 'owner'
         self.owner_id = owner_id
-        # self.id is the *business* id used everywhere data is scoped by user_id.
-        # For staff accounts this resolves to the business owner's id, so staff
-        # transparently see and edit the same data as the owner.
         self.id = _business_id_for(self.role, self.owner_id, self.db_id)
 
     def get_id(self):
-        # Flask-Login needs the account's OWN row id to reload it from the DB
-        # on the next request - not the business id.
         return str(self.db_id)
 
 @app.context_processor
@@ -387,7 +431,7 @@ def login():
         conn.close()
         if user and check_password_hash(user['password'], password):
             login_user(User(user['id'], user['username'], user['email'], user.get('role'), user.get('owner_id')))
-            # Log activity – catches any error so login never fails
+            # Log activity
             try:
                 now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 ip = request.headers.get('X-Forwarded-For', request.remote_addr)
@@ -400,7 +444,6 @@ def login():
                 cur.close()
                 conn.close()
             except Exception as e:
-                # Log the error but don't block login
                 print(f"Activity log error: {e}")
             return redirect(url_for('dashboard'))
         else:
@@ -479,6 +522,16 @@ def dashboard():
     for item in expenses:
         expense_by_date[item['date']] = expense_by_date.get(item['date'], 0) + item['amount']
     
+    # ─── Activity feed ───
+    cur.execute('''
+        SELECT username, action, details, created_at
+        FROM activities
+        WHERE user_id = %s
+        ORDER BY created_at DESC
+        LIMIT 10
+    ''', (current_user.id,))
+    activities = cur.fetchall()
+    
     cur.close()
     conn.close()
     
@@ -497,7 +550,8 @@ def dashboard():
                          monthly_goal=monthly_goal,
                          month_revenue=month_revenue,
                          goal_progress_pct=goal_progress_pct,
-                         tutorial_completed=tutorial_completed)
+                         tutorial_completed=tutorial_completed,
+                         activities=activities)
 
 # ======================== Add Income / Expense ========================
 
@@ -514,6 +568,7 @@ def add_income():
     conn.commit()
     cur.close()
     conn.close()
+    log_activity(current_user.id, current_user.username, 'Added income', f'{source} ${amount:.2f}')
     flash('Income added!', 'success')
     return redirect(url_for('dashboard'))
 
@@ -531,6 +586,7 @@ def add_expense():
     conn.commit()
     cur.close()
     conn.close()
+    log_activity(current_user.id, current_user.username, 'Added expense', f'{name} ${amount:.2f}')
     flash('Expense added!', 'success')
     return redirect(url_for('dashboard'))
 
@@ -543,6 +599,7 @@ def delete_income(id):
     conn.commit()
     cur.close()
     conn.close()
+    log_activity(current_user.id, current_user.username, 'Deleted income', f'ID {id}')
     flash('Income deleted', 'success')
     return redirect(url_for('dashboard'))
 
@@ -555,6 +612,7 @@ def delete_expense(id):
     conn.commit()
     cur.close()
     conn.close()
+    log_activity(current_user.id, current_user.username, 'Deleted expense', f'ID {id}')
     flash('Expense deleted', 'success')
     return redirect(url_for('dashboard'))
 
@@ -590,6 +648,7 @@ def add_doc():
     conn.commit()
     cur.close()
     conn.close()
+    log_activity(current_user.id, current_user.username, 'Created document', title)
     flash('Document saved!', 'success')
     return redirect(url_for('docs'))
 
@@ -602,6 +661,7 @@ def delete_doc(id):
     conn.commit()
     cur.close()
     conn.close()
+    log_activity(current_user.id, current_user.username, 'Deleted document', f'ID {id}')
     flash('Document deleted.', 'success')
     return redirect(url_for('docs'))
 
@@ -616,11 +676,21 @@ def logout():
 @app.route('/customers')
 @login_required
 def customers():
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    offset = (page - 1) * per_page
+    
     conn = get_db()
     cur = conn.cursor()
-    cur.execute('SELECT * FROM customers WHERE user_id = %s ORDER BY name', (current_user.id,))
+    cur.execute('SELECT COUNT(*) as total FROM customers WHERE user_id = %s', (current_user.id,))
+    total = cur.fetchone()['total']
+    
+    cur.execute('''
+        SELECT * FROM customers WHERE user_id = %s ORDER BY name
+        LIMIT %s OFFSET %s
+    ''', (current_user.id, per_page, offset))
     all_customers = cur.fetchall()
-    # Lifetime spend per customer, based on sales linked to them
+    
     cur.execute('''
         SELECT customer_id, COALESCE(SUM(total_amount), 0) as total_spent, COUNT(*) as order_count
         FROM sales WHERE user_id = %s AND customer_id IS NOT NULL
@@ -629,7 +699,14 @@ def customers():
     spend_by_customer = {row['customer_id']: row for row in cur.fetchall()}
     cur.close()
     conn.close()
-    return render_template('customers.html', customers=all_customers, spend_by_customer=spend_by_customer)
+    
+    total_pages = (total + per_page - 1) // per_page
+    return render_template('customers.html', 
+                         customers=all_customers,
+                         spend_by_customer=spend_by_customer,
+                         page=page,
+                         total_pages=total_pages,
+                         per_page=per_page)
 
 @app.route('/customers/add', methods=['POST'])
 @login_required
@@ -648,6 +725,7 @@ def add_customer():
     conn.commit()
     cur.close()
     conn.close()
+    log_activity(current_user.id, current_user.username, 'Added customer', name)
     flash('Customer added.', 'success')
     return redirect(url_for('customers'))
 
@@ -675,6 +753,7 @@ def edit_customer(id):
         conn.commit()
         cur.close()
         conn.close()
+        log_activity(current_user.id, current_user.username, 'Updated customer', name)
         flash('Customer updated.', 'success')
         return redirect(url_for('customers'))
 
@@ -691,6 +770,7 @@ def delete_customer(id):
     conn.commit()
     cur.close()
     conn.close()
+    log_activity(current_user.id, current_user.username, 'Deleted customer', f'ID {id}')
     flash('Customer deleted.', 'success')
     return redirect(url_for('customers'))
 
@@ -699,15 +779,34 @@ def delete_customer(id):
 @app.route('/stock')
 @login_required
 def stock():
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    offset = (page - 1) * per_page
+    
     conn = get_db()
     cur = conn.cursor()
-    cur.execute('SELECT * FROM stock WHERE user_id = %s ORDER BY product_name', (current_user.id,))
+    cur.execute('SELECT COUNT(*) as total FROM stock WHERE user_id = %s', (current_user.id,))
+    total = cur.fetchone()['total']
+    
+    cur.execute('''
+        SELECT * FROM stock WHERE user_id = %s
+        ORDER BY product_name
+        LIMIT %s OFFSET %s
+    ''', (current_user.id, per_page, offset))
     items = cur.fetchall()
     cur.close()
     conn.close()
+    
     product_names = [item['product_name'] for item in items]
     inventory_values = [item['quantity'] * item['cost_price'] for item in items]
-    return render_template('stock.html', items=items, product_names=product_names, inventory_values=inventory_values)
+    total_pages = (total + per_page - 1) // per_page
+    return render_template('stock.html', 
+                         items=items,
+                         product_names=product_names,
+                         inventory_values=inventory_values,
+                         page=page,
+                         total_pages=total_pages,
+                         per_page=per_page)
 
 @app.route('/stock/add', methods=['POST'])
 @login_required
@@ -726,6 +825,7 @@ def add_stock():
     conn.commit()
     cur.close()
     conn.close()
+    log_activity(current_user.id, current_user.username, 'Added stock', f'{product_name} qty {quantity}')
     flash('Stock item added.', 'success')
     return redirect(url_for('stock'))
 
@@ -769,6 +869,7 @@ def update_stock(id):
     
     cur.close()
     conn.close()
+    log_activity(current_user.id, current_user.username, 'Updated stock', f'{product["product_name"]} to {new_quantity}')
     flash('Stock updated.', 'success')
     return redirect(url_for('stock'))
 
@@ -781,6 +882,7 @@ def delete_stock(id):
     conn.commit()
     cur.close()
     conn.close()
+    log_activity(current_user.id, current_user.username, 'Deleted stock', f'ID {id}')
     flash('Stock item deleted.', 'success')
     return redirect(url_for('stock'))
 
@@ -809,6 +911,7 @@ def edit_stock(id):
         conn.commit()
         cur.close()
         conn.close()
+        log_activity(current_user.id, current_user.username, 'Edited stock', product_name)
         flash('Stock updated.', 'success')
         return redirect(url_for('stock'))
     
@@ -842,8 +945,124 @@ def check_low_stock():
         body += f"- {item['product_name']}: {item['quantity']} {item['unit'] or ''} remaining\n"
     send_email(to_email, "Low Stock Report", body)
     _notify(current_user.id, f"Low stock report sent: {len(low_items)} item(s) below threshold.", 'low_stock')
+    log_activity(current_user.id, current_user.username, 'Checked low stock', f'{len(low_items)} items')
     flash(f'Low stock report sent to {to_email} ({len(low_items)} item(s)).', 'success')
     return redirect(url_for('stock'))
+
+# ─── Bulk actions for stock ───
+@app.route('/stock/bulk', methods=['POST'])
+@login_required
+def stock_bulk():
+    action = request.form.get('action')
+    ids = request.form.getlist('selected_ids')
+    if not ids:
+        flash('No items selected.', 'danger')
+        return redirect(url_for('stock'))
+    
+    conn = get_db()
+    cur = conn.cursor()
+    if action == 'delete':
+        cur.execute('DELETE FROM stock WHERE id = ANY(%s) AND user_id = %s', (ids, current_user.id))
+        conn.commit()
+        log_activity(current_user.id, current_user.username, 'Bulk delete stock', f'{len(ids)} items')
+        flash(f'Deleted {len(ids)} items.', 'success')
+    elif action == 'update_quantity':
+        new_qty = request.form.get('new_quantity')
+        if new_qty is None or new_qty == '':
+            flash('Please enter a new quantity.', 'danger')
+            return redirect(url_for('stock'))
+        cur.execute('UPDATE stock SET quantity = %s WHERE id = ANY(%s) AND user_id = %s', (new_qty, ids, current_user.id))
+        conn.commit()
+        log_activity(current_user.id, current_user.username, 'Bulk update stock quantity', f'{len(ids)} items to {new_qty}')
+        flash(f'Updated quantity for {len(ids)} items.', 'success')
+    elif action == 'export':
+        cur.execute('SELECT product_name, quantity, unit, cost_price, selling_price FROM stock WHERE id = ANY(%s) AND user_id = %s', (ids, current_user.id))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        return _csv_response('selected_stock.csv',
+                          ['Product', 'Quantity', 'Unit', 'Cost Price', 'Selling Price'],
+                          [(r['product_name'], r['quantity'], r['unit'], r['cost_price'], r['selling_price']) for r in rows])
+    else:
+        flash('Invalid action.', 'danger')
+    cur.close()
+    conn.close()
+    return redirect(url_for('stock'))
+
+# ─── Bulk actions for sales ───
+@app.route('/sales/bulk', methods=['POST'])
+@login_required
+def sales_bulk():
+    action = request.form.get('action')
+    ids = request.form.getlist('selected_ids')
+    if not ids:
+        flash('No sales selected.', 'danger')
+        return redirect(url_for('sales'))
+
+    conn = get_db()
+    cur = conn.cursor()
+    if action == 'delete':
+        # Restore stock for each sale before deleting
+        for sid in ids:
+            cur.execute('SELECT stock_id, quantity_sold FROM sales WHERE id = %s AND user_id = %s', (sid, current_user.id))
+            sale = cur.fetchone()
+            if sale:
+                cur.execute('UPDATE stock SET quantity = quantity + %s WHERE id = %s AND user_id = %s',
+                            (sale['quantity_sold'], sale['stock_id'], current_user.id))
+        cur.execute('DELETE FROM sales WHERE id = ANY(%s) AND user_id = %s', (ids, current_user.id))
+        conn.commit()
+        log_activity(current_user.id, current_user.username, 'Bulk delete sales', f'{len(ids)} items')
+        flash(f'Deleted {len(ids)} sales and restored stock.', 'success')
+    elif action == 'export':
+        cur.execute('''
+            SELECT stock.product_name, sales.quantity_sold, sales.selling_price_at_time,
+                   sales.total_amount, sales.profit, sales.sale_date, sales.customer_name, sales.customer_email
+            FROM sales JOIN stock ON sales.stock_id = stock.id
+            WHERE sales.id = ANY(%s) AND sales.user_id = %s
+        ''', (ids, current_user.id))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        return _csv_response('selected_sales.csv',
+                             ['Product', 'Quantity', 'Selling Price', 'Total', 'Profit', 'Date', 'Customer', 'Customer Email'],
+                             [(r['product_name'], r['quantity_sold'], r['selling_price_at_time'], r['total_amount'],
+                               r['profit'], r['sale_date'], r['customer_name'], r['customer_email']) for r in rows])
+    else:
+        flash('Invalid action.', 'danger')
+    cur.close()
+    conn.close()
+    return redirect(url_for('sales'))
+
+# ─── Bulk actions for customers ───
+@app.route('/customers/bulk', methods=['POST'])
+@login_required
+def customers_bulk():
+    action = request.form.get('action')
+    ids = request.form.getlist('selected_ids')
+    if not ids:
+        flash('No customers selected.', 'danger')
+        return redirect(url_for('customers'))
+
+    conn = get_db()
+    cur = conn.cursor()
+    if action == 'delete':
+        cur.execute('DELETE FROM customers WHERE id = ANY(%s) AND user_id = %s', (ids, current_user.id))
+        conn.commit()
+        log_activity(current_user.id, current_user.username, 'Bulk delete customers', f'{len(ids)} items')
+        flash(f'Deleted {len(ids)} customers.', 'success')
+    elif action == 'export':
+        cur.execute('SELECT name, email, phone, address, notes FROM customers WHERE id = ANY(%s) AND user_id = %s',
+                    (ids, current_user.id))
+        rows = [(r['name'], r['email'], r['phone'], r['address'], r['notes']) for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return _csv_response('selected_customers.csv',
+                             ['Name', 'Email', 'Phone', 'Address', 'Notes'], rows)
+    else:
+        flash('Invalid action.', 'danger')
+    cur.close()
+    conn.close()
+    return redirect(url_for('customers'))
 
 # ======================== Settings ========================
 
@@ -929,6 +1148,7 @@ def add_cash_entry():
     conn.commit()
     cur.close()
     conn.close()
+    log_activity(current_user.id, current_user.username, 'Added cash entry', f'{entry_type} ${amount:.2f}')
     flash('Cash entry added.', 'success')
     return redirect(url_for('cashbook'))
 
@@ -957,6 +1177,7 @@ def edit_cash_entry(id):
         conn.commit()
         cur.close()
         conn.close()
+        log_activity(current_user.id, current_user.username, 'Edited cash entry', f'ID {id}')
         flash('Cash entry updated.', 'success')
         return redirect(url_for('cashbook'))
     
@@ -973,6 +1194,7 @@ def delete_cash_entry(id):
     conn.commit()
     cur.close()
     conn.close()
+    log_activity(current_user.id, current_user.username, 'Deleted cash entry', f'ID {id}')
     flash('Cash entry deleted.', 'success')
     return redirect(url_for('cashbook'))
 
@@ -981,21 +1203,28 @@ def delete_cash_entry(id):
 @app.route('/sales')
 @login_required
 def sales():
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    offset = (page - 1) * per_page
+    
     conn = get_db()
     cur = conn.cursor()
+    cur.execute('SELECT COUNT(*) as total FROM sales WHERE user_id = %s', (current_user.id,))
+    total = cur.fetchone()['total']
+    
     cur.execute('''
         SELECT sales.*, stock.product_name 
         FROM sales 
         JOIN stock ON sales.stock_id = stock.id
         WHERE sales.user_id = %s 
         ORDER BY sale_date DESC
-    ''', (current_user.id,))
+        LIMIT %s OFFSET %s
+    ''', (current_user.id, per_page, offset))
     all_sales = cur.fetchall()
     
     cur.execute('SELECT id, product_name, selling_price, quantity FROM stock WHERE user_id = %s AND quantity > 0',
                 (current_user.id,))
     stock_items = cur.fetchall()
-
     cur.execute('SELECT id, name, email FROM customers WHERE user_id = %s ORDER BY name', (current_user.id,))
     customer_list = cur.fetchall()
     
@@ -1006,8 +1235,16 @@ def sales():
     
     cur.close()
     conn.close()
-    return render_template('sales.html', sales=all_sales, stock_items=stock_items,
-                            sales_by_date=sales_by_date, customer_list=customer_list)
+    
+    total_pages = (total + per_page - 1) // per_page
+    return render_template('sales.html', 
+                         sales=all_sales,
+                         stock_items=stock_items,
+                         sales_by_date=sales_by_date,
+                         customer_list=customer_list,
+                         page=page,
+                         total_pages=total_pages,
+                         per_page=per_page)
 
 @app.route('/sales/add', methods=['POST'])
 @login_required
@@ -1031,7 +1268,6 @@ def add_sale():
         flash(f'Insufficient stock. Only {stock_item["quantity"]} available.', 'danger')
         return redirect(url_for('sales'))
 
-    # If an existing customer was picked, use their saved name/email
     if customer_id:
         cur.execute('SELECT name, email FROM customers WHERE id = %s AND user_id = %s', (customer_id, current_user.id))
         saved_customer = cur.fetchone()
@@ -1054,6 +1290,8 @@ def add_sale():
     conn.commit()
     cur.close()
     conn.close()
+    
+    log_activity(current_user.id, current_user.username, 'Recorded sale', f'{stock_item["product_name"]} x{quantity_sold} ${total_amount:.2f}')
     flash(f'Sale recorded. Profit: ${profit:.2f}', 'success')
     return redirect(url_for('sales'))
 
@@ -1068,6 +1306,7 @@ def delete_sale(id):
         cur.execute('UPDATE stock SET quantity = quantity + %s WHERE id = %s', (sale['quantity_sold'], sale['stock_id']))
         cur.execute('DELETE FROM sales WHERE id = %s', (id,))
         conn.commit()
+        log_activity(current_user.id, current_user.username, 'Deleted sale', f'ID {id}')
         flash('Sale deleted and stock restored.', 'success')
     else:
         flash('Sale not found.', 'danger')
@@ -1164,6 +1403,155 @@ def export_customers_csv():
     cur.close()
     conn.close()
     return _csv_response('customers.csv', ['Name', 'Email', 'Phone', 'Address', 'Notes'], rows)
+
+# ======================== CSV Import ========================
+
+def _read_uploaded_csv(file_storage):
+    """Parse an uploaded CSV file into a list of dict rows. Returns None on failure."""
+    if not file_storage or file_storage.filename == '':
+        return None
+    try:
+        stream = io.StringIO(file_storage.stream.read().decode('utf-8-sig'), newline=None)
+        return list(csv.DictReader(stream))
+    except Exception:
+        return None
+
+@app.route('/import/stock', methods=['POST'])
+@login_required
+def import_stock_csv():
+    rows = _read_uploaded_csv(request.files.get('file'))
+    if rows is None:
+        flash('Could not read that file. Please upload a CSV exported from this app (or matching columns: Product, Quantity, Unit, Cost Price, Selling Price).', 'danger')
+        return redirect(url_for('stock'))
+    conn = get_db()
+    cur = conn.cursor()
+    count = 0
+    for row in rows:
+        try:
+            product_name = (row.get('Product') or '').strip()
+            if not product_name:
+                continue
+            cur.execute('''
+                INSERT INTO stock (user_id, product_name, quantity, unit, cost_price, selling_price)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            ''', (current_user.id, product_name, float(row.get('Quantity') or 0),
+                  row.get('Unit', ''), float(row.get('Cost Price') or 0), float(row.get('Selling Price') or 0)))
+            count += 1
+        except (ValueError, KeyError):
+            continue
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash(f'Imported {count} stock item(s).' if count else 'No rows imported — check the file has a Product column with values in it.', 'success' if count else 'danger')
+    return redirect(url_for('stock'))
+
+@app.route('/import/customers', methods=['POST'])
+@login_required
+def import_customers_csv():
+    rows = _read_uploaded_csv(request.files.get('file'))
+    if rows is None:
+        flash('Could not read that file. Please upload a CSV with columns: Name, Email, Phone, Address, Notes.', 'danger')
+        return redirect(url_for('customers'))
+    conn = get_db()
+    cur = conn.cursor()
+    count = 0
+    for row in rows:
+        name = (row.get('Name') or '').strip()
+        if not name:
+            continue
+        cur.execute('''
+            INSERT INTO customers (user_id, name, email, phone, address, notes)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        ''', (current_user.id, name, row.get('Email', ''), row.get('Phone', ''), row.get('Address', ''), row.get('Notes', '')))
+        count += 1
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash(f'Imported {count} customer(s).' if count else 'No rows imported — check the file has a Name column with values in it.', 'success' if count else 'danger')
+    return redirect(url_for('customers'))
+
+@app.route('/import/income', methods=['POST'])
+@login_required
+def import_income_csv():
+    rows = _read_uploaded_csv(request.files.get('file'))
+    if rows is None:
+        flash('Could not read that file. Please upload a CSV with columns: Source, Amount, Date.', 'danger')
+        return redirect(url_for('dashboard'))
+    conn = get_db()
+    cur = conn.cursor()
+    count = 0
+    for row in rows:
+        try:
+            source = (row.get('Source') or '').strip()
+            if not source:
+                continue
+            cur.execute('INSERT INTO income (user_id, source, amount, date) VALUES (%s, %s, %s, %s)',
+                        (current_user.id, source, float(row.get('Amount') or 0),
+                         row.get('Date') or datetime.today().strftime('%Y-%m-%d')))
+            count += 1
+        except (ValueError, KeyError):
+            continue
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash(f'Imported {count} income record(s).' if count else 'No rows imported — check the file has a Source column with values in it.', 'success' if count else 'danger')
+    return redirect(url_for('dashboard'))
+
+@app.route('/import/expenses', methods=['POST'])
+@login_required
+def import_expenses_csv():
+    rows = _read_uploaded_csv(request.files.get('file'))
+    if rows is None:
+        flash('Could not read that file. Please upload a CSV with columns: Name, Amount, Category, Date.', 'danger')
+        return redirect(url_for('dashboard'))
+    conn = get_db()
+    cur = conn.cursor()
+    count = 0
+    for row in rows:
+        try:
+            name = (row.get('Name') or '').strip()
+            if not name:
+                continue
+            cur.execute('INSERT INTO expenses (user_id, name, amount, category, date) VALUES (%s, %s, %s, %s, %s)',
+                        (current_user.id, name, float(row.get('Amount') or 0),
+                         row.get('Category') or 'Other', row.get('Date') or datetime.today().strftime('%Y-%m-%d')))
+            count += 1
+        except (ValueError, KeyError):
+            continue
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash(f'Imported {count} expense(s).' if count else 'No rows imported — check the file has a Name column with values in it.', 'success' if count else 'danger')
+    return redirect(url_for('dashboard'))
+
+@app.route('/import/cashbook', methods=['POST'])
+@login_required
+def import_cashbook_csv():
+    rows = _read_uploaded_csv(request.files.get('file'))
+    if rows is None:
+        flash('Could not read that file. Please upload a CSV with columns: Type, Category, Description, Amount, Date.', 'danger')
+        return redirect(url_for('cashbook'))
+    conn = get_db()
+    cur = conn.cursor()
+    count = 0
+    for row in rows:
+        try:
+            entry_type = (row.get('Type') or '').strip().lower()
+            if entry_type not in ('in', 'out'):
+                continue
+            cur.execute('''
+                INSERT INTO cash_books (user_id, entry_type, category, description, amount, date)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            ''', (current_user.id, entry_type, row.get('Category', ''), row.get('Description', ''),
+                  float(row.get('Amount') or 0), row.get('Date') or datetime.today().strftime('%Y-%m-%d')))
+            count += 1
+        except (ValueError, KeyError):
+            continue
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash((f'Imported {count} cash book entr{"y" if count == 1 else "ies"}.') if count else 'No rows imported — check the file has a Type column with "in" or "out" values.', 'success' if count else 'danger')
+    return redirect(url_for('cashbook'))
 
 # ======================== PDF Generation ========================
 
@@ -1850,54 +2238,76 @@ def clear_notifications():
     flash('Notifications cleared.', 'success')
     return redirect(url_for('notifications'))
 
-# ======================== Reports ========================
+# ======================== Reports with date range and charts ========================
 
 @app.route('/reports')
 @login_required
 def reports():
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    if not start_date:
+        start_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+    if not end_date:
+        end_date = datetime.now().strftime('%Y-%m-%d')
+    
     conn = get_db()
     cur = conn.cursor()
-
-    # Monthly profit trend for the last 6 months
+    
+    # Expenses by category (pie chart)
+    cur.execute('''
+        SELECT category, SUM(amount) as total
+        FROM expenses
+        WHERE user_id = %s AND date BETWEEN %s AND %s
+        GROUP BY category
+        ORDER BY total DESC
+    ''', (current_user.id, start_date, end_date))
+    expense_by_category = cur.fetchall()
+    
+    # Top products by revenue (bar chart) — FIXED: now includes profit
+    cur.execute('''
+        SELECT stock.product_name,
+               SUM(sales.quantity_sold) as units_sold,
+               SUM(sales.total_amount) as revenue,
+               SUM(sales.profit) as profit
+        FROM sales JOIN stock ON sales.stock_id = stock.id
+        WHERE sales.user_id = %s AND sales.sale_date BETWEEN %s AND %s
+        GROUP BY stock.product_name
+        ORDER BY revenue DESC
+        LIMIT 5
+    ''', (current_user.id, start_date, end_date))
+    top_products = cur.fetchall()
+    
+    # Also the monthly profit trend (keep existing)
     months = []
     for i in range(5, -1, -1):
         m = _add_months(datetime.today().replace(day=1).strftime('%Y-%m-%d'), -i)
-        months.append(m[:7])  # YYYY-MM
-
+        months.append(m[:7])
+    
     monthly_income = {m: 0 for m in months}
     monthly_expenses = {m: 0 for m in months}
     monthly_sales_profit = {m: 0 for m in months}
-
+    
     cur.execute('SELECT date, amount FROM income WHERE user_id = %s', (current_user.id,))
     for row in cur.fetchall():
         key = row['date'][:7]
         if key in monthly_income:
             monthly_income[key] += row['amount']
-
+    
     cur.execute('SELECT date, amount FROM expenses WHERE user_id = %s', (current_user.id,))
     for row in cur.fetchall():
         key = row['date'][:7]
         if key in monthly_expenses:
             monthly_expenses[key] += row['amount']
-
+    
     cur.execute('SELECT sale_date, profit FROM sales WHERE user_id = %s', (current_user.id,))
     for row in cur.fetchall():
         key = row['sale_date'][:7]
         if key in monthly_sales_profit:
             monthly_sales_profit[key] += row['profit']
-
+    
     monthly_profit = {m: monthly_income[m] - monthly_expenses[m] + monthly_sales_profit[m] for m in months}
-
-    # Top products by revenue
-    cur.execute('''
-        SELECT stock.product_name, SUM(sales.total_amount) as revenue, SUM(sales.profit) as profit, SUM(sales.quantity_sold) as units
-        FROM sales JOIN stock ON sales.stock_id = stock.id
-        WHERE sales.user_id = %s
-        GROUP BY stock.product_name ORDER BY revenue DESC LIMIT 5
-    ''', (current_user.id,))
-    top_products = cur.fetchall()
-
-    # Top customers by spend
+    
+    # Top customers (keep existing)
     cur.execute('''
         SELECT COALESCE(NULLIF(customer_name, ''), 'Walk-in') as customer_name,
                SUM(total_amount) as spent, COUNT(*) as orders
@@ -1905,12 +2315,20 @@ def reports():
         GROUP BY customer_name ORDER BY spent DESC LIMIT 5
     ''', (current_user.id,))
     top_customers = cur.fetchall()
-
+    
     cur.close()
     conn.close()
-    return render_template('reports.html', months=months,
-                            monthly_income=monthly_income, monthly_expenses=monthly_expenses,
-                            monthly_profit=monthly_profit, top_products=top_products, top_customers=top_customers)
+    
+    return render_template('reports.html',
+                           months=months,
+                           monthly_income=monthly_income,
+                           monthly_expenses=monthly_expenses,
+                           monthly_profit=monthly_profit,
+                           top_products=top_products,
+                           top_customers=top_customers,
+                           expense_by_category=expense_by_category,
+                           start_date=start_date,
+                           end_date=end_date)
 
 # ======================== Daily Summary ========================
 
@@ -1974,6 +2392,51 @@ def activity():
     cur.close()
     conn.close()
     return render_template('activity.html', logs=logs, active_count=active_count)
+
+# ======================== Global Search ========================
+
+@app.route('/search')
+@login_required
+def search():
+    q = request.args.get('q', '').strip()
+    if not q:
+        flash('Please enter a search term.', 'info')
+        return redirect(url_for('dashboard'))
+    
+    conn = get_db()
+    cur = conn.cursor()
+    # Search customers
+    cur.execute('''
+        SELECT id, name, 'customer' as type
+        FROM customers
+        WHERE user_id = %s AND (name ILIKE %s OR email ILIKE %s OR phone ILIKE %s)
+        LIMIT 10
+    ''', (current_user.id, f'%{q}%', f'%{q}%', f'%{q}%'))
+    customers = cur.fetchall()
+    
+    # Search products
+    cur.execute('''
+        SELECT id, product_name as name, 'product' as type
+        FROM stock
+        WHERE user_id = %s AND product_name ILIKE %s
+        LIMIT 10
+    ''', (current_user.id, f'%{q}%'))
+    products = cur.fetchall()
+    
+    # Search documents (invoices)
+    cur.execute('''
+        SELECT id, title as name, 'document' as type
+        FROM documents
+        WHERE user_id = %s AND (title ILIKE %s OR client ILIKE %s)
+        LIMIT 10
+    ''', (current_user.id, f'%{q}%', f'%{q}%'))
+    docs = cur.fetchall()
+    
+    cur.close()
+    conn.close()
+    
+    results = customers + products + docs
+    return render_template('search_results.html', results=results, q=q)
 
 # ======================== Main ========================
 

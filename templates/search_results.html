@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Search results for "{{ q }}"</h1>
+{% if results %}
+    <ul style="list-style:none; padding:0;">
+    {% for result in results %}
+        <li style="padding:8px 0; border-bottom:1px solid var(--border);">
+            <span style="font-weight:600;">{{ result.name }}</span>
+            <span style="color:var(--text3); font-size:0.8rem;">({{ result.type }})</span>
+            {% if result.type == 'customer' %}
+                <a href="{{ url_for('edit_customer', id=result.id) }}">View</a>
+            {% elif result.type == 'product' %}
+                <a href="{{ url_for('edit_stock', id=result.id) }}">View</a>
+            {% elif result.type == 'document' %}
+                <a href="{{ url_for('doc_pdf', id=result.id) }}">View PDF</a>
+            {% endif %}
+        </li>
+    {% endfor %}
+    </ul>
+{% else %}
+    <p>No results found.</p>
+{% endif %}
+{% endblock %}

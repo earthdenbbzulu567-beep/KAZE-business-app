@@ -7,10 +7,31 @@
     </div>
 </div>
 
+<!-- Date Range Filter -->
+<form method="GET" style="display:flex; gap:1rem; flex-wrap:wrap; align-items:center; margin-bottom:1.5rem;">
+    <label>From: <input type="date" name="start_date" value="{{ start_date }}"></label>
+    <label>To: <input type="date" name="end_date" value="{{ end_date }}"></label>
+    <button type="submit">Update</button>
+</form>
+
+<!-- Profit Trend Chart -->
 <div class="chart-container">
     <canvas id="profitTrendChart"></canvas>
 </div>
 
+<!-- Expense Pie & Product Bar Charts -->
+<div class="chart-container" style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem;">
+    <div>
+        <h3>Expenses by Category</h3>
+        <canvas id="expensePieChart"></canvas>
+    </div>
+    <div>
+        <h3>Top Products by Revenue</h3>
+        <canvas id="productBarChart"></canvas>
+    </div>
+</div>
+
+<!-- Top Products & Top Customers Tables -->
 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1.5rem; margin-top:2rem;">
     <div>
         <h2>🏆 Top Products</h2>
@@ -56,10 +77,12 @@
 <style>
     @media (max-width: 800px) {
         div[style*="grid-template-columns: 1fr 1fr"] { grid-template-columns: 1fr !important; }
+        .chart-container[style*="grid-template-columns: 1fr 1fr"] { grid-template-columns: 1fr !important; }
     }
 </style>
 
 <script>
+    // ─── Profit Trend Chart ───
     const months = {{ months | tojson }};
     const incomeData = {{ monthly_income | tojson }};
     const expenseData = {{ monthly_expenses | tojson }};
@@ -81,6 +104,24 @@
             plugins: { title: { display: true, text: 'Monthly Profit Trend (Last 6 Months)' } },
             scales: { y: { ticks: { callback: v => '$' + v } } }
         }
+    });
+
+    // ─── Expense Pie Chart ───
+    const pieCtx = document.getElementById('expensePieChart').getContext('2d');
+    const expLabels = {{ expense_by_category | map(attribute='category') | list | tojson }};
+    const expValues = {{ expense_by_category | map(attribute='total') | list | tojson }};
+    new Chart(pieCtx, {
+        type: 'pie',
+        data: { labels: expLabels, datasets: [{ data: expValues, backgroundColor: ['#2ecc71','#e74c3c','#f1c40f','#3498db','#9b59b6'] }] }
+    });
+
+    // ─── Product Bar Chart ───
+    const barCtx = document.getElementById('productBarChart').getContext('2d');
+    const prodLabels = {{ top_products | map(attribute='product_name') | list | tojson }};
+    const prodValues = {{ top_products | map(attribute='revenue') | list | tojson }};
+    new Chart(barCtx, {
+        type: 'bar',
+        data: { labels: prodLabels, datasets: [{ label: 'Revenue', data: prodValues, backgroundColor: '#2ecc71' }] }
     });
 </script>
 {% endblock %}

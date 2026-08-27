@@ -9,7 +9,7 @@
         <p style="margin:0; font-size:0.9rem; color:#666;">Take a 2-minute tour of the app so you know where everything lives.</p>
     </div>
     <div style="display:flex; gap:0.75rem;">
-        <a href="{{ url_for('tutorial') }}"><button>Take the Tour</button></a>
+        <button type="button" onclick="openModal('tutorialModal')">Take the Tour</button>
         <button type="button" class="btn-secondary" onclick="dismissOnboarding()">Dismiss</button>
     </div>
 </div>
@@ -42,9 +42,37 @@ function dismissOnboarding() {
 
 <!-- Summary Cards -->
 <div style="margin-bottom: 1rem; display:flex; justify-content:flex-end; gap:0.75rem; flex-wrap:wrap;">
-    <a href="{{ url_for('export_income_csv') }}" class="btn-secondary" style="padding: 10px 20px; border-radius: 8px; text-decoration: none;">⬇️ Income CSV</a>
-    <a href="{{ url_for('export_expenses_csv') }}" class="btn-secondary" style="padding: 10px 20px; border-radius: 8px; text-decoration: none;">⬇️ Expenses CSV</a>
     <a href="{{ url_for('send_daily_summary') }}" class="btn-secondary" style="background: #27ae60; color: rgb(0, 0, 0); padding: 10px 20px; border-radius: 8px; text-decoration: none;">📧 Send Today's Sales Summary</a>
+    <button type="button" class="btn-secondary popup-trigger-btn" onclick="openModal('dashboardActionsModal')">⬇️ Export / Import</button>
+</div>
+
+<div class="modal-overlay" id="dashboardActionsModal">
+    <div class="modal-box">
+        <button class="modal-close" onclick="closeModal('dashboardActionsModal')">✕</button>
+        <h2>Income &amp; Expenses Data</h2>
+        <div class="modal-actions-list">
+            <a href="{{ url_for('export_income_csv') }}"><button type="button" style="width:100%;">⬇️ Export Income as CSV</button></a>
+            <a href="{{ url_for('export_expenses_csv') }}"><button type="button" style="width:100%;">⬇️ Export Expenses as CSV</button></a>
+        </div>
+        <div class="import-dropzone">
+            <form method="POST" action="{{ url_for('import_income_csv') }}" enctype="multipart/form-data">
+                <label style="display:block; font-size:0.85rem; color:var(--text2,#888); margin-bottom:8px;">
+                    Import income from CSV (columns: Source, Amount, Date)
+                </label>
+                <input type="file" name="file" accept=".csv" required>
+                <button type="submit" style="width:100%;">⬆️ Import Income CSV</button>
+            </form>
+        </div>
+        <div class="import-dropzone">
+            <form method="POST" action="{{ url_for('import_expenses_csv') }}" enctype="multipart/form-data">
+                <label style="display:block; font-size:0.85rem; color:var(--text2,#888); margin-bottom:8px;">
+                    Import expenses from CSV (columns: Name, Amount, Category, Date)
+                </label>
+                <input type="file" name="file" accept=".csv" required>
+                <button type="submit" style="width:100%;">⬆️ Import Expenses CSV</button>
+            </form>
+        </div>
+    </div>
 </div>
 
 <div class="summary-container">
@@ -195,6 +223,23 @@ function dismissOnboarding() {
     });
 </script>
 {% endif %}
+
+<!-- ─── Activity Feed Widget ─── -->
+<div class="widget">
+    <h2>🕒 Recent Activity</h2>
+    <ul class="activity-feed">
+        {% for act in activities %}
+        <li>
+            <span class="user">{{ act.username }}</span>
+            <span class="action">{{ act.action }}</span>
+            <span class="details">{{ act.details or '' }}</span>
+            <span class="time">{{ act.created_at|timesince }}</span>
+        </li>
+        {% else %}
+        <li>No activity yet.</li>
+        {% endfor %}
+    </ul>
+</div>
 
 <!-- Add Forms -->
 <div class="action-buttons">

@@ -2,7 +2,26 @@
 {% block content %}
 <div class="page-header">
     <h1>Cash Book</h1>
-    <a href="{{ url_for('export_cashbook_csv') }}" class="btn-secondary" style="padding:10px 20px; border-radius:8px; text-decoration:none;">⬇️ Export CSV</a>
+    <button type="button" class="btn-secondary popup-trigger-btn" onclick="openModal('cashbookActionsModal')">⬇️ Export / Import</button>
+</div>
+
+<div class="modal-overlay" id="cashbookActionsModal">
+    <div class="modal-box">
+        <button class="modal-close" onclick="closeModal('cashbookActionsModal')">✕</button>
+        <h2>Cash Book Data</h2>
+        <div class="modal-actions-list">
+            <a href="{{ url_for('export_cashbook_csv') }}"><button type="button" style="width:100%;">⬇️ Export Cash Book as CSV</button></a>
+        </div>
+        <div class="import-dropzone">
+            <form method="POST" action="{{ url_for('import_cashbook_csv') }}" enctype="multipart/form-data">
+                <label style="display:block; font-size:0.85rem; color:var(--text2,#888); margin-bottom:8px;">
+                    Import entries from CSV (columns: Type [in/out], Category, Description, Amount, Date)
+                </label>
+                <input type="file" name="file" accept=".csv" required>
+                <button type="submit" style="width:100%;">⬆️ Import CSV</button>
+            </form>
+        </div>
+    </div>
 </div>
 <form method="POST" action="{{ url_for('add_cash_entry') }}">
     <select name="entry_type" required>
