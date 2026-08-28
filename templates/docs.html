@@ -3,9 +3,33 @@
 <div class="page-header">
     <div>
         <h1>📄 Business Documents</h1>
-        <p style="color:#555;">Create, manage and export invoices, contracts and reports.</p>
+        <p style="color:var(--text2);">Create, manage and export invoices, contracts and reports.</p>
     </div>
 </div>
+
+{% set ns = namespace(inv=0, con=0, rep=0) %}
+{% for doc in docs %}
+  {% if doc.doc_type == 'invoice' %}{% set ns.inv = ns.inv + 1 %}
+  {% elif doc.doc_type == 'contract' %}{% set ns.con = ns.con + 1 %}
+  {% else %}{% set ns.rep = ns.rep + 1 %}{% endif %}
+{% endfor %}
+<div class="stat-grid">
+    <div class="stat-chip"><span>Invoices</span><strong>{{ ns.inv }}</strong></div>
+    <div class="stat-chip"><span>Contracts</span><strong>{{ ns.con }}</strong></div>
+    <div class="stat-chip"><span>Reports</span><strong>{{ ns.rep }}</strong></div>
+</div>
+{% if docs %}
+<div class="chart-container" style="max-width:420px;">
+    <canvas id="docsMixChart"></canvas>
+</div>
+<script>
+new Chart(document.getElementById('docsMixChart'), {
+    type: 'doughnut',
+    data: { labels: ['Invoices', 'Contracts', 'Reports'], datasets: [{ data: [{{ ns.inv }}, {{ ns.con }}, {{ ns.rep }}], backgroundColor: ['#2ecc71', '#27ae60', '#1f8a3d'] }] },
+    options: { plugins: { title: { display: true, text: 'Document mix' } } }
+});
+</script>
+{% endif %}
 
 <!-- Doc Type Tabs -->
 <div style="display:flex; gap:0.5rem; margin-bottom:1.5rem; flex-wrap:wrap;">
@@ -20,10 +44,10 @@
     <summary style="cursor:pointer; padding:10px 20px; background:linear-gradient(135deg,#667eea,#764ba2); color:white; border-radius:10px; display:inline-block; font-weight:500;">
         ➕ Create New Document
     </summary>
-    <div style="margin-top:1rem; background:white; padding:1.5rem; border-radius:15px; box-shadow:0 5px 15px rgba(0,0,0,0.1);">
+    <div style="margin-top:1rem; background:var(--surface); padding:1.5rem; border-radius:15px; box-shadow:0 8px 24px rgba(0,0,0,0.25);">
         <form method="POST" action="{{ url_for('add_doc') }}">
             <div class="form-group">
-                <label style="display:block; color:#555; font-size:0.85rem; margin-bottom:4px;">Document Type</label>
+                <label style="display:block; color:var(--text2); font-size:0.85rem; margin-bottom:4px;">Document Type</label>
                 <select name="doc_type" required>
                     <option value="invoice">Invoice</option>
                     <option value="contract">Contract</option>
@@ -31,25 +55,25 @@
                 </select>
             </div>
             <div class="form-group">
-                <label style="display:block; color:#555; font-size:0.85rem; margin-bottom:4px;">Title</label>
+                <label style="display:block; color:var(--text2); font-size:0.85rem; margin-bottom:4px;">Title</label>
                 <input type="text" name="title" placeholder="e.g. Invoice #1042 – Acme Corp" required>
             </div>
             <div class="form-group">
-                <label style="display:block; color:#555; font-size:0.85rem; margin-bottom:4px;">Client / Party</label>
+                <label style="display:block; color:var(--text2); font-size:0.85rem; margin-bottom:4px;">Client / Party</label>
                 <input type="text" name="client" placeholder="e.g. Acme Corp" required>
             </div>
             <div class="form-group">
-                <label style="display:block; color:#555; font-size:0.85rem; margin-bottom:4px;">Amount (optional)</label>
+                <label style="display:block; color:var(--text2); font-size:0.85rem; margin-bottom:4px;">Amount (optional)</label>
                 <input type="number" step="0.01" name="amount" placeholder="0.00">
             </div>
             <div class="form-group">
-                <label style="display:block; color:#555; font-size:0.85rem; margin-bottom:4px;">Date</label>
+                <label style="display:block; color:var(--text2); font-size:0.85rem; margin-bottom:4px;">Date</label>
                 <input type="date" name="date">
             </div>
             <div class="form-group" style="display:block; width:100%;">
-                <label style="display:block; color:#555; font-size:0.85rem; margin-bottom:4px;">Notes / Description</label>
+                <label style="display:block; color:var(--text2); font-size:0.85rem; margin-bottom:4px;">Notes / Description</label>
                 <textarea name="notes" placeholder="Describe the scope, terms, or details..." rows="3"
-                    style="padding:10px 15px; border:2px solid #e0e0e0; border-radius:10px; font-size:1rem; font-family:inherit; width:100%; max-width:600px; resize:vertical;"></textarea>
+                    style="padding:10px 15px; border:1px solid var(--border); border-radius:10px; font-size:1rem; font-family:inherit; width:100%; max-width:600px; resize:vertical;"></textarea>
             </div>
             <div style="margin-top:0.5rem; display:flex; gap:1rem; align-items:center; flex-wrap:wrap;">
                 <button type="submit">💾 Save Document</button>
@@ -58,9 +82,9 @@
         </form>
 
         <!-- AI Output Box -->
-        <div id="ai-output-box" style="display:none; margin-top:1rem; padding:1rem; background:#f8f9ff; border:2px solid #667eea; border-radius:10px;">
+        <div id="ai-output-box" style="display:none; margin-top:1rem; padding:1rem; background:var(--surface2); border:2px solid #667eea; border-radius:10px;">
             <div style="font-size:0.85rem; color:#667eea; font-weight:600; margin-bottom:0.5rem;">✨ AI Generated Content</div>
-            <div id="ai-output-text" style="font-size:0.9rem; color:#333; line-height:1.7; white-space:pre-wrap;"></div>
+            <div id="ai-output-text" style="font-size:0.9rem; color:var(--text); line-height:1.7; white-space:pre-wrap;"></div>
             <button onclick="copyAI()" style="margin-top:0.75rem; background:#28a745; padding:6px 14px; font-size:0.85rem;">📋 Copy to clipboard</button>
         </div>
     </div>
@@ -114,15 +138,15 @@
         padding: 8px 18px;
         border-radius: 8px;
         border: 2px solid #e0e0e0;
-        background: white;
+        background:var(--surface);
         color: #555;
         font-size: 0.9rem;
         font-weight: 500;
         cursor: pointer;
         transition: all 0.2s;
     }
-    .tab-btn:hover { border-color: #667eea; color: #667eea; transform: none; box-shadow: none; }
-    .tab-active { background: linear-gradient(135deg,#667eea,#764ba2) !important; color: white !important; border-color: transparent !important; }
+    .tab-btn:hover { border-color: var(--red-bright); color: var(--red-bright); transform: none; box-shadow: none; }
+    .tab-active { background: var(--red-bright) !important; color: #0a0a0a !important; border-color: transparent !important; }
 </style>
 
 <script>

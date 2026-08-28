@@ -35,6 +35,18 @@
 </details>
 
 <h2>Scheduled Items</h2>
+
+{% set ns = namespace(active=0, paused=0, amount=0) %}
+{% for item in items %}
+  {% set ns.amount = ns.amount + item.amount %}
+  {% if item.active %}{% set ns.active = ns.active + 1 %}{% else %}{% set ns.paused = ns.paused + 1 %}{% endif %}
+{% endfor %}
+<div class="stat-grid">
+    <div class="stat-chip"><span>Active</span><strong>{{ ns.active }}</strong></div>
+    <div class="stat-chip"><span>Paused</span><strong>{{ ns.paused }}</strong></div>
+    <div class="stat-chip"><span>Scheduled total</span><strong>${{ "%.2f"|format(ns.amount) }}</strong></div>
+</div>
+
 <div class="table-wrapper">
     <table>
         <thead>

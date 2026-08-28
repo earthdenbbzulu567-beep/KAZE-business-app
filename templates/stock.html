@@ -3,7 +3,8 @@
 <div class="page-header">
     <h1>Stock / Inventory</h1>
     <div style="display:flex; gap:0.75rem;">
-        <a href="{{ url_for('check_low_stock') }}" class="btn-secondary popup-trigger-btn" style="text-decoration:none;">⚠️ Check Low Stock Now</a>
+        <a href="{{ url_for('check_low_stock') }}" class="btn-secondary popup-trigger-btn" style="text-decoration:none;">Check Low Stock Now</a>
+        <a href="{{ url_for('reorder_low_stock') }}" class="btn-secondary popup-trigger-btn" style="text-decoration:none;" onclick="return confirm('Create draft purchase orders for every low-stock item?')">Reorder low stock</a>
         <button type="button" class="btn-secondary popup-trigger-btn" onclick="openModal('stockActionsModal')">⬇️ Export / Import</button>
     </div>
 </div>
@@ -43,7 +44,22 @@
     <button type="submit">Add Stock</button>
 </form>
 
+
+{% set ns = namespace(qty=0, value=0, low=0) %}
+{% for item in items %}
+  {% set ns.qty = ns.qty + item.quantity %}
+  {% set ns.value = ns.value + (item.quantity * item.cost_price) %}
+  {% if item.quantity < 10 %}{% set ns.low = ns.low + 1 %}{% endif %}
+{% endfor %}
+<div class="stat-grid">
+    <div class="stat-chip"><span>Products</span><strong>{{ items|length }}</strong></div>
+    <div class="stat-chip"><span>Total units</span><strong>{{ ns.qty }}</strong></div>
+    <div class="stat-chip"><span>Inventory cost</span><strong>${{ "%.2f"|format(ns.value) }}</strong></div>
+    <div class="stat-chip"><span>Low stock</span><strong>{{ ns.low }}</strong></div>
+</div>
+
 <h2>Current Stock</h2>
+
 
 <!-- Bulk Action Form -->
 <form method="POST" action="{{ url_for('stock_bulk') }}" onsubmit="return confirm('Are you sure?')">
@@ -73,7 +89,7 @@
             </thead>
             <tbody>
                 {% for item in items %}
-                <tr {% if item.quantity < 10 %}style="background-color: #ffcccc;"{% endif %}>
+                <tr class="{% if item.quantity < 10 %}low-stock-row{% endif %}">
                     <td><input type="checkbox" name="selected_ids" value="{{ item.id }}"></td>
                     <td>{{ item.product_name }}</td>
                     <td>{{ item.quantity }}</td>

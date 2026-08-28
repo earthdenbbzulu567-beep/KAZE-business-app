@@ -6,15 +6,18 @@
         <p>Assess your business's Strengths, Weaknesses, Opportunities, and Threats.</p>
     </div>
 </div>
+<div class="stat-grid">
+    <div class="stat-chip"><span>Saved analyses</span><strong>{{ analyses|length }}</strong></div>
+</div>
 
 <details style="margin-bottom:1.5rem;" {% if not analyses %}open{% endif %}>
     <summary style="cursor:pointer; padding:10px 20px; background:linear-gradient(135deg,#667eea,#764ba2); color:white; border-radius:10px; display:inline-block; font-weight:500;">
         ➕ New SWOT Analysis
     </summary>
-    <div style="margin-top:1rem; background:white; padding:1.5rem; border-radius:15px; box-shadow:0 5px 15px rgba(0,0,0,0.1);">
+    <div style="margin-top:1rem; background:var(--surface); padding:1.5rem; border-radius:15px; box-shadow:0 8px 24px rgba(0,0,0,0.25);">
         <form method="POST" action="{{ url_for('add_swot') }}">
             <div class="form-group" style="display:block; width:100%; margin-bottom:1rem;">
-                <label style="display:block; color:#555; font-size:0.85rem; margin-bottom:4px;">Title</label>
+                <label style="display:block; color:var(--text2); font-size:0.85rem; margin-bottom:4px;">Title</label>
                 <input type="text" name="title" placeholder="e.g. Q3 2026 Strategy Review" style="width:100%; max-width:400px;">
             </div>
             <div class="swot-grid">

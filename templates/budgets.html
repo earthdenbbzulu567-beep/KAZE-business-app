@@ -26,6 +26,36 @@
 </details>
 
 <h2>This Month</h2>
+
+{% set ns = namespace(limit=0, spent=0) %}
+{% for b in budgets %}
+  {% set ns.limit = ns.limit + b.monthly_limit %}
+  {% set ns.spent = ns.spent + spend_by_category.get(b.category, 0) %}
+{% endfor %}
+<div class="stat-grid">
+    <div class="stat-chip"><span>Budgets</span><strong>{{ budgets|length }}</strong></div>
+    <div class="stat-chip"><span>Total limit</span><strong>${{ "%.2f"|format(ns.limit) }}</strong></div>
+    <div class="stat-chip"><span>Spent this month</span><strong>${{ "%.2f"|format(ns.spent) }}</strong></div>
+</div>
+{% if budgets %}
+<div class="chart-container">
+    <canvas id="budgetChart"></canvas>
+</div>
+<script>
+new Chart(document.getElementById('budgetChart'), {
+    type: 'bar',
+    data: {
+        labels: [{% for b in budgets %}'{{ b.category }}'{% if not loop.last %},{% endif %}{% endfor %}],
+        datasets: [
+            { label: 'Limit', data: [{% for b in budgets %}{{ b.monthly_limit }}{% if not loop.last %},{% endif %}{% endfor %}], backgroundColor: 'rgba(52,152,219,0.5)' },
+            { label: 'Spent', data: [{% for b in budgets %}{{ spend_by_category.get(b.category, 0) }}{% if not loop.last %},{% endif %}{% endfor %}], backgroundColor: 'rgba(46,204,113,0.7)' }
+        ]
+    },
+    options: { responsive: true, plugins: { title: { display: true, text: 'Budget vs spend' } }, scales: { y: { ticks: { callback: v => '$' + v } } } }
+});
+</script>
+{% endif %}
+
 {% for b in budgets %}
 {% set spent = spend_by_category.get(b.category, 0) %}
 {% set pct = (spent / b.monthly_limit * 100) if b.monthly_limit else 0 %}

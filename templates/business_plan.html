@@ -9,6 +9,11 @@
     <a href="{{ url_for('business_plan_pdf') }}" class="btn-secondary" style="padding:10px 20px; border-radius:8px; text-decoration:none;">⬇️ Download PDF</a>
     {% endif %}
 </div>
+{% set fields = [plan.mission, plan.products_services, plan.target_market, plan.marketing_strategy, plan.operations_plan, plan.financial_plan, plan.goals] if plan else [] %}
+{% set filled = fields | select | list | length %}
+<div class="stat-grid">
+    <div class="stat-chip"><span>Sections filled</span><strong>{{ filled if plan else 0 }} / 7</strong></div>
+</div>
 
 {% if plan and plan.updated_date %}
 <p style="color:#888; font-size:0.85rem; margin-bottom:1rem;">Last updated: {{ plan.updated_date }}</p>

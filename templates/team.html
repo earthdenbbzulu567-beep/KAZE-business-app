@@ -7,6 +7,12 @@
     </div>
 </div>
 
+<div class="stat-grid">
+    <div class="stat-chip"><span>Owner</span><strong>1</strong></div>
+    <div class="stat-chip"><span>Staff</span><strong>{{ staff|length }}</strong></div>
+    <div class="stat-chip"><span>Total seats</span><strong>{{ 1 + (staff|length) }}</strong></div>
+</div>
+
 {% if current_user.role == 'owner' %}
 <details style="margin-bottom:1.5rem;">
     <summary>➕ Invite Team Member</summary>

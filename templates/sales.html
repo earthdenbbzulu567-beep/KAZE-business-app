@@ -52,7 +52,22 @@
 <p style="font-size:0.8rem; margin-top:0.5rem;">Tip: pick an existing customer above, or leave it as walk-in and just type a name/email — you can add them properly on the <a href="{{ url_for('customers') }}">Customers</a> page later.</p>
 
 <!-- Sales History Table with Bulk Actions -->
+
+{% set ns = namespace(rev=0, profit=0, units=0) %}
+{% for sale in sales %}
+  {% set ns.rev = ns.rev + sale.total_amount %}
+  {% set ns.profit = ns.profit + sale.profit %}
+  {% set ns.units = ns.units + sale.quantity_sold %}
+{% endfor %}
+<div class="stat-grid">
+    <div class="stat-chip"><span>Sales on page</span><strong>{{ sales|length }}</strong></div>
+    <div class="stat-chip"><span>Units sold</span><strong>{{ ns.units }}</strong></div>
+    <div class="stat-chip"><span>Revenue</span><strong>${{ "%.2f"|format(ns.rev) }}</strong></div>
+    <div class="stat-chip"><span>Profit</span><strong>${{ "%.2f"|format(ns.profit) }}</strong></div>
+</div>
+
 <h2>Sales History</h2>
+
 <form method="POST" action="{{ url_for('sales_bulk') }}" onsubmit="return confirm('Are you sure?')">
     <div style="display:flex; gap:0.5rem; margin-bottom:0.5rem; align-items:center; flex-wrap:wrap;">
         <select name="action">

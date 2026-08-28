@@ -224,6 +224,39 @@ function dismissOnboarding() {
 </script>
 {% endif %}
 
+{% if open_tasks %}
+<div class="widget">
+    <h2>Open tasks</h2>
+    <ul class="activity-feed">
+        {% for task in open_tasks %}
+        <li>
+            <span class="user">{{ task.title }}</span>
+            <span class="details">{{ task.priority }}{% if task.due_date %} · due {{ task.due_date }}{% endif %}</span>
+            <span class="time"><a href="{{ url_for('toggle_task', id=task.id) }}">Complete</a></span>
+        </li>
+        {% endfor %}
+    </ul>
+    <p style="margin-top:0.75rem;"><a href="{{ url_for('tasks') }}">All tasks</a></p>
+</div>
+{% endif %}
+
+{% if upcoming_recurring %}
+<div class="widget">
+    <h2>Coming up</h2>
+    <ul class="activity-feed">
+        {% for item in upcoming_recurring %}
+        <li>
+            <span class="user">{{ item.name }}</span>
+            <span class="action">{{ item.item_type }}</span>
+            <span class="details">${{ "%.2f"|format(item.amount) }}</span>
+            <span class="time">{{ item.next_run_date }}</span>
+        </li>
+        {% endfor %}
+    </ul>
+    <p style="margin-top:0.75rem;"><a href="{{ url_for('calendar') }}">Full calendar</a></p>
+</div>
+{% endif %}
+
 <!-- ─── Activity Feed Widget ─── -->
 <div class="widget">
     <h2>🕒 Recent Activity</h2>

@@ -52,7 +52,42 @@
     </div>
 </details>
 
+
+{% set ns = namespace(spent=0, orders=0, labels=[], values=[]) %}
+{% for c in customers %}
+  {% set row = spend_by_customer[c.id] if c.id in spend_by_customer else None %}
+  {% set s = row.total_spent if row else 0 %}
+  {% set o = row.order_count if row else 0 %}
+  {% set ns.spent = ns.spent + s %}
+  {% set ns.orders = ns.orders + o %}
+  {% if loop.index <= 8 %}
+    {% set ns.labels = ns.labels + [c.name] %}
+    {% set ns.values = ns.values + [s] %}
+  {% endif %}
+{% endfor %}
+<div class="stat-grid">
+    <div class="stat-chip"><span>Customers</span><strong>{{ customers|length }}</strong></div>
+    <div class="stat-chip"><span>Orders</span><strong>{{ ns.orders }}</strong></div>
+    <div class="stat-chip"><span>Lifetime spend</span><strong>${{ "%.2f"|format(ns.spent) }}</strong></div>
+</div>
+{% if ns.values %}
+<div class="chart-container">
+    <canvas id="customerSpendChart"></canvas>
+</div>
+<script>
+new Chart(document.getElementById('customerSpendChart'), {
+    type: 'bar',
+    data: {
+        labels: {{ ns.labels | tojson }},
+        datasets: [{ label: 'Lifetime spend', data: {{ ns.values | tojson }}, backgroundColor: 'rgba(46,204,113,0.65)', borderRadius: 8 }]
+    },
+    options: { responsive: true, plugins: { title: { display: true, text: 'Customer spend' } }, scales: { y: { ticks: { callback: v => '$' + v } } } }
+});
+</script>
+{% endif %}
+
 <h2>All Customers</h2>
+
 
 <!-- Bulk actions form -->
 <form method="POST" action="{{ url_for('customers_bulk') }}" onsubmit="return confirm('Are you sure?')">

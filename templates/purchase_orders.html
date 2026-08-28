@@ -37,6 +37,30 @@
 </details>
 
 <h2>Orders</h2>
+
+{% set ns = namespace(pending=0, received=0, cost=0) %}
+{% for po in orders %}
+  {% set ns.cost = ns.cost + po.total_cost %}
+  {% if po.status == 'received' %}{% set ns.received = ns.received + 1 %}{% else %}{% set ns.pending = ns.pending + 1 %}{% endif %}
+{% endfor %}
+<div class="stat-grid">
+    <div class="stat-chip"><span>Pending</span><strong>{{ ns.pending }}</strong></div>
+    <div class="stat-chip"><span>Received</span><strong>{{ ns.received }}</strong></div>
+    <div class="stat-chip"><span>Order value</span><strong>${{ "%.2f"|format(ns.cost) }}</strong></div>
+</div>
+{% if orders %}
+<div class="chart-container" style="max-width:420px;">
+    <canvas id="poChart"></canvas>
+</div>
+<script>
+new Chart(document.getElementById('poChart'), {
+    type: 'doughnut',
+    data: { labels: ['Pending', 'Received'], datasets: [{ data: [{{ ns.pending }}, {{ ns.received }}], backgroundColor: ['#e0a030', '#2ecc71'] }] },
+    options: { plugins: { title: { display: true, text: 'Order status' } } }
+});
+</script>
+{% endif %}
+
 <div class="table-wrapper">
     <table>
         <thead>

@@ -57,9 +57,13 @@
     <div class="form-group">
         <label>Font Family</label>
         <select name="font_family">
+            <option value="Plus Jakarta Sans" {% if settings.font_family == 'Plus Jakarta Sans' %}selected{% endif %}>Plus Jakarta Sans</option>
+            <option value="Outfit" {% if settings.font_family == 'Outfit' %}selected{% endif %}>Outfit</option>
+            <option value="DM Sans" {% if settings.font_family == 'DM Sans' %}selected{% endif %}>DM Sans</option>
             <option value="Inter" {% if settings.font_family == 'Inter' %}selected{% endif %}>Inter</option>
             <option value="Roboto" {% if settings.font_family == 'Roboto' %}selected{% endif %}>Roboto</option>
-            <option value="'Courier New', monospace" {% if settings.font_family == "'Courier New', monospace" %}selected{% endif %}>Monospace</option>
+            <option value="JetBrains Mono" {% if settings.font_family == 'JetBrains Mono' %}selected{% endif %}>JetBrains Mono</option>
+            <option value="'Courier New', monospace" {% if settings.font_family == "'Courier New', monospace" %}selected{% endif %}>Classic Mono</option>
         </select>
     </div>
     <div class="form-group">
@@ -99,4 +103,32 @@
 
     <button type="submit">Save All Settings</button>
 </form>
+
+<h2>Password</h2>
+<form method="POST" action="{{ url_for('change_password') }}">
+    <div class="form-group"><label>Current password</label><input type="password" name="old_password" required></div>
+    <div class="form-group"><label>New password</label><input type="password" name="new_password" required></div>
+    <div class="form-group"><label>Confirm new password</label><input type="password" name="confirm_password" required></div>
+    <button type="submit">Update password</button>
+</form>
+
+<h2>Backup</h2>
+<div class="widget">
+    <p>Download a JSON copy of income, expenses, stock, customers, notes, tasks and more.</p>
+    <p><a href="{{ url_for('backup_export') }}"><button type="button">Download backup</button></a></p>
+    <form method="POST" action="{{ url_for('backup_import') }}" enctype="multipart/form-data">
+        <div class="import-dropzone">
+            <label>Restore from a KAZE backup file (adds records, does not wipe existing ones)</label>
+            <input type="file" name="file" accept=".json,application/json" required>
+            <button type="submit">Import backup</button>
+        </div>
+    </form>
+</div>
+
+<div class="widget" style="margin-top:1.5rem;">
+    <h2>Type preview</h2>
+    <p style="font-family:var(--display); font-size:1.4rem; margin:0.4rem 0;">Outfit headings look like this.</p>
+    <p style="font-family:var(--font); margin:0.4rem 0;">Body text uses your selected font.</p>
+    <p style="font-family:var(--mono); margin:0;">$1,234.56 — numbers use a monospace figure style.</p>
+</div>
 {% endblock %}

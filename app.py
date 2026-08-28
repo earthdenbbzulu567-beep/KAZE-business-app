@@ -19,6 +19,7 @@ from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image as RLImage
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_LEFT
+import json
 import re
 
 app = Flask(__name__)
@@ -305,6 +306,28 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS tasks (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            title TEXT NOT NULL,
+            notes TEXT DEFAULT '',
+            priority TEXT NOT NULL DEFAULT 'medium',
+            due_date TEXT DEFAULT '',
+            done INTEGER DEFAULT 0,
+            created_date TEXT NOT NULL
+        )
+    ''')
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS notes (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            title TEXT NOT NULL,
+            body TEXT DEFAULT '',
+            created_date TEXT NOT NULL,
+            updated_date TEXT NOT NULL
+        )
+    ''')
     conn.commit()
     cur.close()
     conn.close()
@@ -531,6 +554,22 @@ def dashboard():
         LIMIT 10
     ''', (current_user.id,))
     activities = cur.fetchall()
+
+    cur.execute('''
+        SELECT * FROM tasks
+        WHERE user_id = %s AND done = 0
+        ORDER BY CASE WHEN due_date = '' THEN '9999-12-31' ELSE due_date END, id DESC
+        LIMIT 6
+    ''', (current_user.id,))
+    open_tasks = cur.fetchall()
+
+    soon = (datetime.today() + timedelta(days=14)).strftime('%Y-%m-%d')
+    cur.execute('''
+        SELECT name, next_run_date, item_type, amount FROM recurring_items
+        WHERE user_id = %s AND active = 1 AND next_run_date <= %s
+        ORDER BY next_run_date LIMIT 5
+    ''', (current_user.id, soon))
+    upcoming_recurring = cur.fetchall()
     
     cur.close()
     conn.close()
@@ -551,7 +590,9 @@ def dashboard():
                          month_revenue=month_revenue,
                          goal_progress_pct=goal_progress_pct,
                          tutorial_completed=tutorial_completed,
-                         activities=activities)
+                         activities=activities,
+                         open_tasks=open_tasks,
+                         upcoming_recurring=upcoming_recurring)
 
 # ======================== Add Income / Expense ========================
 
@@ -2435,8 +2476,400 @@ def search():
     cur.close()
     conn.close()
     
-    results = customers + products + docs
+    cur.execute('''
+        SELECT id, title as name, 'note' as type
+        FROM notes
+        WHERE user_id = %s AND (title ILIKE %s OR body ILIKE %s)
+        LIMIT 10
+    ''', (current_user.id, f'%{q}%', f'%{q}%'))
+    note_hits = cur.fetchall()
+
+    cur.execute('''
+        SELECT id, title as name, 'task' as type
+        FROM tasks
+        WHERE user_id = %s AND title ILIKE %s
+        LIMIT 10
+    ''', (current_user.id, f'%{q}%'))
+    task_hits = cur.fetchall()
+
+    results = customers + products + docs + note_hits + task_hits
     return render_template('search_results.html', results=results, q=q)
+
+# ======================== Tasks ========================
+
+@app.route('/tasks')
+@login_required
+def tasks():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT * FROM tasks WHERE user_id = %s ORDER BY done ASC, CASE WHEN due_date = '' THEN '9999-12-31' ELSE due_date END, id DESC",
+        (current_user.id,)
+    )
+    items = cur.fetchall()
+    cur.close()
+    conn.close()
+    open_count = sum(1 for i in items if not i['done'])
+    return render_template('tasks.html', items=items, open_count=open_count)
+
+
+@app.route('/tasks/add', methods=['POST'])
+@login_required
+def add_task():
+    title = request.form['title'].strip()
+    if not title:
+        flash('Task needs a title.', 'danger')
+        return redirect(url_for('tasks'))
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        '''
+        INSERT INTO tasks (user_id, title, notes, priority, due_date, done, created_date)
+        VALUES (%s, %s, %s, %s, %s, 0, %s)
+        ''',
+        (current_user.id, title, request.form.get('notes', ''),
+         request.form.get('priority', 'medium'), request.form.get('due_date', ''),
+         datetime.today().strftime('%Y-%m-%d'))
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    log_activity(current_user.id, current_user.username, 'Added task', title)
+    flash('Task added.', 'success')
+    return redirect(url_for('tasks'))
+
+
+@app.route('/tasks/toggle/<int:id>')
+@login_required
+def toggle_task(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('UPDATE tasks SET done = 1 - done WHERE id = %s AND user_id = %s', (id, current_user.id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(request.referrer or url_for('tasks'))
+
+
+@app.route('/tasks/delete/<int:id>')
+@login_required
+def delete_task(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('DELETE FROM tasks WHERE id = %s AND user_id = %s', (id, current_user.id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Task deleted.', 'success')
+    return redirect(url_for('tasks'))
+
+
+# ======================== Notes ========================
+
+@app.route('/notes')
+@login_required
+def notes():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM notes WHERE user_id = %s ORDER BY updated_date DESC', (current_user.id,))
+    items = cur.fetchall()
+    cur.close()
+    conn.close()
+    return render_template('notes.html', items=items)
+
+
+@app.route('/notes/add', methods=['POST'])
+@login_required
+def add_note():
+    title = request.form['title'].strip() or 'Untitled note'
+    body = request.form.get('body', '')
+    now = datetime.today().strftime('%Y-%m-%d %H:%M')
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        'INSERT INTO notes (user_id, title, body, created_date, updated_date) VALUES (%s, %s, %s, %s, %s)',
+        (current_user.id, title, body, now, now)
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    log_activity(current_user.id, current_user.username, 'Added note', title)
+    flash('Note saved.', 'success')
+    return redirect(url_for('notes'))
+
+
+@app.route('/notes/edit/<int:id>', methods=['GET', 'POST'])
+@login_required
+def edit_note(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM notes WHERE id = %s AND user_id = %s', (id, current_user.id))
+    note = cur.fetchone()
+    if not note:
+        cur.close()
+        conn.close()
+        flash('Note not found.', 'danger')
+        return redirect(url_for('notes'))
+    if request.method == 'POST':
+        title = request.form['title'].strip() or 'Untitled note'
+        body = request.form.get('body', '')
+        now = datetime.today().strftime('%Y-%m-%d %H:%M')
+        cur.execute(
+            'UPDATE notes SET title=%s, body=%s, updated_date=%s WHERE id=%s AND user_id=%s',
+            (title, body, now, id, current_user.id)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+        flash('Note updated.', 'success')
+        return redirect(url_for('notes'))
+    cur.close()
+    conn.close()
+    return render_template('edit_note.html', note=note)
+
+
+@app.route('/notes/delete/<int:id>')
+@login_required
+def delete_note(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('DELETE FROM notes WHERE id = %s AND user_id = %s', (id, current_user.id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Note deleted.', 'success')
+    return redirect(url_for('notes'))
+
+
+# ======================== Calendar ========================
+
+@app.route('/calendar')
+@login_required
+def calendar():
+    today = datetime.today().strftime('%Y-%m-%d')
+    horizon = (datetime.today() + timedelta(days=60)).strftime('%Y-%m-%d')
+    conn = get_db()
+    cur = conn.cursor()
+    events = []
+    cur.execute(
+        'SELECT name, next_run_date, item_type, amount FROM recurring_items WHERE user_id=%s AND active=1 AND next_run_date <= %s',
+        (current_user.id, horizon)
+    )
+    for row in cur.fetchall():
+        events.append({
+            'date': row['next_run_date'],
+            'kind': 'Recurring ' + row['item_type'],
+            'title': row['name'],
+            'extra': '${:.2f}'.format(row['amount'])
+        })
+    cur.execute(
+        "SELECT item_description, expected_date, status FROM purchase_orders WHERE user_id=%s AND expected_date <> '' AND expected_date <= %s",
+        (current_user.id, horizon)
+    )
+    for row in cur.fetchall():
+        events.append({
+            'date': row['expected_date'],
+            'kind': 'Purchase order',
+            'title': row['item_description'],
+            'extra': row['status']
+        })
+    cur.execute(
+        "SELECT title, due_date, priority, done FROM tasks WHERE user_id=%s AND due_date <> '' AND due_date <= %s",
+        (current_user.id, horizon)
+    )
+    for row in cur.fetchall():
+        events.append({
+            'date': row['due_date'],
+            'kind': 'Task',
+            'title': row['title'],
+            'extra': ('done' if row['done'] else row['priority'])
+        })
+    cur.close()
+    conn.close()
+    events.sort(key=lambda e: e['date'] or '9999')
+    return render_template('calendar.html', events=events, today=today)
+
+
+# ======================== Profit calculator ========================
+
+@app.route('/calculator')
+@login_required
+def calculator():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        'SELECT product_name, cost_price, selling_price FROM stock WHERE user_id=%s ORDER BY product_name',
+        (current_user.id,)
+    )
+    products = cur.fetchall()
+    cur.close()
+    conn.close()
+    return render_template('calculator.html', products=products)
+
+
+# ======================== Password ========================
+
+@app.route('/settings/password', methods=['POST'])
+@login_required
+def change_password():
+    old = request.form.get('old_password', '')
+    new = request.form.get('new_password', '')
+    confirm = request.form.get('confirm_password', '')
+    if not new or len(new) < 6:
+        flash('New password must be at least 6 characters.', 'danger')
+        return redirect(url_for('settings'))
+    if new != confirm:
+        flash('New passwords do not match.', 'danger')
+        return redirect(url_for('settings'))
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT password FROM users WHERE id = %s', (current_user.db_id,))
+    row = cur.fetchone()
+    if not row or not check_password_hash(row['password'], old):
+        cur.close()
+        conn.close()
+        flash('Current password is incorrect.', 'danger')
+        return redirect(url_for('settings'))
+    cur.execute('UPDATE users SET password = %s WHERE id = %s', (generate_password_hash(new), current_user.db_id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    log_activity(current_user.id, current_user.username, 'Changed password', None)
+    flash('Password updated.', 'success')
+    return redirect(url_for('settings'))
+
+
+# ======================== JSON backup ========================
+
+@app.route('/backup/export')
+@login_required
+def backup_export():
+    uid = current_user.id
+    conn = get_db()
+    cur = conn.cursor()
+    payload = {'exported_at': datetime.now().isoformat(), 'tables': {}}
+    tables = ('income', 'expenses', 'stock', 'customers', 'cash_books', 'documents',
+              'tasks', 'notes', 'suppliers', 'budgets', 'recurring_items')
+    for table in tables:
+        cur.execute('SELECT * FROM {} WHERE user_id = %s'.format(table), (uid,))
+        rows = cur.fetchall()
+        payload['tables'][table] = [dict(r) for r in rows]
+    cur.close()
+    conn.close()
+    body = json.dumps(payload, default=str, indent=2)
+    return Response(
+        body,
+        mimetype='application/json',
+        headers={'Content-Disposition': 'attachment; filename=kaze-backup.json'}
+    )
+
+
+@app.route('/backup/import', methods=['POST'])
+@login_required
+def backup_import():
+    f = request.files.get('file')
+    if not f or not f.filename:
+        flash('Choose a backup JSON file first.', 'danger')
+        return redirect(url_for('settings'))
+    try:
+        payload = json.loads(f.read().decode('utf-8'))
+        tables = payload.get('tables', {})
+    except Exception:
+        flash('That file is not a valid KAZE backup.', 'danger')
+        return redirect(url_for('settings'))
+    uid = current_user.id
+    conn = get_db()
+    cur = conn.cursor()
+    added = 0
+    try:
+        for row in tables.get('income', []):
+            cur.execute(
+                'INSERT INTO income (user_id, source, amount, date) VALUES (%s,%s,%s,%s)',
+                (uid, row.get('source'), row.get('amount'), row.get('date'))
+            )
+            added += 1
+        for row in tables.get('expenses', []):
+            cur.execute(
+                'INSERT INTO expenses (user_id, name, amount, category, date) VALUES (%s,%s,%s,%s,%s)',
+                (uid, row.get('name'), row.get('amount'), row.get('category') or 'Other', row.get('date'))
+            )
+            added += 1
+        for row in tables.get('stock', []):
+            cur.execute(
+                'INSERT INTO stock (user_id, product_name, quantity, cost_price, selling_price, unit) VALUES (%s,%s,%s,%s,%s,%s)',
+                (uid, row.get('product_name'), row.get('quantity'), row.get('cost_price'), row.get('selling_price'), row.get('unit'))
+            )
+            added += 1
+        for row in tables.get('customers', []):
+            cur.execute(
+                'INSERT INTO customers (user_id, name, email, phone, address, notes) VALUES (%s,%s,%s,%s,%s,%s)',
+                (uid, row.get('name'), row.get('email'), row.get('phone'), row.get('address'), row.get('notes'))
+            )
+            added += 1
+        for row in tables.get('notes', []):
+            now = datetime.today().strftime('%Y-%m-%d %H:%M')
+            cur.execute(
+                'INSERT INTO notes (user_id, title, body, created_date, updated_date) VALUES (%s,%s,%s,%s,%s)',
+                (uid, row.get('title') or 'Imported note', row.get('body') or '', row.get('created_date') or now, now)
+            )
+            added += 1
+        for row in tables.get('tasks', []):
+            cur.execute(
+                'INSERT INTO tasks (user_id, title, notes, priority, due_date, done, created_date) VALUES (%s,%s,%s,%s,%s,%s,%s)',
+                (uid, row.get('title'), row.get('notes') or '', row.get('priority') or 'medium',
+                 row.get('due_date') or '', row.get('done') or 0,
+                 row.get('created_date') or datetime.today().strftime('%Y-%m-%d'))
+            )
+            added += 1
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        flash('Import failed: {}'.format(e), 'danger')
+        return redirect(url_for('settings'))
+    cur.close()
+    conn.close()
+    log_activity(current_user.id, current_user.username, 'Imported backup', '{} rows'.format(added))
+    flash('Imported {} records from backup.'.format(added), 'success')
+    return redirect(url_for('settings'))
+
+
+# ======================== Low stock -> purchase orders ========================
+
+@app.route('/stock/reorder-low')
+@login_required
+def reorder_low_stock():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT low_stock_threshold FROM settings WHERE user_id = %s', (current_user.id,))
+    row = cur.fetchone()
+    threshold = row['low_stock_threshold'] if row else 10
+    cur.execute('SELECT * FROM stock WHERE user_id = %s AND quantity < %s', (current_user.id, threshold))
+    low_items = cur.fetchall()
+    created = 0
+    today = datetime.today().strftime('%Y-%m-%d')
+    for item in low_items:
+        need = max(threshold * 2 - item['quantity'], 1)
+        total = need * (item['cost_price'] or 0)
+        cur.execute(
+            '''
+            INSERT INTO purchase_orders (user_id, supplier_id, item_description, quantity, unit_cost, total_cost, status, order_date, expected_date, stock_id)
+            VALUES (%s, NULL, %s, %s, %s, %s, 'pending', %s, %s, %s)
+            ''',
+            (current_user.id, item['product_name'], need, item['cost_price'] or 0, total, today, '', item['id'])
+        )
+        created += 1
+    conn.commit()
+    cur.close()
+    conn.close()
+    if created:
+        log_activity(current_user.id, current_user.username, 'Drafted reorder POs', '{} items'.format(created))
+        flash('Created {} draft purchase order(s) for low-stock items.'.format(created), 'success')
+        return redirect(url_for('purchase_orders'))
+    flash('No low-stock items to reorder.', 'info')
+    return redirect(url_for('stock'))
+
 
 # ======================== Main ========================
 

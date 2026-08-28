@@ -6,10 +6,8 @@
     <link rel="icon" type="image/png" sizes="64x64" href="{{ url_for('static', filename='favicon-64.png') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    {% if user_settings and user_settings.font_family == 'Roboto' %}
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-    {% endif %}
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
     <style>
         :root {
             --bg: #0a0a0a;
@@ -32,17 +30,45 @@
             --sidebar-width: 240px;
             --transition-speed: 0.25s;
             --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+            --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+            --font: 'Plus Jakarta Sans', 'Inter', sans-serif;
+            --display: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+            --mono: 'JetBrains Mono', ui-monospace, monospace;
+            --icon: #8ee0ad;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
+        html { scroll-behavior: smooth; }
+
         body {
-            font-family: 'Inter', sans-serif;
+            font-family: var(--font);
             background: var(--bg);
             color: var(--text);
             min-height: 100vh;
             display: flex;
+            position: relative;
         }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            background-image:
+                radial-gradient(circle at 12% 8%, rgba(46, 204, 113, 0.07), transparent 32%),
+                radial-gradient(circle at 88% 92%, rgba(46, 204, 113, 0.05), transparent 28%),
+                linear-gradient(rgba(46, 204, 113, 0.035) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(46, 204, 113, 0.035) 1px, transparent 1px);
+            background-size: auto, auto, 42px 42px, 42px 42px;
+            animation: gridDrift 40s linear infinite;
+        }
+        @keyframes gridDrift {
+            from { background-position: 0 0, 0 0, 0 0, 0 0; }
+            to { background-position: 0 0, 0 0, 42px 42px, 42px 42px; }
+        }
+        .sidebar, .main-content { position: relative; z-index: 1; }
 
         /* ── Scrollbar ── */
         ::-webkit-scrollbar { width: 6px; }
@@ -117,9 +143,10 @@
             border-radius: 6px;
             font-size: 0.85rem;
             font-weight: 500;
-            transition: all 0.2s ease;
+            transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
             margin-bottom: 2px;
             position: relative;
+            overflow: hidden;
         }
         .sidebar-nav a:hover {
             background: var(--surface);
@@ -130,16 +157,63 @@
             background: var(--red-glow);
             color: var(--red-bright);
         }
-        .sidebar-nav a .icon {
-            font-size: 1.1rem;
-            width: 24px;
-            text-align: center;
+        .sidebar-nav a .icon,
+        .sidebar-nav a svg.icon,
+        .sidebar-nav a i[data-lucide] {
+            width: 18px;
+            height: 18px;
+            min-width: 18px;
+            stroke: currentColor;
+            color: var(--icon);
+            fill: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.25s var(--ease-spring), color 0.2s ease;
+        }
+        .sidebar-nav a { color: var(--text2); }
+        .sidebar-nav a .icon { color: var(--icon); }
+        .sidebar-nav a:hover .icon,
+        .sidebar-nav a:hover svg {
+            transform: scale(1.14) rotate(-6deg);
+            color: var(--red-bright);
+        }
+        .sidebar-nav a.active .icon,
+        .sidebar-nav a.active svg {
+            color: var(--red-bright);
+        }
+        .sidebar-nav .nav-section a {
+            animation: navSlide 0.45s var(--ease-out) both;
+        }
+        .sidebar-nav .nav-section:nth-child(1) a:nth-of-type(1) { animation-delay: .03s; }
+        .sidebar-nav .nav-section:nth-child(1) a:nth-of-type(2) { animation-delay: .06s; }
+        .sidebar-nav .nav-section:nth-child(1) a:nth-of-type(3) { animation-delay: .09s; }
+        .sidebar-nav .nav-section:nth-child(1) a:nth-of-type(4) { animation-delay: .12s; }
+        .sidebar-nav .nav-section:nth-child(1) a:nth-of-type(5) { animation-delay: .15s; }
+        .sidebar-nav .nav-section:nth-child(2) a:nth-of-type(1) { animation-delay: .18s; }
+        .sidebar-nav .nav-section:nth-child(2) a:nth-of-type(2) { animation-delay: .21s; }
+        .sidebar-nav .nav-section:nth-child(2) a:nth-of-type(3) { animation-delay: .24s; }
+        .sidebar-nav .nav-section:nth-child(2) a:nth-of-type(4) { animation-delay: .27s; }
+        .sidebar-nav .nav-section:nth-child(3) a:nth-of-type(1) { animation-delay: .30s; }
+        .sidebar-nav .nav-section:nth-child(3) a:nth-of-type(2) { animation-delay: .33s; }
+        .sidebar-nav .nav-section:nth-child(3) a:nth-of-type(3) { animation-delay: .36s; }
+        .sidebar-nav .nav-section:nth-child(4) a:nth-of-type(1) { animation-delay: .39s; }
+        .sidebar-nav .nav-section:nth-child(4) a:nth-of-type(2) { animation-delay: .42s; }
+        .sidebar-nav .nav-section:nth-child(4) a:nth-of-type(3) { animation-delay: .45s; }
+        .sidebar-nav .nav-section:nth-child(4) a:nth-of-type(4) { animation-delay: .48s; }
+        .sidebar-nav .nav-section:nth-child(5) a:nth-of-type(1) { animation-delay: .51s; }
+        @keyframes navSlide {
+            from { opacity: 0; transform: translateX(-12px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        .nav-section-title {
+            animation: navSlide 0.4s ease both;
         }
         /* Active indicator glow */
         .sidebar-nav a.active::before {
             content: '';
             position: absolute;
-            left: -2px;
+            left: 0;
             top: 4px;
             width: 3px;
             height: calc(100% - 8px);
@@ -361,7 +435,9 @@
         }
 
         /* ── Typography ── */
-        h1 { font-size: 1.75rem; font-weight: 800; color: var(--text); margin-bottom: 0.4rem; letter-spacing: -0.3px; text-shadow: 0 1px 0 rgba(255,255,255,0.08), 0 2px 6px rgba(0,0,0,0.5); }
+        h1 { font-family: var(--display); font-size: 1.75rem; font-weight: 800; color: var(--text); margin-bottom: 0.4rem; letter-spacing: -0.4px; text-shadow: 0 1px 0 rgba(255,255,255,0.08), 0 2px 6px rgba(0,0,0,0.5); }
+        .sidebar-brand span { font-family: var(--display); }
+        .amount, .live-clock { font-family: var(--mono); }
         h2 { font-size: 1rem; font-weight: 600; color: var(--text2); margin: 2rem 0 1rem 0; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 8px; }
         h2::before { content: ''; display: inline-block; width: 3px; height: 14px; background: var(--red-bright); border-radius: 2px; }
         p { color: var(--text2); line-height: 1.6; }
@@ -488,6 +564,11 @@
             transform: scale(0);
             animation: rippleAnim 0.6s linear;
             pointer-events: none;
+            z-index: 1;
+        }
+        .sidebar-nav a .ripple {
+            background: rgba(46, 204, 113, 0.35);
+            animation: rippleAnim 0.7s ease-out;
         }
         @keyframes rippleAnim {
             to { transform: scale(4); opacity: 0; }
@@ -707,6 +788,205 @@
             100% { transform: translateX(250%); }
         }
 
+        /* ── Widgets / cards used by inner pages ── */
+        .widget {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 1.25rem 1.4rem;
+            margin: 1.25rem 0;
+            position: relative;
+            overflow: hidden;
+            animation: cardEntrance 0.55s var(--ease-out) both;
+            transition: transform 0.25s var(--ease-spring), border-color 0.2s ease, box-shadow 0.25s ease;
+        }
+        .widget::before {
+            content: '';
+            position: absolute;
+            inset: 0 auto auto 0;
+            width: 100%;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--red-bright), transparent);
+            opacity: 0.35;
+        }
+        .widget:hover {
+            transform: translateY(-3px);
+            border-color: var(--border2);
+            box-shadow: 0 14px 36px rgba(0,0,0,0.35);
+        }
+        @keyframes cardEntrance {
+            from { opacity: 0; transform: translateY(16px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        details {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 0.2rem 1rem 0.2rem;
+            margin-bottom: 1rem;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        details[open] {
+            border-color: var(--red-dim);
+            box-shadow: 0 0 0 3px var(--red-glow);
+        }
+        details summary {
+            cursor: pointer;
+            padding: 0.85rem 0;
+            font-weight: 600;
+            list-style: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        details summary::-webkit-details-marker { display: none; }
+        details summary::after {
+            content: '▾';
+            margin-left: auto;
+            color: var(--text3);
+            transition: transform 0.25s var(--ease-spring);
+        }
+        details[open] summary::after { transform: rotate(180deg); }
+        details > div, details form { padding-bottom: 1rem; animation: cardEntrance 0.35s ease both; }
+
+        .pagination a {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 32px;
+            height: 32px;
+            padding: 0 8px;
+            border-radius: 8px;
+            text-decoration: none;
+            color: var(--text2);
+            border: 1px solid var(--border);
+            background: var(--surface);
+            transition: all 0.2s var(--ease-spring);
+        }
+        .pagination a:hover {
+            color: var(--text);
+            border-color: var(--red-bright);
+            transform: translateY(-2px);
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin: 1.5rem 0;
+        }
+
+        .auth-card {
+            max-width: 420px;
+            margin: 2rem auto;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 2rem 1.75rem;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.35);
+            animation: modalPopIn 0.45s var(--ease-spring);
+        }
+        .auth-card h1 { text-align: center; margin-bottom: 1.25rem; }
+        .auth-card .form-group { display: block; width: 100%; margin-right: 0; }
+        .auth-card input { width: 100%; }
+        .auth-card button { width: 100%; margin-top: 0.5rem; }
+        .auth-card p { text-align: center; margin-top: 1rem; }
+        .auth-card a { color: var(--red-bright); }
+
+        a { color: var(--red-bright); transition: color 0.15s ease, opacity 0.15s ease; }
+        a:hover { opacity: 0.85; }
+
+        tbody tr {
+            animation: rowIn 0.35s var(--ease-out) both;
+        }
+        tbody tr:nth-child(1) { animation-delay: 0.02s; }
+        tbody tr:nth-child(2) { animation-delay: 0.05s; }
+        tbody tr:nth-child(3) { animation-delay: 0.08s; }
+        tbody tr:nth-child(4) { animation-delay: 0.11s; }
+        tbody tr:nth-child(5) { animation-delay: 0.14s; }
+        tbody tr:nth-child(6) { animation-delay: 0.17s; }
+        tbody tr:nth-child(7) { animation-delay: 0.2s; }
+        tbody tr:nth-child(8) { animation-delay: 0.23s; }
+        @keyframes rowIn {
+            from { opacity: 0; transform: translateX(-8px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .low-stock-row { background: var(--danger-dim) !important; }
+
+        .status-pill {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 999px;
+            font-size: 0.78rem;
+            font-weight: 600;
+        }
+        .status-ok { background: var(--green-dim); color: var(--green); }
+        .status-warn { background: rgba(224,160,48,0.15); color: #e0a030; }
+
+        .empty-state {
+            text-align: center;
+            padding: 2rem 1rem;
+            color: var(--text3);
+        }
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 0.85rem;
+            margin: 0 0 1.5rem;
+        }
+        .stat-chip {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 0.95rem 1rem;
+            animation: cardEntrance 0.5s var(--ease-out) both;
+        }
+        .stat-chip span {
+            display: block;
+            font-size: 0.7rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--text3);
+            margin-bottom: 0.35rem;
+        }
+        .stat-chip strong {
+            font-family: var(--mono);
+            font-size: 1.15rem;
+            color: var(--text);
+        }
+        .split-charts {
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 1rem;
+            margin: 1rem 0 1.5rem;
+        }
+        @media (max-width: 800px) {
+            .split-charts { grid-template-columns: 1fr; }
+        }
+
+        /* Live clock chip in topbar */
+        .live-clock {
+            font-size: 0.75rem;
+            color: var(--text3);
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 0.3px;
+            padding: 4px 10px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: var(--surface);
+            animation: clockFade 0.6s ease both;
+        }
+        @keyframes clockFade { from { opacity: 0; } to { opacity: 1; } }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation: none !important;
+                transition: none !important;
+            }
+        }
+
         /* ── Responsive ── */
         @media (max-width: 768px) {
             .sidebar {
@@ -739,6 +1019,7 @@
         @media (max-width: 480px) {
             .summary-container { grid-template-columns: 1fr; }
             .right-group { gap: 0.5rem; }
+            .live-clock { display: none; }
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -749,14 +1030,20 @@
         :root {
             {% if user_settings.font_family == 'Inter' %} --font: 'Inter', sans-serif;
             {% elif user_settings.font_family == 'Roboto' %} --font: 'Roboto', sans-serif;
+            {% elif user_settings.font_family == 'Outfit' %} --font: 'Outfit', sans-serif;
+            {% elif user_settings.font_family == 'DM Sans' %} --font: 'DM Sans', sans-serif;
+            {% elif user_settings.font_family == 'Plus Jakarta Sans' %} --font: 'Plus Jakarta Sans', sans-serif;
+            {% elif user_settings.font_family == 'JetBrains Mono' %} --font: 'JetBrains Mono', monospace;
             {% else %} --font: 'Courier New', monospace; {% endif %}
             {% if user_settings.font_size == 'small' %} --base-font-size: 0.85rem;
             {% elif user_settings.font_size == 'large' %} --base-font-size: 1.1rem;
             {% else %} --base-font-size: 1rem; {% endif %}
             {% if user_settings.theme == 'light' %}
-            --bg: #f5f5f5; --bg2: #ffffff; --surface: #ffffff; --surface2: #f0f0f0; --border: #ddd; --text: #111; --text2: #333; --text3: #666;
+            --bg: #f5f5f5; --bg2: #ffffff; --surface: #ffffff; --surface2: #f0f0f0; --border: #ddd; --text: #111; --text2: #333; --text3: #666; --icon: #1f8a3d;
             {% elif user_settings.theme == 'matrix' %}
-            --bg: #0a0f0a; --bg2: #0f1a0f; --surface: #0f1a0f; --surface2: #1a2a1a; --border: #2a4a2a; --text: #00ff41; --text2: #00cc33; --text3: #009922; --red-bright: #00ff41; --red: #00cc33;
+            --bg: #0a0f0a; --bg2: #0f1a0f; --surface: #0f1a0f; --surface2: #1a2a1a; --border: #2a4a2a; --text: #00ff41; --text2: #00cc33; --text3: #009922; --red-bright: #00ff41; --red: #00cc33; --icon: #00ff41;
+            {% elif user_settings.theme == 'inverted' %}
+            --bg: #f0f0f0; --bg2: #111; --surface: #1a1a1a; --surface2: #222; --border: #333; --text: #f5f5f5; --text2: #ccc; --icon: #2ecc71;
             {% endif %}
         }
         body { font-family: var(--font); font-size: var(--base-font-size); }
@@ -814,6 +1101,10 @@
             document.querySelectorAll('button:not(.modal-close)').forEach(btn => {
                 btn.addEventListener('click', createRipple);
             });
+            document.querySelectorAll('.sidebar-nav a').forEach(link => {
+                link.addEventListener('click', createRipple);
+            });
+            if (window.lucide) lucide.createIcons({ attrs: { stroke: 'currentColor', width: 18, height: 18 } });
         });
     </script>
 </head>
@@ -831,19 +1122,19 @@
             <div class="nav-section">
                 <div class="nav-section-title">Core</div>
                 <a href="{{ url_for('dashboard') }}" {% if request.endpoint == 'dashboard' %}class="active"{% endif %}>
-                    <span class="icon">📊</span> Dashboard
+                    <i data-lucide="layout-dashboard" class="icon"></i> Dashboard
                 </a>
                 <a href="{{ url_for('stock') }}" {% if request.endpoint == 'stock' %}class="active"{% endif %}>
-                    <span class="icon">📦</span> Stock
+                    <i data-lucide="package" class="icon"></i> Stock
                 </a>
                 <a href="{{ url_for('sales') }}" {% if request.endpoint == 'sales' %}class="active"{% endif %}>
-                    <span class="icon">🧾</span> Sales
+                    <i data-lucide="receipt" class="icon"></i> Sales
                 </a>
                 <a href="{{ url_for('customers') }}" {% if request.endpoint == 'customers' %}class="active"{% endif %}>
-                    <span class="icon">👤</span> Customers
+                    <i data-lucide="users" class="icon"></i> Customers
                 </a>
                 <a href="{{ url_for('cashbook') }}" {% if request.endpoint == 'cashbook' %}class="active"{% endif %}>
-                    <span class="icon">📒</span> Cash Book
+                    <i data-lucide="book-open" class="icon"></i> Cash Book
                 </a>
             </div>
 
@@ -851,16 +1142,16 @@
             <div class="nav-section">
                 <div class="nav-section-title">Operations</div>
                 <a href="{{ url_for('recurring') }}" {% if request.endpoint == 'recurring' %}class="active"{% endif %}>
-                    <span class="icon">🔁</span> Recurring
+                    <i data-lucide="refresh-cw" class="icon"></i> Recurring
                 </a>
                 <a href="{{ url_for('purchase_orders') }}" {% if request.endpoint == 'purchase_orders' %}class="active"{% endif %}>
-                    <span class="icon">📦</span> Purchase Orders
+                    <i data-lucide="shopping-cart" class="icon"></i> Purchase Orders
                 </a>
                 <a href="{{ url_for('suppliers') }}" {% if request.endpoint == 'suppliers' %}class="active"{% endif %}>
-                    <span class="icon">🏭</span> Suppliers
+                    <i data-lucide="warehouse" class="icon"></i> Suppliers
                 </a>
                 <a href="{{ url_for('budgets') }}" {% if request.endpoint == 'budgets' %}class="active"{% endif %}>
-                    <span class="icon">🎯</span> Budgets
+                    <i data-lucide="target" class="icon"></i> Budgets
                 </a>
             </div>
 
@@ -868,13 +1159,13 @@
             <div class="nav-section">
                 <div class="nav-section-title">Planning</div>
                 <a href="{{ url_for('reports') }}" {% if request.endpoint == 'reports' %}class="active"{% endif %}>
-                    <span class="icon">📊</span> Reports
+                    <i data-lucide="bar-chart-3" class="icon"></i> Reports
                 </a>
                 <a href="{{ url_for('swot') }}" {% if request.endpoint == 'swot' %}class="active"{% endif %}>
-                    <span class="icon">🧭</span> SWOT
+                    <i data-lucide="compass" class="icon"></i> SWOT
                 </a>
                 <a href="{{ url_for('business_plan') }}" {% if request.endpoint == 'business_plan' %}class="active"{% endif %}>
-                    <span class="icon">📈</span> Business Plan
+                    <i data-lucide="trending-up" class="icon"></i> Business Plan
                 </a>
             </div>
 
@@ -882,30 +1173,45 @@
             <div class="nav-section">
                 <div class="nav-section-title">Integrations</div>
                 <a href="#" onclick="alert('GitHub integration coming soon!')">
-                    <span class="icon">🐙</span> GitHub
+                    <i data-lucide="github" class="icon"></i> GitHub
                 </a>
                 <a href="#" onclick="alert('Render integration coming soon!')">
-                    <span class="icon">⚡</span> Render
+                    <i data-lucide="zap" class="icon"></i> Render
                 </a>
                 <a href="#" onclick="alert('Gmail integration coming soon!')">
-                    <span class="icon">📧</span> Gmail
+                    <i data-lucide="mail" class="icon"></i> Gmail
                 </a>
                 <a href="#" onclick="alert('YouTube integration coming soon!')">
-                    <span class="icon">▶️</span> YouTube
+                    <i data-lucide="youtube" class="icon"></i> YouTube
                 </a>
             </div>
 
             <!-- Documents -->
             <div class="nav-section">
+                <div class="nav-section-title">Workspace</div>
+                <a href="{{ url_for('tasks') }}" {% if request.endpoint == 'tasks' %}class="active"{% endif %}>
+                    <i data-lucide="check-square" class="icon"></i> Tasks
+                </a>
+                <a href="{{ url_for('notes') }}" {% if request.endpoint in ['notes','edit_note'] %}class="active"{% endif %}>
+                    <i data-lucide="sticky-note" class="icon"></i> Notes
+                </a>
+                <a href="{{ url_for('calendar') }}" {% if request.endpoint == 'calendar' %}class="active"{% endif %}>
+                    <i data-lucide="calendar" class="icon"></i> Calendar
+                </a>
+                <a href="{{ url_for('calculator') }}" {% if request.endpoint == 'calculator' %}class="active"{% endif %}>
+                    <i data-lucide="calculator" class="icon"></i> Calculator
+                </a>
+            </div>
+            <div class="nav-section">
                 <div class="nav-section-title">Documents</div>
                 <a href="{{ url_for('docs') }}" {% if request.endpoint == 'docs' %}class="active"{% endif %}>
-                    <span class="icon">📄</span> Documents
+                    <i data-lucide="file-text" class="icon"></i> Documents
                 </a>
             </div>
         </nav>
 
         <div class="sidebar-footer">
-            <span>KAZE v2.0.0</span>
+            <span>KAZE v2.2.0</span>
             <span class="version">⚡</span>
         </div>
     </div>
@@ -919,12 +1225,13 @@
 
             <!-- GLOBAL SEARCH FORM -->
             <form action="{{ url_for('search') }}" method="GET" class="search-form">
-                <input type="text" name="q" placeholder="Search customers, products, documents..." aria-label="Search">
+                <input type="text" name="q" placeholder="Search customers, products, notes, tasks..." aria-label="Search">
                 <button type="submit" aria-label="Submit search">🔍</button>
             </form>
 
             <!-- Right group: notifications + user menu -->
             <div class="right-group">
+                <span class="live-clock" id="liveClock" title="Local time"></span>
                 <a href="{{ url_for('notifications') }}" class="bell-link" title="Notifications">
                     🔔{% if unread_notifications and unread_notifications > 0 %}<span class="bell-badge">{{ unread_notifications }}</span>{% endif %}
                 </a>
@@ -933,8 +1240,9 @@
                     <div class="dropdown-content">
                         <a href="{{ url_for('dashboard') }}">Dashboard</a>
                         <a href="{{ url_for('team') }}">👥 Team</a>
-                        <a href="{{ url_for('activity') }}">🕓 Login Activity</a>
-                        <a href="#" onclick="openModal('tutorialModal'); return false;">❓ Help / Tutorial</a>
+                        <a href="{{ url_for('activity') }}">Login Activity</a>
+                        <a href="{{ url_for('backup_export') }}">Download backup</a>
+                        <a href="#" onclick="openModal('tutorialModal'); return false;">Help / Tutorial</a>
                         <a href="{{ url_for('settings') }}">Settings</a>
                         <a href="{{ url_for('logout') }}">Logout</a>
                     </div>
@@ -1001,8 +1309,21 @@
         document.addEventListener('DOMContentLoaded', () => {
             document.querySelectorAll('.summary-card .amount').forEach(el => {
                 const card = el.closest('.summary-card');
+                if (!card || !card.parentElement) return;
                 const idx = [...card.parentElement.children].indexOf(card);
                 setTimeout(() => animateCount(el), 100 + idx * 100);
+            });
+
+            const clock = document.getElementById('liveClock');
+            function tickClock() {
+                if (!clock) return;
+                clock.textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+            }
+            tickClock();
+            setInterval(tickClock, 1000);
+
+            document.querySelectorAll('.page-content .summary-card, .page-content .widget, .page-content .chart-container').forEach((el, i) => {
+                el.style.animationDelay = (i * 0.06) + 's';
             });
         });
     </script>
