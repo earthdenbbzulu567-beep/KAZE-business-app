@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Account tracking</h1>
+        <p>Journals, ledgers, and financial statements built from your sales, purchases, cash, and journal entries.</p>
+    </div>
+</div>
+<div class="stat-grid">
+{% for k, label, hint, count in books %}
+<a href="{{ url_for('account_book', book=k) }}" style="text-decoration:none;color:inherit;">
+    <div class="stat-chip" style="min-height:108px;">
+        <span>{{ label }}</span>
+        <strong>{{ count }}</strong>
+        <p style="margin:8px 0 0;font-size:0.78rem;color:var(--text3);text-transform:none;letter-spacing:0;">{{ hint }}</p>
+    </div>
+</a>
+{% endfor %}
+</div>
+<div class="widget" style="margin-top:1.5rem;">
+    <h2>How this works</h2>
+    <p>Sales Journal and Purchases Journal fill themselves from Sales and Purchase Orders. Returns pick up Credit Notes and Goods Returned Notes from Book keeping. Type extra lines in the General Journal or Petty Cash Book. The General Ledger and statements add those figures up.</p>
+</div>
+{% endblock %}

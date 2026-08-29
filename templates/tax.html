@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Tax summary</h1>
+        <p>Uses the tax / VAT rate from Settings (currently {{ rate }}%). This is a simple estimate, not a filed return.</p>
+    </div>
+    <a href="{{ url_for('settings') }}" class="btn-secondary" style="text-decoration:none;padding:10px 18px;">Change rate</a>
+</div>
+<div class="stat-grid">
+    <div class="stat-chip"><span>Taxable sales + income</span><strong>{{ symbol }}{{ "%.2f"|format(taxable_out) }}</strong></div>
+    <div class="stat-chip"><span>Output tax</span><strong>{{ symbol }}{{ "%.2f"|format(output_tax) }}</strong></div>
+    <div class="stat-chip"><span>Purchases + expenses</span><strong>{{ symbol }}{{ "%.2f"|format(taxable_in) }}</strong></div>
+    <div class="stat-chip"><span>Input tax</span><strong>{{ symbol }}{{ "%.2f"|format(input_tax) }}</strong></div>
+    <div class="stat-chip"><span>Net tax to set aside</span><strong>{{ symbol }}{{ "%.2f"|format(net_tax) }}</strong></div>
+</div>
+<div class="table-wrapper">
+<table>
+<thead><tr><th>Base</th><th>Amount</th></tr></thead>
+<tbody>
+<tr><td>Sales</td><td>{{ symbol }}{{ "%.2f"|format(sales_rev) }}</td></tr>
+<tr><td>Other income</td><td>{{ symbol }}{{ "%.2f"|format(other_inc) }}</td></tr>
+<tr><td>Expenses</td><td>{{ symbol }}{{ "%.2f"|format(expenses) }}</td></tr>
+<tr><td>Purchase orders</td><td>{{ symbol }}{{ "%.2f"|format(purchases) }}</td></tr>
+</tbody>
+</table>
+</div>
+<div class="widget">
+    <p>Set your rate under Settings → Tax / VAT Rate. Output tax is estimated on sales and income. Input tax is estimated on expenses and purchase orders. Ask an accountant before you file anything official.</p>
+</div>
+{% endblock %}

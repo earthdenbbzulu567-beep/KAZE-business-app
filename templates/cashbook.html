@@ -2,10 +2,11 @@
 {% block content %}
 <div class="page-header">
     <div>
-        <h1>📒 Cash Book</h1>
-        <p>Track cash in and out separately from your income statement.</p>
+        <h1>Cash ledger</h1>
+        <p>Part of Book keeping — track cash in and out for till reconciliation.</p>
     </div>
-    <button type="button" class="btn-secondary popup-trigger-btn" onclick="openModal('cashbookActionsModal')">⬇️ Export / Import</button>
+    <a href="{{ url_for('bookkeeping') }}" class="btn-secondary" style="text-decoration:none;padding:10px 18px;">All book keeping</a>
+    <button type="button" class="btn-secondary popup-trigger-btn" onclick="openModal('cashbookActionsModal')">Export / Import</button>
 </div>
 
 <div class="modal-overlay" id="cashbookActionsModal">

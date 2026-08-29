@@ -125,6 +125,23 @@
     </form>
 </div>
 
+
+<h2>Start over</h2>
+<div class="widget" style="border-color:rgba(192,57,43,0.45);">
+    <p>Erase this business’s records and start from zero. Your login, team accounts, and Settings stay. Sales, stock, customers, cash, journals, documents, tasks, and notes are removed. This cannot be undone — download a backup first.</p>
+    {% if current_user.role == 'owner' %}
+    <form method="POST" action="{{ url_for('clear_data') }}" onsubmit="return confirm('This permanently deletes business records. Continue?');">
+        <div class="form-group">
+            <label>Type CLEAR to confirm</label>
+            <input type="text" name="confirm_text" placeholder="CLEAR" autocomplete="off" required>
+        </div>
+        <button type="submit" class="delete-btn" style="background:#c0392b;">Clear all business data</button>
+    </form>
+    {% else %}
+    <p style="color:var(--text3);">Only the account owner can clear data.</p>
+    {% endif %}
+</div>
+
 <div class="widget" style="margin-top:1.5rem;">
     <h2>Type preview</h2>
     <p style="font-family:var(--display); font-size:1.4rem; margin:0.4rem 0;">Outfit headings look like this.</p>

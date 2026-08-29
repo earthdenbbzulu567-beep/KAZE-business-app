@@ -3,6 +3,7 @@
 <div class="page-header">
     <h1>Stock / Inventory</h1>
     <div style="display:flex; gap:0.75rem;">
+        <a href="{{ url_for('price_list') }}" class="btn-secondary popup-trigger-btn" style="text-decoration:none;">Price list PDF</a>
         <a href="{{ url_for('check_low_stock') }}" class="btn-secondary popup-trigger-btn" style="text-decoration:none;">Check Low Stock Now</a>
         <a href="{{ url_for('reorder_low_stock') }}" class="btn-secondary popup-trigger-btn" style="text-decoration:none;" onclick="return confirm('Create draft purchase orders for every low-stock item?')">Reorder low stock</a>
         <button type="button" class="btn-secondary popup-trigger-btn" onclick="openModal('stockActionsModal')">⬇️ Export / Import</button>
@@ -125,7 +126,9 @@
     const prodNames = {{ product_names | tojson }};
     const invValues = {{ inventory_values | tojson }};
     
-    const ctxStock = document.getElementById('stockValueChart').getContext('2d');
+    const stockCanvas = document.getElementById('stockValueChart');
+    if (stockCanvas) {
+    const ctxStock = stockCanvas.getContext('2d');
     new Chart(ctxStock, {
         type: 'bar',
         data: {
@@ -148,6 +151,7 @@
             }
         }
     });
+    }
 </script>
 
 <!-- Toggle all checkboxes -->

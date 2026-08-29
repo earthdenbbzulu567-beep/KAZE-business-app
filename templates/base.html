@@ -1133,8 +1133,8 @@
                 <a href="{{ url_for('customers') }}" {% if request.endpoint == 'customers' %}class="active"{% endif %}>
                     <i data-lucide="users" class="icon"></i> Customers
                 </a>
-                <a href="{{ url_for('cashbook') }}" {% if request.endpoint == 'cashbook' %}class="active"{% endif %}>
-                    <i data-lucide="book-open" class="icon"></i> Cash Book
+                <a href="{{ url_for('bookkeeping') }}" {% if request.endpoint in ['bookkeeping','bookkeeping_type','cashbook','edit_cash_entry'] %}class="active"{% endif %}>
+                    <i data-lucide="book-open" class="icon"></i> Book keeping
                 </a>
             </div>
 
@@ -1157,9 +1157,22 @@
 
             <!-- Planning -->
             <div class="nav-section">
+                <div class="nav-section-title">Accounts</div>
+                <a href="{{ url_for('accounts') }}" {% if request.endpoint in ['accounts','account_book'] %}class="active"{% endif %}>
+                    <i data-lucide="book-marked" class="icon"></i> Account tracking
+                </a>
+            </div>
+
+            <div class="nav-section">
                 <div class="nav-section-title">Planning</div>
                 <a href="{{ url_for('reports') }}" {% if request.endpoint == 'reports' %}class="active"{% endif %}>
                     <i data-lucide="bar-chart-3" class="icon"></i> Reports
+                </a>
+                <a href="{{ url_for('tax_summary') }}" {% if request.endpoint == 'tax_summary' %}class="active"{% endif %}>
+                    <i data-lucide="percent" class="icon"></i> Tax summary
+                </a>
+                <a href="{{ url_for('reminders') }}" {% if request.endpoint == 'reminders' %}class="active"{% endif %}>
+                    <i data-lucide="bell" class="icon"></i> Reminders
                 </a>
                 <a href="{{ url_for('swot') }}" {% if request.endpoint == 'swot' %}class="active"{% endif %}>
                     <i data-lucide="compass" class="icon"></i> SWOT
@@ -1211,7 +1224,7 @@
         </nav>
 
         <div class="sidebar-footer">
-            <span>KAZE v2.2.0</span>
+            <span>KAZE v2.5.0</span>
             <span class="version">⚡</span>
         </div>
     </div>

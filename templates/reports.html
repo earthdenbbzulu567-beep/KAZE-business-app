@@ -42,7 +42,7 @@
                     {% for p in top_products %}
                     <tr>
                         <td>{{ p.product_name }}</td>
-                        <td>{{ p.units }}</td>
+                        <td>{{ p.units_sold }}</td>
                         <td>${{ "%.2f"|format(p.revenue) }}</td>
                         <td>${{ "%.2f"|format(p.profit) }}</td>
                     </tr>

@@ -328,6 +328,36 @@ def init_db():
             updated_date TEXT NOT NULL
         )
     ''')
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS bookkeeping_docs (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            kind TEXT NOT NULL,
+            title TEXT NOT NULL,
+            party TEXT DEFAULT '',
+            reference TEXT DEFAULT '',
+            doc_date TEXT NOT NULL,
+            amount REAL DEFAULT 0,
+            status TEXT DEFAULT 'draft',
+            notes TEXT DEFAULT '',
+            line_items TEXT DEFAULT '',
+            created_date TEXT NOT NULL
+        )
+    ''')
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS journal_entries (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            book TEXT NOT NULL,
+            entry_date TEXT NOT NULL,
+            reference TEXT DEFAULT '',
+            account TEXT NOT NULL,
+            particulars TEXT DEFAULT '',
+            debit REAL DEFAULT 0,
+            credit REAL DEFAULT 0,
+            created_date TEXT NOT NULL
+        )
+    ''')
     conn.commit()
     cur.close()
     conn.close()
@@ -2472,10 +2502,7 @@ def search():
         LIMIT 10
     ''', (current_user.id, f'%{q}%', f'%{q}%'))
     docs = cur.fetchall()
-    
-    cur.close()
-    conn.close()
-    
+
     cur.execute('''
         SELECT id, title as name, 'note' as type
         FROM notes
@@ -2491,6 +2518,9 @@ def search():
         LIMIT 10
     ''', (current_user.id, f'%{q}%'))
     task_hits = cur.fetchall()
+
+    cur.close()
+    conn.close()
 
     results = customers + products + docs + note_hits + task_hits
     return render_template('search_results.html', results=results, q=q)
@@ -2871,7 +2901,810 @@ def reorder_low_stock():
     return redirect(url_for('stock'))
 
 
+# ======================== Book keeping documents ========================
+
+BOOK_DOC_TYPES = [
+    ('quotation', 'Quotation', 'Price offer sent to a customer before they order.'),
+    ('purchase_order', 'Purchase Order', 'Order you send to a supplier.'),
+    ('invoice', 'Invoice', 'Request for payment after goods or services.'),
+    ('proforma_invoice', 'Pro-forma Invoice', 'Estimated invoice sent before the final bill.'),
+    ('delivery_note', 'Delivery Note', 'List of goods sent out to a customer.'),
+    ('grn', 'Goods Received Note (GRN)', 'Record of goods that arrived from a supplier.'),
+    ('credit_note', 'Credit Note', 'Reduces what a customer owes you.'),
+    ('debit_note', 'Debit Note', 'Increases an amount owed.'),
+    ('statement', 'Statement of Account', 'Running balance for a customer or supplier.'),
+    ('receipt', 'Receipt', 'Proof that money was received.'),
+    ('cash_sale_receipt', 'Cash Sale Receipt', 'Receipt for an immediate cash sale.'),
+    ('payment_voucher', 'Payment Voucher', 'Authorisation to pay money out.'),
+    ('petty_cash_voucher', 'Petty Cash Voucher', 'Small cash payment from the petty cash tin.'),
+    ('cheque', 'Cheque', 'Record of a cheque you wrote or received.'),
+    ('cheque_counterfoil', 'Cheque Counterfoil', 'Stub kept in the cheque book.'),
+    ('bank_deposit_slip', 'Bank Deposit Slip', 'Record of cash or cheques paid into the bank.'),
+    ('bank_statement', 'Bank Statement', 'Summary of bank movements you want to keep on file.'),
+    ('remittance_advice', 'Remittance Advice', 'Note sent with a payment explaining what it covers.'),
+    ('goods_returned_note', 'Goods Returned Note', 'Goods sent back to a supplier or by a customer.'),
+    ('goods_dispatch_note', 'Goods Dispatch Note', 'Goods leaving your store.'),
+    ('order_confirmation', 'Order Confirmation', 'Confirms an order you accepted.'),
+    ('purchase_invoice', 'Purchase Invoice', 'Bill received from a supplier.'),
+    ('sales_invoice', 'Sales Invoice', 'Bill you send to a customer.'),
+    ('timesheet', 'Time Sheet', 'Hours worked on a job or by a person.'),
+    ('clock_card', 'Clock Card / Time Card', 'Clock-in record.'),
+    ('wage_sheet', 'Wage Sheet / Payroll', 'Payroll list for a pay period.'),
+    ('payslip', 'Payslip', 'Pay breakdown for one person.'),
+]
+BOOK_DOC_LOOKUP = {k: (label, hint) for k, label, hint in BOOK_DOC_TYPES}
+
+
+@app.route('/bookkeeping')
+@login_required
+def bookkeeping():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT kind, COUNT(*) as total FROM bookkeeping_docs WHERE user_id=%s GROUP BY kind', (current_user.id,))
+    counts = {row['kind']: row['total'] for row in cur.fetchall()}
+    cur.execute('SELECT * FROM cash_books WHERE user_id=%s ORDER BY date DESC LIMIT 8', (current_user.id,))
+    recent_cash = cur.fetchall()
+    cur.execute('SELECT * FROM bookkeeping_docs WHERE user_id=%s ORDER BY id DESC LIMIT 8', (current_user.id,))
+    recent_docs = cur.fetchall()
+    cur.close()
+    conn.close()
+    types = [(k, label, hint, counts.get(k, 0)) for k, label, hint in BOOK_DOC_TYPES]
+    return render_template(
+        'bookkeeping.html',
+        types=types,
+        recent_cash=recent_cash,
+        recent_docs=recent_docs,
+        kind_labels={k: label for k, label, _ in BOOK_DOC_TYPES}
+    )
+
+
+@app.route('/bookkeeping/<kind>', methods=['GET', 'POST'])
+@login_required
+def bookkeeping_type(kind):
+    info = BOOK_DOC_LOOKUP.get(kind)
+    if not info:
+        flash('Unknown document type.', 'danger')
+        return redirect(url_for('bookkeeping'))
+    label, hint = info
+    if request.method == 'POST':
+        title = (request.form.get('title') or '').strip() or label
+        try:
+            amount = float(request.form.get('amount') or 0)
+        except ValueError:
+            amount = 0
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute(
+            '''
+            INSERT INTO bookkeeping_docs
+            (user_id, kind, title, party, reference, doc_date, amount, status, notes, line_items, created_date)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            ''',
+            (
+                current_user.id, kind, title,
+                request.form.get('party', ''),
+                request.form.get('reference', ''),
+                request.form.get('doc_date') or datetime.today().strftime('%Y-%m-%d'),
+                amount,
+                request.form.get('status') or 'draft',
+                request.form.get('notes', ''),
+                request.form.get('line_items', ''),
+                datetime.today().strftime('%Y-%m-%d')
+            )
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+        log_activity(current_user.id, current_user.username, 'Created ' + label, title)
+        flash(label + ' saved.', 'success')
+        return redirect(url_for('bookkeeping_type', kind=kind))
+
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        'SELECT * FROM bookkeeping_docs WHERE user_id=%s AND kind=%s ORDER BY doc_date DESC, id DESC',
+        (current_user.id, kind)
+    )
+    items = cur.fetchall()
+    cur.close()
+    conn.close()
+    return render_template('bookkeeping_type.html', kind=kind, label=label, hint=hint, items=items)
+
+
+@app.route('/bookkeeping/doc/<int:id>/delete')
+@login_required
+def delete_book_doc(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT kind FROM bookkeeping_docs WHERE id=%s AND user_id=%s', (id, current_user.id))
+    row = cur.fetchone()
+    kind = row['kind'] if row else None
+    cur.execute('DELETE FROM bookkeeping_docs WHERE id=%s AND user_id=%s', (id, current_user.id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Document deleted.', 'success')
+    if kind:
+        return redirect(url_for('bookkeeping_type', kind=kind))
+    return redirect(url_for('bookkeeping'))
+
+
+@app.route('/bookkeeping/doc/<int:id>/pdf')
+@login_required
+def bookkeeping_pdf(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM bookkeeping_docs WHERE id=%s AND user_id=%s', (id, current_user.id))
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not row:
+        flash('Document not found.', 'danger')
+        return redirect(url_for('bookkeeping'))
+    label = BOOK_DOC_LOOKUP.get(row['kind'], (row['kind'].replace('_', ' ').title(), ''))[0]
+    settings_row = _get_settings_row(current_user.id)
+    business_name = (settings_row['business_name'] if settings_row else '') or 'Your Business'
+    symbol = (settings_row['currency_symbol'] if settings_row else '$') or '$'
+    tax_rate = (settings_row['tax_rate'] if settings_row else 0) or 0
+    meta_lines = [
+        '<b>Document:</b> {}'.format(label),
+        '<b>Title:</b> {}'.format(row['title']),
+        '<b>Party:</b> {}'.format(row['party'] or '-'),
+        '<b>Reference:</b> {}'.format(row['reference'] or '-'),
+        '<b>Date:</b> {}'.format(row['doc_date']),
+        '<b>Status:</b> {}'.format(row['status'] or 'draft'),
+    ]
+    if row['notes']:
+        meta_lines.append('<b>Notes:</b> {}'.format(row['notes']))
+    table_data = [['Description', 'Qty / detail', 'Amount']]
+    parsed = False
+    for raw in (row['line_items'] or '').splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        parts = [p.strip() for p in line.split('|')]
+        if len(parts) == 1:
+            table_data.append([parts[0], '', ''])
+        elif len(parts) == 2:
+            table_data.append([parts[0], parts[1], ''])
+        else:
+            table_data.append([parts[0], parts[1], parts[2]])
+        parsed = True
+    if not parsed:
+        table_data.append([row['title'], '1', '{}{:.2f}'.format(symbol, row['amount'] or 0)])
+    subtotal = row['amount'] or 0
+    if row['kind'] in ('invoice', 'sales_invoice', 'proforma_invoice', 'quotation') and tax_rate:
+        tax_amount = subtotal * (tax_rate / 100)
+        table_data.append(['Tax ({:.1f}%)'.format(tax_rate), '', '{}{:.2f}'.format(symbol, tax_amount)])
+        table_data.append(['Total', '', '{}{:.2f}'.format(symbol, subtotal + tax_amount)])
+    else:
+        table_data.append(['Total', '', '{}{:.2f}'.format(symbol, subtotal)])
+    buffer = io.BytesIO()
+    _build_pdf(
+        buffer, label + ' - ' + row['title'], business_name, meta_lines, table_data,
+        footer_lines=['Generated on {}'.format(datetime.today().strftime('%Y-%m-%d'))]
+    )
+    buffer.seek(0)
+    safe = ''.join(c for c in row['title'] if c.isalnum() or c in (' ', '_', '-')).rstrip()
+    return send_file(
+        buffer, mimetype='application/pdf', as_attachment=True,
+        download_name='{}-{}.pdf'.format(row['kind'], safe or 'document')
+    )
+
+
 # ======================== Main ========================
+
+# ======================== Account tracking ========================
+
+ACCOUNT_BOOKS = [
+    ('cash_book', 'Cash Book', 'Cash in and out — same ledger as Book keeping.'),
+    ('purchases_journal', 'Purchases Journal', 'Credit purchases and supplier bills.'),
+    ('sales_journal', 'Sales Journal', 'Credit and recorded sales.'),
+    ('purchases_returns', 'Purchases Returns Journal', 'Goods sent back to suppliers.'),
+    ('sales_returns', 'Sales Returns Journal', 'Goods returned by customers.'),
+    ('general_journal', 'General Journal', 'Double-entry adjustments you type yourself.'),
+    ('petty_cash', 'Petty Cash Book', 'Small cash payments.'),
+    ('general_ledger', 'General Ledger', 'Accounts rolled up from journals and the app.'),
+    ('debtors_ledger', 'Debtors Ledger', 'What customers owe, from sales.'),
+    ('creditors_ledger', 'Creditors Ledger', 'What you owe suppliers.'),
+    ('trading_account', 'Trading Account', 'Sales, cost of goods, and gross profit.'),
+    ('profit_and_loss', 'Profit and Loss Account', 'Gross profit, other income, and expenses.'),
+    ('balance_sheet', 'Balance Sheet', 'Assets, liabilities, and capital.'),
+    ('cash_flow', 'Cash Flow Statement', 'Where cash came from and where it went.'),
+]
+ACCOUNT_BOOK_LOOKUP = {k: (label, hint) for k, label, hint in ACCOUNT_BOOKS}
+LEDGER_BOOKS = {
+    'purchases_journal', 'sales_journal', 'purchases_returns',
+    'sales_returns', 'general_journal', 'petty_cash'
+}
+
+
+def _je_rows(cur, user_id, book):
+    cur.execute(
+        '''SELECT * FROM journal_entries WHERE user_id=%s AND book=%s
+           ORDER BY entry_date DESC, id DESC''',
+        (user_id, book)
+    )
+    return cur.fetchall()
+
+
+@app.route('/accounts')
+@login_required
+def accounts():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        'SELECT book, COUNT(*) as total FROM journal_entries WHERE user_id=%s GROUP BY book',
+        (current_user.id,)
+    )
+    counts = {r['book']: r['total'] for r in cur.fetchall()}
+    cur.execute('SELECT COUNT(*) as n FROM sales WHERE user_id=%s', (current_user.id,))
+    counts['sales_journal'] = counts.get('sales_journal', 0) + (cur.fetchone()['n'] or 0)
+    cur.execute('SELECT COUNT(*) as n FROM purchase_orders WHERE user_id=%s', (current_user.id,))
+    counts['purchases_journal'] = counts.get('purchases_journal', 0) + (cur.fetchone()['n'] or 0)
+    cur.execute('SELECT COUNT(*) as n FROM cash_books WHERE user_id=%s', (current_user.id,))
+    counts['cash_book'] = cur.fetchone()['n'] or 0
+    cur.close()
+    conn.close()
+    books = [(k, label, hint, counts.get(k, 0)) for k, label, hint in ACCOUNT_BOOKS]
+    return render_template('accounts.html', books=books)
+
+
+@app.route('/accounts/add', methods=['POST'])
+@login_required
+def add_journal_entry():
+    book = request.form.get('book') or 'general_journal'
+    if book not in LEDGER_BOOKS:
+        flash('That book does not take typed entries.', 'danger')
+        return redirect(url_for('accounts'))
+    account = (request.form.get('account') or '').strip()
+    if not account:
+        flash('Account name is required.', 'danger')
+        return redirect(url_for('account_book', book=book))
+    try:
+        debit = float(request.form.get('debit') or 0)
+        credit = float(request.form.get('credit') or 0)
+    except ValueError:
+        debit, credit = 0, 0
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        '''INSERT INTO journal_entries
+           (user_id, book, entry_date, reference, account, particulars, debit, credit, created_date)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)''',
+        (
+            current_user.id, book,
+            request.form.get('entry_date') or datetime.today().strftime('%Y-%m-%d'),
+            request.form.get('reference', ''),
+            account,
+            request.form.get('particulars', ''),
+            debit, credit,
+            datetime.today().strftime('%Y-%m-%d')
+        )
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    log_activity(current_user.id, current_user.username, 'Journal entry', book + ': ' + account)
+    flash('Entry saved.', 'success')
+    return redirect(url_for('account_book', book=book))
+
+
+@app.route('/accounts/entry/<int:id>/delete')
+@login_required
+def delete_journal_entry(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT book FROM journal_entries WHERE id=%s AND user_id=%s', (id, current_user.id))
+    row = cur.fetchone()
+    book = row['book'] if row else 'general_journal'
+    cur.execute('DELETE FROM journal_entries WHERE id=%s AND user_id=%s', (id, current_user.id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Entry deleted.', 'success')
+    return redirect(url_for('account_book', book=book))
+
+
+@app.route('/accounts/<book>')
+@login_required
+def account_book(book):
+    if book not in ACCOUNT_BOOK_LOOKUP:
+        flash('Unknown book.', 'danger')
+        return redirect(url_for('accounts'))
+    if book == 'cash_book':
+        return redirect(url_for('cashbook'))
+
+    label, hint = ACCOUNT_BOOK_LOOKUP[book]
+    uid = current_user.id
+    conn = get_db()
+    cur = conn.cursor()
+    auto_rows = []
+    totals = {'debit': 0, 'credit': 0}
+    extra = {}
+
+    if book == 'sales_journal':
+        cur.execute(
+            '''SELECT sale_date as entry_date, COALESCE(customer_name, 'Walk-in') as account,
+                      product_name as particulars, total_amount as debit, 0 as credit,
+                      id::text as reference
+               FROM sales WHERE user_id=%s ORDER BY sale_date DESC, id DESC''',
+            (uid,)
+        )
+        # sales table may not have product_name - join stock
+        cur.close()
+        cur = conn.cursor()
+        cur.execute(
+            '''SELECT sales.sale_date as entry_date,
+                      COALESCE(sales.customer_name, 'Walk-in') as account,
+                      stock.product_name as particulars,
+                      sales.total_amount as debit,
+                      0 as credit,
+                      sales.id::text as reference
+               FROM sales JOIN stock ON sales.stock_id = stock.id
+               WHERE sales.user_id=%s
+               ORDER BY sales.sale_date DESC, sales.id DESC''',
+            (uid,)
+        )
+        auto_rows = cur.fetchall()
+    elif book == 'purchases_journal':
+        cur.execute(
+            '''SELECT order_date as entry_date,
+                      COALESCE(item_description, 'Purchase') as account,
+                      status as particulars,
+                      0 as debit,
+                      total_cost as credit,
+                      id::text as reference
+               FROM purchase_orders WHERE user_id=%s
+               ORDER BY order_date DESC, id DESC''',
+            (uid,)
+        )
+        auto_rows = cur.fetchall()
+        extra_po = list(auto_rows)
+        cur.execute(
+            '''SELECT date as entry_date, COALESCE(client, title) as account,
+                      title as particulars, 0 as debit, COALESCE(amount,0) as credit,
+                      id::text as reference
+               FROM documents WHERE user_id=%s AND doc_type IN ('invoice')
+               ORDER BY date DESC''',
+            (uid,)
+        )
+        # purchase invoices live in bookkeeping
+        cur.execute(
+            '''SELECT doc_date as entry_date, COALESCE(party, title) as account,
+                      title as particulars, 0 as debit, COALESCE(amount,0) as credit,
+                      COALESCE(reference, id::text) as reference
+               FROM bookkeeping_docs WHERE user_id=%s AND kind IN ('purchase_invoice','purchase_order')
+               ORDER BY doc_date DESC''',
+            (uid,)
+        )
+        auto_rows = list(extra_po) + list(cur.fetchall())
+    elif book == 'purchases_returns':
+        cur.execute(
+            '''SELECT doc_date as entry_date, COALESCE(party, title) as account,
+                      title as particulars, COALESCE(amount,0) as debit, 0 as credit,
+                      COALESCE(reference, id::text) as reference
+               FROM bookkeeping_docs
+               WHERE user_id=%s AND kind IN ('goods_returned_note','debit_note')
+               ORDER BY doc_date DESC''',
+            (uid,)
+        )
+        auto_rows = cur.fetchall()
+    elif book == 'sales_returns':
+        cur.execute(
+            '''SELECT doc_date as entry_date, COALESCE(party, title) as account,
+                      title as particulars, 0 as debit, COALESCE(amount,0) as credit,
+                      COALESCE(reference, id::text) as reference
+               FROM bookkeeping_docs
+               WHERE user_id=%s AND kind IN ('credit_note')
+               ORDER BY doc_date DESC''',
+            (uid,)
+        )
+        auto_rows = cur.fetchall()
+    elif book == 'petty_cash':
+        cur.execute(
+            '''SELECT date as entry_date, category as account, description as particulars,
+                      CASE WHEN entry_type='out' THEN amount ELSE 0 END as debit,
+                      CASE WHEN entry_type='in' THEN amount ELSE 0 END as credit,
+                      id::text as reference
+               FROM cash_books
+               WHERE user_id=%s AND (LOWER(category) LIKE '%%petty%%' OR LOWER(description) LIKE '%%petty%%')
+               ORDER BY date DESC''',
+            (uid,)
+        )
+        auto_rows = cur.fetchall()
+    elif book == 'debtors_ledger':
+        cur.execute(
+            '''SELECT COALESCE(NULLIF(customer_name,''), 'Walk-in') as account,
+                      COUNT(*) as orders, SUM(total_amount) as debit, 0 as credit
+               FROM sales WHERE user_id=%s
+               GROUP BY 1 ORDER BY debit DESC''',
+            (uid,)
+        )
+        extra['ledger'] = cur.fetchall()
+    elif book == 'creditors_ledger':
+        cur.execute(
+            '''SELECT COALESCE(s.name, po.item_description) as account,
+                      COUNT(*) as orders, 0 as debit, SUM(po.total_cost) as credit
+               FROM purchase_orders po
+               LEFT JOIN suppliers s ON s.id = po.supplier_id
+               WHERE po.user_id=%s
+               GROUP BY 1 ORDER BY credit DESC''',
+            (uid,)
+        )
+        extra['ledger'] = cur.fetchall()
+    elif book == 'general_ledger':
+        accounts = {}
+        def bump(name, debit=0, credit=0):
+            row = accounts.setdefault(name, {'account': name, 'debit': 0, 'credit': 0})
+            row['debit'] += debit or 0
+            row['credit'] += credit or 0
+        cur.execute('SELECT COALESCE(SUM(amount),0) as t FROM income WHERE user_id=%s', (uid,))
+        bump('Income', credit=cur.fetchone()['t'])
+        cur.execute('SELECT COALESCE(SUM(amount),0) as t FROM expenses WHERE user_id=%s', (uid,))
+        bump('Expenses', debit=cur.fetchone()['t'])
+        cur.execute('SELECT COALESCE(SUM(total_amount),0) as t FROM sales WHERE user_id=%s', (uid,))
+        bump('Sales', credit=cur.fetchone()['t'])
+        cur.execute('SELECT COALESCE(SUM(quantity * cost_price),0) as t FROM stock WHERE user_id=%s', (uid,))
+        bump('Inventory', debit=cur.fetchone()['t'])
+        cur.execute("SELECT COALESCE(SUM(amount),0) as t FROM cash_books WHERE user_id=%s AND entry_type='in'", (uid,))
+        bump('Cash', debit=cur.fetchone()['t'])
+        cur.execute("SELECT COALESCE(SUM(amount),0) as t FROM cash_books WHERE user_id=%s AND entry_type='out'", (uid,))
+        bump('Cash', credit=cur.fetchone()['t'])
+        cur.execute('SELECT COALESCE(SUM(total_cost),0) as t FROM purchase_orders WHERE user_id=%s', (uid,))
+        bump('Purchases', debit=cur.fetchone()['t'])
+        bump('Creditors', credit=cur.fetchone()['t'] if False else None)
+        cur.execute('SELECT COALESCE(SUM(total_cost),0) as t FROM purchase_orders WHERE user_id=%s', (uid,))
+        cred = cur.fetchone()['t']
+        bump('Creditors', credit=cred)
+        cur.execute('SELECT account, SUM(debit) as debit, SUM(credit) as credit FROM journal_entries WHERE user_id=%s GROUP BY account', (uid,))
+        for r in cur.fetchall():
+            bump(r['account'], r['debit'], r['credit'])
+        extra['ledger'] = sorted(accounts.values(), key=lambda r: r['account'])
+    elif book == 'trading_account':
+        cur.execute('SELECT COALESCE(SUM(total_amount),0) as t FROM sales WHERE user_id=%s', (uid,))
+        sales_rev = cur.fetchone()['t'] or 0
+        cur.execute('SELECT COALESCE(SUM(quantity_sold * selling_price_at_time),0) as t FROM sales WHERE user_id=%s', (uid,))
+        # COGS approx from sales profit
+        cur.execute('SELECT COALESCE(SUM(total_amount - profit),0) as t FROM sales WHERE user_id=%s', (uid,))
+        cogs = cur.fetchone()['t'] or 0
+        cur.execute('SELECT COALESCE(SUM(quantity * cost_price),0) as t FROM stock WHERE user_id=%s', (uid,))
+        closing = cur.fetchone()['t'] or 0
+        extra['statement'] = [
+            ('Sales', sales_rev, 'cr'),
+            ('Cost of goods sold', cogs, 'dr'),
+            ('Closing inventory', closing, 'dr'),
+            ('Gross profit', sales_rev - cogs, 'cr' if sales_rev - cogs >= 0 else 'dr'),
+        ]
+    elif book == 'profit_and_loss':
+        cur.execute('SELECT COALESCE(SUM(total_amount),0) as t FROM sales WHERE user_id=%s', (uid,))
+        sales_rev = cur.fetchone()['t'] or 0
+        cur.execute('SELECT COALESCE(SUM(total_amount - profit),0) as t FROM sales WHERE user_id=%s', (uid,))
+        cogs = cur.fetchone()['t'] or 0
+        gross = sales_rev - cogs
+        cur.execute('SELECT COALESCE(SUM(amount),0) as t FROM income WHERE user_id=%s', (uid,))
+        other_inc = cur.fetchone()['t'] or 0
+        cur.execute('SELECT COALESCE(SUM(amount),0) as t FROM expenses WHERE user_id=%s', (uid,))
+        exp = cur.fetchone()['t'] or 0
+        extra['statement'] = [
+            ('Gross profit from trading', gross, 'cr'),
+            ('Other income', other_inc, 'cr'),
+            ('Expenses', exp, 'dr'),
+            ('Net profit / (loss)', gross + other_inc - exp, 'cr'),
+        ]
+    elif book == 'balance_sheet':
+        cur.execute('SELECT COALESCE(SUM(quantity * cost_price),0) as t FROM stock WHERE user_id=%s', (uid,))
+        inventory = cur.fetchone()['t'] or 0
+        cur.execute("SELECT COALESCE(SUM(CASE WHEN entry_type='in' THEN amount ELSE -amount END),0) as t FROM cash_books WHERE user_id=%s", (uid,))
+        cash = cur.fetchone()['t'] or 0
+        cur.execute('SELECT COALESCE(SUM(total_amount),0) as t FROM sales WHERE user_id=%s', (uid,))
+        debtors = cur.fetchone()['t'] or 0
+        cur.execute('SELECT COALESCE(SUM(total_cost),0) as t FROM purchase_orders WHERE user_id=%s AND status != %s', (uid, 'received'))
+        creditors = cur.fetchone()['t'] or 0
+        assets = inventory + cash + debtors
+        capital = assets - creditors
+        extra['statement'] = [
+            ('Inventory', inventory, 'asset'),
+            ('Cash', cash, 'asset'),
+            ('Debtors (sales billed)', debtors, 'asset'),
+            ('Total assets', assets, 'total'),
+            ('Creditors (open POs)', creditors, 'liability'),
+            ('Capital / net assets', capital, 'capital'),
+        ]
+    elif book == 'cash_flow':
+        cur.execute("SELECT COALESCE(SUM(amount),0) as t FROM cash_books WHERE user_id=%s AND entry_type='in'", (uid,))
+        cin = cur.fetchone()['t'] or 0
+        cur.execute("SELECT COALESCE(SUM(amount),0) as t FROM cash_books WHERE user_id=%s AND entry_type='out'", (uid,))
+        cout = cur.fetchone()['t'] or 0
+        cur.execute('SELECT COALESCE(SUM(total_amount),0) as t FROM sales WHERE user_id=%s', (uid,))
+        sales_cash = cur.fetchone()['t'] or 0
+        extra['statement'] = [
+            ('Cash receipts (cash book in)', cin, 'in'),
+            ('Sales recorded', sales_cash, 'in'),
+            ('Cash payments (cash book out)', cout, 'out'),
+            ('Net cash movement', cin - cout, 'net'),
+        ]
+
+    manual = _je_rows(cur, uid, book)
+    cur.close()
+    conn.close()
+
+    for r in auto_rows:
+        totals['debit'] += r.get('debit') or 0
+        totals['credit'] += r.get('credit') or 0
+    for r in manual:
+        totals['debit'] += r.get('debit') or 0
+        totals['credit'] += r.get('credit') or 0
+
+    return render_template(
+        'account_book.html',
+        book=book, label=label, hint=hint,
+        auto_rows=auto_rows, manual=manual, totals=totals, extra=extra,
+        allow_manual=book in LEDGER_BOOKS
+    )
+
+
+
+# ======================== Extra tools ========================
+
+@app.route('/reminders')
+@login_required
+def reminders():
+    uid = current_user.id
+    today = datetime.today().strftime('%Y-%m-%d')
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT * FROM tasks WHERE user_id=%s AND done=0 AND due_date <> '' AND due_date < %s ORDER BY due_date",
+        (uid, today)
+    )
+    overdue_tasks = cur.fetchall()
+    cur.execute(
+        "SELECT * FROM purchase_orders WHERE user_id=%s AND status <> 'received' AND expected_date <> '' AND expected_date < %s ORDER BY expected_date",
+        (uid, today)
+    )
+    late_pos = cur.fetchall()
+    cur.execute(
+        '''SELECT * FROM bookkeeping_docs
+           WHERE user_id=%s AND status IN ('draft','issued') AND doc_date < %s
+           ORDER BY doc_date''',
+        (uid, today)
+    )
+    open_docs = cur.fetchall()
+    cur.execute('SELECT low_stock_threshold FROM settings WHERE user_id=%s', (uid,))
+    row = cur.fetchone()
+    threshold = row['low_stock_threshold'] if row else 10
+    cur.execute(
+        'SELECT * FROM stock WHERE user_id=%s AND quantity < %s ORDER BY quantity',
+        (uid, threshold)
+    )
+    low = cur.fetchall()
+    cur.close()
+    conn.close()
+    return render_template(
+        'reminders.html',
+        overdue_tasks=overdue_tasks,
+        late_pos=late_pos,
+        open_docs=open_docs,
+        low=low,
+        today=today
+    )
+
+
+@app.route('/tax')
+@login_required
+def tax_summary():
+    uid = current_user.id
+    settings_row = _get_settings_row(uid)
+    rate = (settings_row['tax_rate'] if settings_row else 0) or 0
+    symbol = (settings_row['currency_symbol'] if settings_row else '$') or '$'
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT COALESCE(SUM(total_amount),0) as t FROM sales WHERE user_id=%s', (uid,))
+    sales_rev = cur.fetchone()['t'] or 0
+    cur.execute('SELECT COALESCE(SUM(amount),0) as t FROM income WHERE user_id=%s', (uid,))
+    other_inc = cur.fetchone()['t'] or 0
+    cur.execute('SELECT COALESCE(SUM(amount),0) as t FROM expenses WHERE user_id=%s', (uid,))
+    expenses = cur.fetchone()['t'] or 0
+    cur.execute('SELECT COALESCE(SUM(total_cost),0) as t FROM purchase_orders WHERE user_id=%s', (uid,))
+    purchases = cur.fetchone()['t'] or 0
+    cur.close()
+    conn.close()
+    taxable_out = sales_rev + other_inc
+    output_tax = taxable_out * rate / 100 if rate else 0
+    taxable_in = expenses + purchases
+    input_tax = taxable_in * rate / 100 if rate else 0
+    return render_template(
+        'tax.html',
+        rate=rate, symbol=symbol,
+        sales_rev=sales_rev, other_inc=other_inc, expenses=expenses, purchases=purchases,
+        taxable_out=taxable_out, output_tax=output_tax,
+        taxable_in=taxable_in, input_tax=input_tax,
+        net_tax=output_tax - input_tax
+    )
+
+
+@app.route('/customers/<int:id>/statement')
+@login_required
+def customer_statement(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM customers WHERE id=%s AND user_id=%s', (id, current_user.id))
+    customer = cur.fetchone()
+    if not customer:
+        cur.close()
+        conn.close()
+        flash('Customer not found.', 'danger')
+        return redirect(url_for('customers'))
+    cur.execute(
+        '''SELECT sales.*, stock.product_name FROM sales
+           JOIN stock ON sales.stock_id = stock.id
+           WHERE sales.user_id=%s AND (sales.customer_id=%s OR sales.customer_name=%s)
+           ORDER BY sales.sale_date''',
+        (current_user.id, id, customer['name'])
+    )
+    sales_rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    settings_row = _get_settings_row(current_user.id)
+    business_name = (settings_row['business_name'] if settings_row else '') or 'Your Business'
+    symbol = (settings_row['currency_symbol'] if settings_row else '$') or '$'
+    total = sum(s['total_amount'] for s in sales_rows)
+    meta = [
+        '<b>Statement for:</b> {}'.format(customer['name']),
+        '<b>Email:</b> {}'.format(customer['email'] or '-'),
+        '<b>Phone:</b> {}'.format(customer['phone'] or '-'),
+        '<b>Date:</b> {}'.format(datetime.today().strftime('%Y-%m-%d')),
+    ]
+    table = [['Date', 'Product', 'Qty', 'Amount']]
+    for s in sales_rows:
+        table.append([
+            s['sale_date'], s['product_name'],
+            str(s['quantity_sold']),
+            '{}{:.2f}'.format(symbol, s['total_amount'])
+        ])
+    table.append(['', '', 'Total', '{}{:.2f}'.format(symbol, total)])
+    buffer = io.BytesIO()
+    _build_pdf(buffer, 'Statement of Account', business_name, meta, table,
+               footer_lines=['Generated by KAZE Account tracking'])
+    buffer.seek(0)
+    safe = ''.join(c for c in customer['name'] if c.isalnum() or c in (' ', '-', '_')).strip() or 'customer'
+    return send_file(buffer, mimetype='application/pdf', as_attachment=True,
+                     download_name='statement-{}.pdf'.format(safe))
+
+
+@app.route('/sales/repeat/<int:id>')
+@login_required
+def repeat_sale(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM sales WHERE id=%s AND user_id=%s', (id, current_user.id))
+    sale = cur.fetchone()
+    if not sale:
+        cur.close()
+        conn.close()
+        flash('Sale not found.', 'danger')
+        return redirect(url_for('sales'))
+    cur.execute('SELECT * FROM stock WHERE id=%s AND user_id=%s', (sale['stock_id'], current_user.id))
+    item = cur.fetchone()
+    if not item:
+        cur.close()
+        conn.close()
+        flash('That product is no longer in stock records.', 'danger')
+        return redirect(url_for('sales'))
+    qty = sale['quantity_sold']
+    if item['quantity'] < qty:
+        cur.close()
+        conn.close()
+        flash('Not enough stock to repeat this sale. Available: {}'.format(item['quantity']), 'danger')
+        return redirect(url_for('sales'))
+    today = datetime.today().strftime('%Y-%m-%d')
+    price = item['selling_price']
+    profit = (price - item['cost_price']) * qty
+    total = price * qty
+    cur.execute(
+        '''INSERT INTO sales (user_id, stock_id, quantity_sold, selling_price_at_time, total_amount, profit,
+           sale_date, customer_name, customer_email, customer_id)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''',
+        (current_user.id, item['id'], qty, price, total, profit, today,
+         sale['customer_name'], sale['customer_email'], sale['customer_id'])
+    )
+    cur.execute('UPDATE stock SET quantity = quantity - %s WHERE id=%s', (qty, item['id']))
+    conn.commit()
+    cur.close()
+    conn.close()
+    log_activity(current_user.id, current_user.username, 'Repeated sale', item['product_name'])
+    flash('Sale repeated for today. Profit: ${:.2f}'.format(profit), 'success')
+    return redirect(url_for('sales'))
+
+
+@app.route('/stock/price-list')
+@login_required
+def price_list():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        'SELECT product_name, unit, selling_price, quantity FROM stock WHERE user_id=%s ORDER BY product_name',
+        (current_user.id,)
+    )
+    items = cur.fetchall()
+    cur.close()
+    conn.close()
+    settings_row = _get_settings_row(current_user.id)
+    business_name = (settings_row['business_name'] if settings_row else '') or 'Your Business'
+    symbol = (settings_row['currency_symbol'] if settings_row else '$') or '$'
+    table = [['Product', 'Unit', 'Price', 'In stock']]
+    for i in items:
+        table.append([
+            i['product_name'], i['unit'] or 'each',
+            '{}{:.2f}'.format(symbol, i['selling_price'] or 0),
+            str(i['quantity'])
+        ])
+    if len(table) == 1:
+        table.append(['No products yet', '', '', ''])
+    buffer = io.BytesIO()
+    _build_pdf(
+        buffer, 'Price list', business_name,
+        ['<b>Date:</b> {}'.format(datetime.today().strftime('%Y-%m-%d'))],
+        table
+    )
+    buffer.seek(0)
+    return send_file(buffer, mimetype='application/pdf', as_attachment=True,
+                     download_name='price-list.pdf')
+
+
+
+
+@app.route('/settings/clear-data', methods=['POST'])
+@login_required
+def clear_data():
+    if current_user.role != 'owner':
+        flash('Only the account owner can clear business data.', 'danger')
+        return redirect(url_for('settings'))
+    if (request.form.get('confirm_text') or '').strip().upper() != 'CLEAR':
+        flash('Type CLEAR exactly to confirm.', 'danger')
+        return redirect(url_for('settings'))
+    uid = current_user.id
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        # Children first so foreign keys do not block the wipe.
+        for sql in (
+            'DELETE FROM sales WHERE user_id = %s',
+            'DELETE FROM purchase_orders WHERE user_id = %s',
+            'DELETE FROM bookkeeping_docs WHERE user_id = %s',
+            'DELETE FROM journal_entries WHERE user_id = %s',
+            'DELETE FROM stock WHERE user_id = %s',
+            'DELETE FROM customers WHERE user_id = %s',
+            'DELETE FROM suppliers WHERE user_id = %s',
+            'DELETE FROM income WHERE user_id = %s',
+            'DELETE FROM expenses WHERE user_id = %s',
+            'DELETE FROM documents WHERE user_id = %s',
+            'DELETE FROM cash_books WHERE user_id = %s',
+            'DELETE FROM recurring_items WHERE user_id = %s',
+            'DELETE FROM budgets WHERE user_id = %s',
+            'DELETE FROM notifications WHERE user_id = %s',
+            'DELETE FROM activities WHERE user_id = %s',
+            'DELETE FROM tasks WHERE user_id = %s',
+            'DELETE FROM notes WHERE user_id = %s',
+            'DELETE FROM swot_analyses WHERE user_id = %s',
+            'DELETE FROM business_plans WHERE user_id = %s',
+            'DELETE FROM user_activity WHERE user_id = %s',
+        ):
+            cur.execute(sql, (uid,))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        flash('Could not clear data: {}'.format(e), 'danger')
+        return redirect(url_for('settings'))
+    cur.close()
+    conn.close()
+    log_activity(current_user.id, current_user.username, 'Cleared all business data', 'start over')
+    flash('Business data cleared. Your account and settings are still here.', 'success')
+    return redirect(url_for('dashboard'))
+
 
 if __name__ == '__main__':
     app.run(debug=True)

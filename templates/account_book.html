@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ label }}</h1>
+        <p>{{ hint }}</p>
+    </div>
+    <a href="{{ url_for('accounts') }}" class="btn-secondary" style="text-decoration:none;padding:10px 18px;">All books</a>
+</div>
+
+{% if extra.statement is defined %}
+<div class="stat-grid">
+    {% for name, value, side in extra.statement %}
+    <div class="stat-chip">
+        <span>{{ name }}</span>
+        <strong>${{ "%.2f"|format(value) }}</strong>
+    </div>
+    {% endfor %}
+</div>
+<div class="table-wrapper">
+<table>
+<thead><tr><th>Line</th><th>Side</th><th>Amount</th></tr></thead>
+<tbody>
+{% for name, value, side in extra.statement %}
+<tr>
+    <td>{{ name }}</td>
+    <td>{{ side }}</td>
+    <td>${{ "%.2f"|format(value) }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% elif extra.ledger is defined %}
+<div class="table-wrapper">
+<table>
+<thead><tr><th>Account</th><th>Debit</th><th>Credit</th><th>Balance</th></tr></thead>
+<tbody>
+{% for row in extra.ledger %}
+{% set dr = row.debit or 0 %}
+{% set cr = row.credit or 0 %}
+<tr>
+    <td>{{ row.account }}</td>
+    <td>${{ "%.2f"|format(dr) }}</td>
+    <td>${{ "%.2f"|format(cr) }}</td>
+    <td>${{ "%.2f"|format(dr - cr) }}</td>
+</tr>
+{% else %}
+<tr><td colspan="4">Nothing posted to this ledger yet.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% else %}
+
+{% if allow_manual %}
+<details open style="margin-bottom:1.5rem;">
+    <summary>Add entry</summary>
+    <div>
+        <form method="POST" action="{{ url_for('add_journal_entry') }}">
+            <input type="hidden" name="book" value="{{ book }}">
+            <div class="form-group"><label>Date</label><input type="date" name="entry_date"></div>
+            <div class="form-group"><label>Reference</label><input type="text" name="reference"></div>
+            <div class="form-group"><label>Account</label><input type="text" name="account" required placeholder="Purchases, Cash, Sales..."></div>
+            <div class="form-group"><label>Particulars</label><input type="text" name="particulars"></div>
+            <div class="form-group"><label>Debit</label><input type="number" step="0.01" name="debit" value="0"></div>
+            <div class="form-group"><label>Credit</label><input type="number" step="0.01" name="credit" value="0"></div>
+            <button type="submit">Post entry</button>
+        </form>
+    </div>
+</details>
+{% endif %}
+
+<div class="stat-grid">
+    <div class="stat-chip"><span>Debit</span><strong>${{ "%.2f"|format(totals.debit) }}</strong></div>
+    <div class="stat-chip"><span>Credit</span><strong>${{ "%.2f"|format(totals.credit) }}</strong></div>
+</div>
+
+<h2>From the app</h2>
+<div class="table-wrapper">
+<table>
+<thead><tr><th>Date</th><th>Ref</th><th>Account</th><th>Particulars</th><th>Debit</th><th>Credit</th></tr></thead>
+<tbody>
+{% for r in auto_rows %}
+<tr>
+    <td>{{ r.entry_date }}</td>
+    <td>{{ r.reference }}</td>
+    <td>{{ r.account }}</td>
+    <td>{{ r.particulars }}</td>
+    <td>${{ "%.2f"|format(r.debit or 0) }}</td>
+    <td>${{ "%.2f"|format(r.credit or 0) }}</td>
+</tr>
+{% else %}
+<tr><td colspan="6">No automatic entries yet.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+
+<h2>Typed entries</h2>
+<div class="table-wrapper">
+<table>
+<thead><tr><th>Date</th><th>Ref</th><th>Account</th><th>Particulars</th><th>Debit</th><th>Credit</th><th></th></tr></thead>
+<tbody>
+{% for r in manual %}
+<tr>
+    <td>{{ r.entry_date }}</td>
+    <td>{{ r.reference }}</td>
+    <td>{{ r.account }}</td>
+    <td>{{ r.particulars }}</td>
+    <td>${{ "%.2f"|format(r.debit or 0) }}</td>
+    <td>${{ "%.2f"|format(r.credit or 0) }}</td>
+    <td><a href="{{ url_for('delete_journal_entry', id=r.id) }}" class="delete-btn" onclick="return confirm('Delete this entry?')">Delete</a></td>
+</tr>
+{% else %}
+<tr><td colspan="7">No typed entries in this book.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

@@ -106,7 +106,7 @@
                     <td>{{ sale.customer_name or '—' }}</td>
                     <td>{{ sale.customer_email or '—' }}</td>
                     <td>
-                        <a href="{{ url_for('sale_receipt', id=sale.id) }}">Receipt</a>
+                        <a href="{{ url_for('sale_receipt', id=sale.id) }}">Receipt</a> <a href="{{ url_for('repeat_sale', id=sale.id) }}" onclick="return confirm('Record the same sale again for today?')">Repeat</a>
                         <a href="{{ url_for('delete_sale', id=sale.id) }}" onclick="return confirm('Delete? This will restore stock.')">Delete</a>
                     </td>
                 </tr>
@@ -133,12 +133,14 @@
         document.querySelectorAll('input[name="selected_ids"]').forEach(cb => cb.checked = source.checked);
     }
 
-    // Sales revenue chart (unchanged)
+    // Sales revenue chart
+    const salesCanvas = document.getElementById('salesRevenueChart');
+    if (salesCanvas) {
     const salesData = {{ sales_by_date | tojson }};
     const labels = Object.keys(salesData).sort();
     const revenue = labels.map(date => salesData[date]);
 
-    const ctx = document.getElementById('salesRevenueChart').getContext('2d');
+    const ctx = salesCanvas.getContext('2d');
     new Chart(ctx, {
         type: 'line',
         data: {
@@ -162,5 +164,6 @@
             }
         }
     });
+    }
 </script>
 {% endblock %}
