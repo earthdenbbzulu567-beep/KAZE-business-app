@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>📊 Reports</h1>
+        <p>Profit trends and your best-performing products and customers.</p>
+    </div>
+</div>
+
+<!-- Date Range Filter -->
+<form method="GET" style="display:flex; gap:1rem; flex-wrap:wrap; align-items:center; margin-bottom:1.5rem;">
+    <label>From: <input type="date" name="start_date" value="{{ start_date }}"></label>
+    <label>To: <input type="date" name="end_date" value="{{ end_date }}"></label>
+    <button type="submit">Update</button>
+</form>
+
+<!-- Profit Trend Chart -->
+<div class="chart-container">
+    <canvas id="profitTrendChart"></canvas>
+</div>
+
+<!-- Expense Pie & Product Bar Charts -->
+<div class="chart-container" style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem;">
+    <div>
+        <h3>Expenses by Category</h3>
+        <canvas id="expensePieChart"></canvas>
+    </div>
+    <div>
+        <h3>Top Products by Revenue</h3>
+        <canvas id="productBarChart"></canvas>
+    </div>
+</div>
+
+<!-- Top Products & Top Customers Tables -->
+<div style="display:grid; grid-template-columns: 1fr 1fr; gap:1.5rem; margin-top:2rem;">
+    <div>
+        <h2>🏆 Top Products</h2>
+        <div class="table-wrapper">
+            <table>
+                <thead><tr><th>Product</th><th>Units Sold</th><th>Revenue</th><th>Profit</th></tr></thead>
+                <tbody>
+                    {% for p in top_products %}
+                    <tr>
+                        <td>{{ p.product_name }}</td>
+                        <td>{{ p.units_sold }}</td>
+                        <td>${{ "%.2f"|format(p.revenue) }}</td>
+                        <td>${{ "%.2f"|format(p.profit) }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="4">No sales recorded yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div>
+        <h2>🙋 Top Customers</h2>
+        <div class="table-wrapper">
+            <table>
+                <thead><tr><th>Customer</th><th>Orders</th><th>Total Spent</th></tr></thead>
+                <tbody>
+                    {% for c in top_customers %}
+                    <tr>
+                        <td>{{ c.customer_name }}</td>
+                        <td>{{ c.orders }}</td>
+                        <td>${{ "%.2f"|format(c.spent) }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="3">No sales recorded yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<style>
+    @media (max-width: 800px) {
+        div[style*="grid-template-columns: 1fr 1fr"] { grid-template-columns: 1fr !important; }
+        .chart-container[style*="grid-template-columns: 1fr 1fr"] { grid-template-columns: 1fr !important; }
+    }
+</style>
+
+<script>
+    // ─── Profit Trend Chart ───
+    const months = {{ months | tojson }};
+    const incomeData = {{ monthly_income | tojson }};
+    const expenseData = {{ monthly_expenses | tojson }};
+    const profitData = {{ monthly_profit | tojson }};
+
+    const ctx = document.getElementById('profitTrendChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: months,
+            datasets: [
+                { label: 'Profit', data: months.map(m => profitData[m] || 0), backgroundColor: 'rgba(46, 204, 113, 0.7)', borderColor: '#2ecc71', borderWidth: 1, type: 'line', tension: 0.3, fill: false },
+                { label: 'Income', data: months.map(m => incomeData[m] || 0), backgroundColor: 'rgba(52, 152, 219, 0.5)' },
+                { label: 'Expenses', data: months.map(m => expenseData[m] || 0), backgroundColor: 'rgba(231, 76, 60, 0.5)' }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { title: { display: true, text: 'Monthly Profit Trend (Last 6 Months)' } },
+            scales: { y: { ticks: { callback: v => '$' + v } } }
+        }
+    });
+
+    // ─── Expense Pie Chart ───
+    const pieCtx = document.getElementById('expensePieChart').getContext('2d');
+    const expLabels = {{ expense_by_category | map(attribute='category') | list | tojson }};
+    const expValues = {{ expense_by_category | map(attribute='total') | list | tojson }};
+    new Chart(pieCtx, {
+        type: 'pie',
+        data: { labels: expLabels, datasets: [{ data: expValues, backgroundColor: ['#2ecc71','#e74c3c','#f1c40f','#3498db','#9b59b6'] }] }
+    });
+
+    // ─── Product Bar Chart ───
+    const barCtx = document.getElementById('productBarChart').getContext('2d');
+    const prodLabels = {{ top_products | map(attribute='product_name') | list | tojson }};
+    const prodValues = {{ top_products | map(attribute='revenue') | list | tojson }};
+    new Chart(barCtx, {
+        type: 'bar',
+        data: { labels: prodLabels, datasets: [{ label: 'Revenue', data: prodValues, backgroundColor: '#2ecc71' }] }
+    });
+</script>
+{% endblock %}

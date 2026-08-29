@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header"><div><h1>Day close</h1><p>Today’s sales and cash so you can count the till.</p></div></div>
+<div class="stat-grid">
+    <div class="stat-chip"><span>Date</span><strong>{{ today }}</strong></div>
+    <div class="stat-chip"><span>Sales</span><strong>{{ sales_n }}</strong></div>
+    <div class="stat-chip"><span>Sales total</span><strong>${{ "%.2f"|format(sales_total) }}</strong></div>
+    <div class="stat-chip"><span>Cash in</span><strong>${{ "%.2f"|format(cash_in) }}</strong></div>
+    <div class="stat-chip"><span>Cash out</span><strong>${{ "%.2f"|format(cash_out) }}</strong></div>
+    <div class="stat-chip"><span>Net cash</span><strong>${{ "%.2f"|format(cash_net) }}</strong></div>
+</div>
+<div class="widget"><p>Print this page (Ctrl+P) and keep it with the till count. Cash figures come from the cash ledger dated today.</p></div>
+{% endblock %}

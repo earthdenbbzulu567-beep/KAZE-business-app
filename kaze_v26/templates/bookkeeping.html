@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Book keeping</h1>
+        <p>Cash movements plus quotations, invoices, vouchers, bank papers, and payroll documents.</p>
+    </div>
+    <a href="{{ url_for('cashbook') }}" class="btn-secondary" style="text-decoration:none;padding:10px 20px;">Open cash ledger</a>
+</div>
+
+{% set ns = namespace(n=0) %}
+{% for k, label, hint, count in types %}{% set ns.n = ns.n + count %}{% endfor %}
+<div class="stat-grid">
+    <div class="stat-chip"><span>Document types</span><strong>{{ types|length }}</strong></div>
+    <div class="stat-chip"><span>Saved documents</span><strong>{{ ns.n }}</strong></div>
+</div>
+
+<h2>Cash ledger</h2>
+<p>Day-to-day cash in and out still lives here. Use it for till reconciliation.</p>
+<div class="table-wrapper">
+<table>
+<thead><tr><th>Type</th><th>Category</th><th>Description</th><th>Amount</th><th>Date</th></tr></thead>
+<tbody>
+{% for e in recent_cash %}
+<tr>
+    <td>{{ e.entry_type }}</td>
+    <td>{{ e.category }}</td>
+    <td>{{ e.description }}</td>
+    <td>${{ "%.2f"|format(e.amount) }}</td>
+    <td>{{ e.date }}</td>
+</tr>
+{% else %}
+<tr><td colspan="5">No cash entries yet. <a href="{{ url_for('cashbook') }}">Add one</a>.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+
+<h2>Source documents</h2>
+<div class="stat-grid">
+{% for k, label, hint, count in types %}
+<a href="{{ url_for('bookkeeping_type', kind=k) }}" style="text-decoration:none;color:inherit;">
+    <div class="stat-chip" style="min-height:110px;">
+        <span>{{ label }}</span>
+        <strong>{{ count }}</strong>
+        <p style="margin:8px 0 0;font-size:0.78rem;color:var(--text3);text-transform:none;letter-spacing:0;">{{ hint }}</p>
+    </div>
+</a>
+{% endfor %}
+</div>
+
+{% if recent_docs %}
+<h2>Recently saved</h2>
+<div class="table-wrapper">
+<table>
+<thead><tr><th>Type</th><th>Title</th><th>Party</th><th>Date</th><th>Amount</th></tr></thead>
+<tbody>
+{% for d in recent_docs %}
+<tr>
+    <td>{{ kind_labels.get(d.kind, d.kind) }}</td>
+    <td><a href="{{ url_for('bookkeeping_pdf', id=d.id) }}">{{ d.title }}</a></td>
+    <td>{{ d.party or '—' }}</td>
+    <td>{{ d.doc_date }}</td>
+    <td>${{ "%.2f"|format(d.amount or 0) }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}
