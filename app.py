@@ -2003,10 +2003,127 @@ def business_plan_pdf():
 
 # ======================== Tutorial / Onboarding ========================
 
+def _guide_steps():
+    return [
+        {
+            'group': 'Start',
+            'title': 'Settings first',
+            'body': 'Set the business name, currency, tax rate, and low-stock threshold before you type real numbers. PDFs pick these up automatically.',
+            'do_this': ['Open Settings', 'Type your shop name and currency symbol', 'Save'],
+            'href': url_for('settings'),
+        },
+        {
+            'group': 'Stock',
+            'title': 'Add products',
+            'body': 'Every sale needs a product. Add name, quantity, cost price, and selling price. Cost is what you paid. Selling price is what the customer pays.',
+            'do_this': ['Open Stock', 'Add 3 real products you sell', 'Check the quantity matches the shelf'],
+            'href': url_for('stock'),
+        },
+        {
+            'group': 'People',
+            'title': 'Save customers',
+            'body': 'Walk-ins can stay as a typed name. Regulars belong on the Customers page so lifetime spend and statements work.',
+            'do_this': ['Open Customers', 'Add one regular buyer', 'Optional: add a supplier next'],
+            'href': url_for('customers'),
+        },
+        {
+            'group': 'Till',
+            'title': 'Counter mode',
+            'body': 'This is the new till page. Tap a product, set quantity, ring it up. Stock falls and profit is calculated for you.',
+            'do_this': ['Open Counter', 'Tap a product that is in stock', 'Ring up a test sale of 1 unit'],
+            'href': url_for('counter'),
+        },
+        {
+            'group': 'Till',
+            'title': 'Sales desk',
+            'body': 'Use Sales when you need a discount, a note, a receipt PDF, or to turn a sale into an invoice.',
+            'do_this': ['Open Sales', 'Download a receipt for the test sale', 'Try Repeat if the same person buys again'],
+            'href': url_for('sales'),
+        },
+        {
+            'group': 'Cash',
+            'title': 'Cash ledger',
+            'body': 'The cash book is the till tin: cash in and cash out. It is separate from profit. Use it to count the drawer.',
+            'do_this': ['Open Book keeping', 'Open the cash ledger', 'Add today opening float if you use one'],
+            'href': url_for('cashbook'),
+        },
+        {
+            'group': 'Papers',
+            'title': 'Book keeping documents',
+            'body': 'Quotations, invoices, GRNs, payslips, and cheques live here. Fill the form, save, download the PDF.',
+            'do_this': ['Pick one document type', 'Save a draft', 'Open the PDF'],
+            'href': url_for('bookkeeping'),
+        },
+        {
+            'group': 'Books',
+            'title': 'Account tracking',
+            'body': 'Journals and statements. Sales and purchases post themselves. Type extra lines in the last row of a journal.',
+            'do_this': ['Open Account tracking', 'Open the sales journal', 'Download a P and L PDF'],
+            'href': url_for('accounts'),
+        },
+        {
+            'group': 'Plan',
+            'title': 'Budgets and recurring',
+            'body': 'Cap monthly spend by category. Schedule rent or a retainer so it writes itself when the date arrives.',
+            'do_this': ['Set one budget', 'Add one monthly recurring cost'],
+            'href': url_for('budgets'),
+        },
+        {
+            'group': 'Plan',
+            'title': 'SWOT and business plan',
+            'body': 'Write the thinking down. Export PDFs when a bank or partner asks.',
+            'do_this': ['Add a SWOT', 'Fill at least the mission and goals on the plan'],
+            'href': url_for('swot'),
+        },
+        {
+            'group': 'Day',
+            'title': 'Tasks, notes, calendar',
+            'body': 'Tasks have due dates. Notes are a scratch pad. Calendar lists what is coming in the next 60 days.',
+            'do_this': ['Add one task due tomorrow', 'Open Calendar and check it appears'],
+            'href': url_for('tasks'),
+        },
+        {
+            'group': 'Day',
+            'title': 'Reminders and tax',
+            'body': 'Reminders lists overdue work. Tax summary estimates VAT from the rate in Settings. It is not a filed return.',
+            'do_this': ['Open Reminders', 'Open Tax summary and confirm the rate'],
+            'href': url_for('reminders'),
+        },
+        {
+            'group': 'Close',
+            'title': 'Day close',
+            'body': 'End of day: today sales count and cash in or out. Print the page and keep it with the till count.',
+            'do_this': ['Open Day close', 'Compare the number with cash in the drawer'],
+            'href': url_for('day_close'),
+        },
+        {
+            'group': 'Safety',
+            'title': 'Backup',
+            'body': 'Download a JSON backup from Settings. Export CSVs from Stock, Customers, and Sales as well.',
+            'do_this': ['Download a backup now', 'Store it somewhere that is not only this computer'],
+            'href': url_for('settings'),
+        },
+        {
+            'group': 'Team',
+            'title': 'Invite staff',
+            'body': 'Owners can add staff. They see the same business data. Only the owner can clear data or remove staff.',
+            'do_this': ['Open Team if you have helpers', 'Otherwise skip'],
+            'href': url_for('team'),
+        },
+        {
+            'group': 'Speed',
+            'title': 'Shortcuts',
+            'body': 'Ctrl+K jumps pages. [ collapses the sidebar. The + button is quick add.',
+            'do_this': ['Press Ctrl+K', 'Type Counter and go there'],
+            'href': url_for('shortcuts'),
+        },
+    ]
+
+
 @app.route('/tutorial')
 @login_required
 def tutorial():
-    return render_template('tutorial.html')
+    return render_template('tutorial.html', steps=_guide_steps())
 
 @app.route('/tutorial/dismiss')
 @login_required
@@ -4019,6 +4136,145 @@ def day_close():
     conn.close()
     return render_template('day_close.html', today=today, sales_total=sales['t'] or 0, sales_n=sales['n'] or 0, cash_in=cin, cash_out=cout, cash_net=cin-cout)
 
+
+@app.route('/counter')
+@login_required
+def counter():
+    uid = current_user.id
+    today = datetime.today().strftime('%Y-%m-%d')
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        '''SELECT id, product_name, quantity, selling_price, cost_price, unit, sku, category
+           FROM stock WHERE user_id=%s ORDER BY product_name''',
+        (uid,)
+    )
+    stock_items = cur.fetchall()
+    cur.execute('SELECT id, name FROM customers WHERE user_id=%s ORDER BY name', (uid,))
+    customer_list = cur.fetchall()
+    cur.execute(
+        '''SELECT COALESCE(SUM(total_amount),0) as t, COALESCE(SUM(profit),0) as p, COUNT(*) as n
+           FROM sales WHERE user_id=%s AND sale_date=%s''',
+        (uid, today)
+    )
+    today_row = cur.fetchone()
+    cur.execute(
+        '''SELECT sales.quantity_sold, sales.total_amount, sales.sale_date, stock.product_name
+           FROM sales JOIN stock ON sales.stock_id = stock.id
+           WHERE sales.user_id=%s AND sales.sale_date=%s
+           ORDER BY sales.id DESC LIMIT 8''',
+        (uid, today)
+    )
+    recent = cur.fetchall()
+    cur.close()
+    conn.close()
+    return render_template(
+        'counter.html',
+        stock_items=stock_items,
+        customer_list=customer_list,
+        today_total=today_row['t'] or 0,
+        today_profit=today_row['p'] or 0,
+        today_count=today_row['n'] or 0,
+        recent=recent,
+    )
+
+
+@app.route('/counter/sale', methods=['POST'])
+@login_required
+def counter_sale():
+    try:
+        stock_id = int(request.form['stock_id'])
+        quantity_sold = float(request.form['quantity'])
+    except (TypeError, ValueError, KeyError):
+        flash('Pick a product and a quantity.', 'danger')
+        return redirect(url_for('counter'))
+    if quantity_sold <= 0:
+        flash('Quantity must be more than zero.', 'danger')
+        return redirect(url_for('counter'))
+
+    customer_id = request.form.get('customer_id') or None
+    customer_name = request.form.get('customer_name', '')
+    customer_email = ''
+    sale_date = datetime.today().strftime('%Y-%m-%d')
+
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM stock WHERE id = %s AND user_id = %s', (stock_id, current_user.id))
+    stock_item = cur.fetchone()
+    if not stock_item:
+        cur.close()
+        conn.close()
+        flash('Stock item not found.', 'danger')
+        return redirect(url_for('counter'))
+    if stock_item['quantity'] < quantity_sold:
+        cur.close()
+        conn.close()
+        flash('Insufficient stock. Only {} available.'.format(stock_item['quantity']), 'danger')
+        return redirect(url_for('counter'))
+
+    if customer_id:
+        cur.execute('SELECT name, email FROM customers WHERE id = %s AND user_id = %s', (customer_id, current_user.id))
+        saved_customer = cur.fetchone()
+        if saved_customer:
+            customer_name = saved_customer['name']
+            customer_email = saved_customer['email'] or ''
+
+    try:
+        discount = float(request.form.get('discount') or 0)
+    except ValueError:
+        discount = 0
+    selling_price = stock_item['selling_price']
+    cost_price = stock_item['cost_price']
+    total_amount = max(selling_price * quantity_sold - discount, 0)
+    profit = total_amount - (cost_price * quantity_sold)
+
+    cur.execute(
+        '''INSERT INTO sales (user_id, stock_id, quantity_sold, selling_price_at_time, total_amount, profit,
+           sale_date, customer_name, customer_email, customer_id, discount, sale_notes)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)''',
+        (current_user.id, stock_id, quantity_sold, selling_price, total_amount, profit, sale_date,
+         customer_name, customer_email, customer_id, discount, 'counter')
+    )
+    cur.execute('UPDATE stock SET quantity = quantity - %s WHERE id = %s', (quantity_sold, stock_id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    log_activity(current_user.id, current_user.username, 'Counter sale',
+                 '{} x{} ${:.2f}'.format(stock_item['product_name'], quantity_sold, total_amount))
+    flash('Rang up {} × {}. Collect ${:.2f}.'.format(stock_item['product_name'], quantity_sold, total_amount), 'success')
+    return redirect(url_for('counter'))
+
+
+@app.route('/guide.pdf')
+@login_required
+def guide_pdf():
+    settings_row = None
+    try:
+        settings_row = _get_settings_row(current_user.id)
+    except Exception:
+        settings_row = None
+    business_name = (settings_row['business_name'] if settings_row else '') or 'Your business'
+    buffer = io.BytesIO()
+    styles = getSampleStyleSheet()
+    title = ParagraphStyle('KTitle', parent=styles['Title'], textColor=colors.HexColor('#1f8a3d'), fontSize=18, spaceAfter=8)
+    h = ParagraphStyle('KH', parent=styles['Heading2'], textColor=colors.HexColor('#0a0a0a'), fontSize=12, spaceBefore=10, spaceAfter=4)
+    body = ParagraphStyle('KB', parent=styles['BodyText'], fontSize=10, leading=14, spaceAfter=4)
+    story = [
+        Paragraph('KAZE Traders — Practical Guide', title),
+        Paragraph('For {}. Version 2.6. How to run the shop in the app, step by step.'.format(business_name), body),
+        Spacer(1, 8),
+    ]
+    for i, step in enumerate(_guide_steps(), 1):
+        story.append(Paragraph('{}. {} — {}'.format(i, step['group'], step['title']), h))
+        story.append(Paragraph(step['body'], body))
+        story.append(Paragraph('Do this: ' + ' → '.join(step['do_this']), body))
+    story.append(Spacer(1, 12))
+    story.append(Paragraph('Join / open the app: https://kaze-business-app.onrender.com', body))
+    story.append(Paragraph('This guide is a shop floor checklist. It is not tax, legal, or accounting advice.', body))
+    doc = SimpleDocTemplate(buffer, pagesize=letter, title='KAZE Practical Guide')
+    doc.build(story)
+    buffer.seek(0)
+    return send_file(buffer, mimetype='application/pdf', as_attachment=True, download_name='kaze-practical-guide.pdf')
 
 
 if __name__ == '__main__':

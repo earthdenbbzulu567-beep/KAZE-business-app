@@ -5,11 +5,13 @@
 {% if not tutorial_completed %}
 <div id="onboarding-banner" class="widget" style="border:2px solid var(--red-bright, #2ecc71); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
     <div>
-        <h3 style="margin:0 0 4px 0;">👋 New here?</h3>
-        <p style="margin:0; font-size:0.9rem; color:#666;">Take a 2-minute tour of the app so you know where everything lives.</p>
+        <h3 style="margin:0 0 4px 0;">New here?</h3>
+        <p style="margin:0; font-size:0.9rem; color:#666;">Open the practical guide, then try Counter mode for your first sale.</p>
     </div>
-    <div style="display:flex; gap:0.75rem;">
-        <button type="button" onclick="openModal('tutorialModal')">Take the Tour</button>
+    <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
+        <a href="{{ url_for('tutorial') }}"><button type="button">Practical guide</button></a>
+        <a href="{{ url_for('counter') }}"><button type="button" class="btn-secondary">Counter</button></a>
+        <button type="button" class="btn-secondary" onclick="openModal('tutorialModal')">Quick tour</button>
         <button type="button" class="btn-secondary" onclick="dismissOnboarding()">Dismiss</button>
     </div>
 </div>

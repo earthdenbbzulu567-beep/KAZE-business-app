@@ -1186,6 +1186,39 @@ thead th { position: sticky; top: 0; background: var(--bg2); z-index: 2; }
     .main-content { margin: 0 !important; }
     body { background: white; color: black; }
 }
+button, .btn-secondary, .product-tile, .summary-card, .stat-chip, .widget {
+    transition: transform 0.2s var(--ease-spring), box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+button:active:not(:disabled), .product-tile:active {
+    transform: scale(0.97);
+}
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+    outline: 2px solid var(--red-bright);
+    outline-offset: 2px;
+}
+.stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.75rem;
+    margin: 1rem 0 1.25rem;
+}
+.stat-chip {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 0.9rem 1rem;
+    animation: pageFadeUp 0.45s var(--ease-out) both;
+}
+.stat-chip span { display: block; color: var(--text3); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.35rem; }
+.stat-chip strong { font-size: 1.2rem; font-family: var(--mono); }
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation: none !important;
+        transition: none !important;
+        scroll-behavior: auto !important;
+    }
+    body::before { animation: none !important; }
+}
 .shimmer-line { height: 2px; background: linear-gradient(90deg, transparent, var(--red-bright), transparent); background-size: 200% 100%; animation: shimmer-sweep 2.4s linear infinite; }
 @keyframes shimmer-sweep { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 </style>
@@ -1212,6 +1245,9 @@ thead th { position: sticky; top: 0; background: var(--bg2); z-index: 2; }
                 </a>
                 <a href="{{ url_for('sales') }}" {% if request.endpoint == 'sales' %}class="active"{% endif %}>
                     <i data-lucide="receipt" class="icon"></i> Sales
+                </a>
+                <a href="{{ url_for('counter') }}" {% if request.endpoint == 'counter' %}class="active"{% endif %}>
+                    <i data-lucide="monitor-smartphone" class="icon"></i> Counter
                 </a>
                 <a href="{{ url_for('customers') }}" {% if request.endpoint == 'customers' %}class="active"{% endif %}>
                     <i data-lucide="users" class="icon"></i> Customers
@@ -1302,6 +1338,9 @@ thead th { position: sticky; top: 0; background: var(--bg2); z-index: 2; }
                 </a>
                 <a href="{{ url_for('shortcuts') }}" {% if request.endpoint == 'shortcuts' %}class="active"{% endif %}>
                     <i data-lucide="keyboard" class="icon"></i> Shortcuts
+                </a>
+                <a href="{{ url_for('tutorial') }}" {% if request.endpoint == 'tutorial' %}class="active"{% endif %}>
+                    <i data-lucide="book-open-check" class="icon"></i> Practical guide
                 </a>
             </div>
             <div class="nav-section">
@@ -1433,6 +1472,7 @@ thead th { position: sticky; top: 0; background: var(--bg2); z-index: 2; }
 <div class="shimmer-line" style="position:fixed;top:0;left:0;right:0;z-index:400;"></div>
 <button type="button" class="fab" id="fabBtn" title="Quick add">+</button>
 <div class="fab-menu" id="fabMenu">
+    <a href="{{ url_for('counter') }}">Counter sale</a>
     <a href="{{ url_for('sales') }}">Record sale</a>
     <a href="{{ url_for('stock') }}">Add stock</a>
     <a href="{{ url_for('tasks') }}">Add task</a>
@@ -1458,7 +1498,9 @@ thead th { position: sticky; top: 0; background: var(--bg2); z-index: 2; }
         ['Dashboard', '{{ url_for("dashboard") }}'],
         ['Stock', '{{ url_for("stock") }}'],
         ['Sales', '{{ url_for("sales") }}'],
+        ['Counter', '{{ url_for("counter") }}'],
         ['Customers', '{{ url_for("customers") }}'],
+        ['Practical guide', '{{ url_for("tutorial") }}'],
         ['Book keeping', '{{ url_for("bookkeeping") }}'],
         ['Account tracking', '{{ url_for("accounts") }}'],
         ['Reports', '{{ url_for("reports") }}'],
