@@ -44,7 +44,7 @@
 <div class="stat-grid">
     <div class="stat-chip"><span>Active</span><strong>{{ ns.active }}</strong></div>
     <div class="stat-chip"><span>Paused</span><strong>{{ ns.paused }}</strong></div>
-    <div class="stat-chip"><span>Scheduled total</span><strong>${{ "%.2f"|format(ns.amount) }}</strong></div>
+    <div class="stat-chip"><span>Scheduled total</span><strong>{{ money(ns.amount) }}</strong></div>
 </div>
 
 <div class="table-wrapper">
@@ -57,7 +57,7 @@
             <tr>
                 <td>{{ item.item_type | capitalize }}</td>
                 <td>{{ item.name }}</td>
-                <td>${{ "%.2f"|format(item.amount) }}</td>
+                <td>{{ money(item.amount) }}</td>
                 <td>{{ item.frequency | capitalize }}</td>
                 <td>{{ item.next_run_date }}</td>
                 <td>{% if item.active %}<span style="color:#2ecc71;">Active</span>{% else %}<span style="color:#888;">Paused</span>{% endif %}</td>

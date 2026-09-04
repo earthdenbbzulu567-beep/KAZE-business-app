@@ -1,3 +1,4 @@
+{% set threshold = threshold if threshold is defined else (user_settings.low_stock_threshold if user_settings and user_settings.low_stock_threshold is not none else 10) %}
 {% extends "base.html" %}
 {% block content %}
 <div class="page-header">
@@ -53,12 +54,12 @@
 {% for item in items %}
   {% set ns.qty = ns.qty + item.quantity %}
   {% set ns.value = ns.value + (item.quantity * item.cost_price) %}
-  {% if item.quantity < 10 %}{% set ns.low = ns.low + 1 %}{% endif %}
+  {% if item.quantity < (threshold|default(10)) %}{% set ns.low = ns.low + 1 %}{% endif %}
 {% endfor %}
 <div class="stat-grid">
     <div class="stat-chip"><span>Products</span><strong>{{ items|length }}</strong></div>
     <div class="stat-chip"><span>Total units</span><strong>{{ ns.qty }}</strong></div>
-    <div class="stat-chip"><span>Inventory cost</span><strong>${{ "%.2f"|format(ns.value) }}</strong></div>
+    <div class="stat-chip"><span>Inventory cost</span><strong>{{ money(ns.value) }}</strong></div>
     <div class="stat-chip"><span>Low stock</span><strong>{{ ns.low }}</strong></div>
 </div>
 
@@ -84,6 +85,8 @@
                 <tr>
                     <th><input type="checkbox" onclick="toggleAll(this)"></th>
                     <th>Product</th>
+                    <th>SKU</th>
+                    <th>Category</th>
                     <th>Quantity</th>
                     <th>Unit</th>
                     <th>Cost Price</th>
@@ -93,19 +96,17 @@
             </thead>
             <tbody>
                 {% for item in items %}
-                <tr class="{% if item.quantity < 10 %}low-stock-row{% endif %}">
+                <tr class="{% if item.quantity < (threshold|default(10)) %}low-stock-row{% endif %}">
                     <td><input type="checkbox" name="selected_ids" value="{{ item.id }}"></td>
                     <td>{{ item.product_name }}</td>
+                    <td>{{ item.sku or '—' }}</td>
+                    <td>{{ item.category or '—' }}</td>
                     <td>{{ item.quantity }}</td>
                     <td>{{ item.unit }}</td>
-                    <td>${{ "%.2f"|format(item.cost_price) }}</td>
-                    <td>${{ "%.2f"|format(item.selling_price) }}</td>
+                    <td>{{ money(item.cost_price) }}</td>
+                    <td>{{ money(item.selling_price) }}</td>
                     <td>
                         <a href="{{ url_for('edit_stock', id=item.id) }}">Edit</a>
-                        <form method="POST" action="{{ url_for('update_stock', id=item.id) }}" style="display:inline">
-                            <input type="number" step="any" name="quantity" placeholder="New quantity" required size="8">
-                            <button type="submit">Update</button>
-                        </form>
                         <a href="{{ url_for('delete_stock', id=item.id) }}" onclick="return confirm('Delete?')">Delete</a>
                     </td>
                 </tr>

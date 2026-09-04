@@ -27,7 +27,7 @@ function dismissOnboarding() {
 <div class="widget">
     <h3 style="margin:0 0 8px 0;">🎯 Monthly Revenue Goal</h3>
     <div style="display:flex; justify-content:space-between; font-size:0.85rem; color:#666; margin-bottom:4px;">
-        <span>${{ "%.2f"|format(month_revenue) }} of ${{ "%.2f"|format(monthly_goal) }}</span>
+        <span>{{ money(month_revenue) }} of {{ money(monthly_goal) }}</span>
         <span>{{ goal_progress_pct }}%</span>
     </div>
     <div style="background:rgba(0,0,0,0.08); border-radius:8px; height:14px; overflow:hidden;">
@@ -94,11 +94,11 @@ function dismissOnboarding() {
     </div>
     <div class="summary-card">
         <h3>This month sales</h3>
-        <div class="amount income-amount">${{ "%.2f"|format(month_revenue) }}</div>
+        <div class="amount income-amount">{{ money(month_revenue) }}</div>
     </div>
     <div class="summary-card">
         <h3>Last month sales</h3>
-        <div class="amount">${{ "%.2f"|format(last_month_revenue|default(0)) }}</div>
+        <div class="amount">{{ money(last_month_revenue|default(0)) }}</div>
     </div>
 </div>
 
@@ -119,6 +119,25 @@ function dismissOnboarding() {
         requestAnimationFrame(tick);
     });
 </script>
+
+
+<div class="widget" id="dashStatsTable">
+    <h2>Quick statistics</h2>
+    <div class="table-wrapper">
+    <table>
+        <thead><tr><th>Figure</th><th>Amount</th></tr></thead>
+        <tbody>
+            <tr><td>Total income</td><td>{{ money(total_income) }}</td></tr>
+            <tr><td>Total expenses</td><td>{{ money(total_expenses) }}</td></tr>
+            <tr><td>Profit / loss</td><td>{{ money(profit) }}</td></tr>
+            <tr><td>This month sales</td><td>{{ money(month_revenue) }}</td></tr>
+            <tr><td>Last month sales</td><td>{{ money(last_month_revenue|default(0)) }}</td></tr>
+        </tbody>
+    </table>
+    </div>
+    <p style="margin-top:0.6rem;"><a href="{{ url_for('stats') }}">Full tables + charts</a></p>
+</div>
+
 
 <!-- Chart -->
 {% if income or expenses %}
@@ -258,7 +277,7 @@ function dismissOnboarding() {
         <li>
             <span class="user">{{ item.name }}</span>
             <span class="action">{{ item.item_type }}</span>
-            <span class="details">${{ "%.2f"|format(item.amount) }}</span>
+            <span class="details">{{ money(item.amount) }}</span>
             <span class="time">{{ item.next_run_date }}</span>
         </li>
         {% endfor %}
@@ -347,7 +366,7 @@ function dismissOnboarding() {
             {% for item in income %}
             <tr>
                 <td>{{ item.source }}</td>
-                <td class="income-amount">${{ "%.2f"|format(item.amount) }}</td>
+                <td class="income-amount">{{ money(item.amount) }}</td>
                 <td>{{ item.date }}</td>
                 <td><a href="{{ url_for('delete_income', id=item.id) }}" class="delete-btn" onclick="return confirm('Delete this income?')">Delete</a></td>
             </tr>
@@ -369,7 +388,7 @@ function dismissOnboarding() {
             {% for item in expenses %}
             <tr>
                 <td>{{ item.name }}</td>
-                <td class="expense-amount">${{ "%.2f"|format(item.amount) }}</td>
+                <td class="expense-amount">{{ money(item.amount) }}</td>
                 <td>{{ item.category }}</td>
                 <td>{{ item.date }}</td>
                 <td><a href="{{ url_for('delete_expense', id=item.id) }}" class="delete-btn" onclick="return confirm('Delete this expense?')">Delete</a></td>

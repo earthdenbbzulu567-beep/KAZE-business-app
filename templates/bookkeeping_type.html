@@ -52,7 +52,7 @@
     <td>{{ item.party or '—' }}</td>
     <td>{{ item.reference or '—' }}</td>
     <td>{{ item.doc_date }}</td>
-    <td>${{ "%.2f"|format(item.amount or 0) }}</td>
+    <td>{{ money(item.amount or 0) }}</td>
     <td><span class="status-pill">{{ item.status }}</span></td>
     <td>
         <a href="{{ url_for('bookkeeping_pdf', id=item.id) }}">PDF</a>

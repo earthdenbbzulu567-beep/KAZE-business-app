@@ -2,10 +2,10 @@
 {% block content %}
 <div class="page-header"><div><h1>Aged sales</h1><p>How old each recorded sale is. Use this as a simple debtors ageing view.</p></div></div>
 <div class="stat-grid">
-    <div class="stat-chip"><span>0–30 days</span><strong>${{ "%.2f"|format(buckets['0-30']) }}</strong></div>
-    <div class="stat-chip"><span>31–60</span><strong>${{ "%.2f"|format(buckets['31-60']) }}</strong></div>
-    <div class="stat-chip"><span>61–90</span><strong>${{ "%.2f"|format(buckets['61-90']) }}</strong></div>
-    <div class="stat-chip"><span>90+</span><strong>${{ "%.2f"|format(buckets['90+']) }}</strong></div>
+    <div class="stat-chip"><span>0–30 days</span><strong>{{ money(buckets['0-30']) }}</strong></div>
+    <div class="stat-chip"><span>31–60</span><strong>{{ money(buckets['31-60']) }}</strong></div>
+    <div class="stat-chip"><span>61–90</span><strong>{{ money(buckets['61-90']) }}</strong></div>
+    <div class="stat-chip"><span>90+</span><strong>{{ money(buckets['90+']) }}</strong></div>
 </div>
 <div class="table-wrapper">
 <table>
@@ -18,7 +18,7 @@
     <td><span class="status-pill">{{ s.bucket }}</span></td>
     <td>{{ s.product_name }}</td>
     <td>{{ s.customer_name or '—' }}</td>
-    <td>${{ "%.2f"|format(s.total_amount) }}</td>
+    <td>{{ money(s.total_amount) }}</td>
 </tr>
 {% else %}
 <tr><td colspan="6">No sales yet.</td></tr>

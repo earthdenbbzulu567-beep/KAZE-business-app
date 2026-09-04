@@ -10,8 +10,8 @@
 
 <div class="stat-grid counter-stats">
     <div class="stat-chip"><span>Today’s sales</span><strong>{{ today_count }}</strong></div>
-    <div class="stat-chip"><span>Today’s take</span><strong>${{ "%.2f"|format(today_total) }}</strong></div>
-    <div class="stat-chip"><span>Today’s profit</span><strong>${{ "%.2f"|format(today_profit) }}</strong></div>
+    <div class="stat-chip"><span>Today’s take</span><strong>{{ money(today_total) }}</strong></div>
+    <div class="stat-chip"><span>Today’s profit</span><strong>{{ money(today_profit) }}</strong></div>
     <div class="stat-chip"><span>Products in stock</span><strong>{{ stock_items|length }}</strong></div>
 </div>
 
@@ -30,7 +30,7 @@
                     data-qty="{{ item.quantity }}"
                     data-search="{{ item.product_name|lower }} {{ item.sku or '' }} {{ item.category or '' }}">
                 <span class="tile-name">{{ item.product_name }}</span>
-                <span class="tile-price">${{ "%.2f"|format(item.selling_price) }}</span>
+                <span class="tile-price">{{ money(item.selling_price) }}</span>
                 <span class="tile-stock">{{ item.quantity }} {{ item.unit or 'left' }}</span>
             </button>
             {% else %}
@@ -78,7 +78,7 @@
             {% for s in recent %}
             <li>
                 <span>{{ s.product_name }} ×{{ s.quantity_sold }}</span>
-                <strong>${{ "%.2f"|format(s.total_amount) }}</strong>
+                <strong>{{ money(s.total_amount) }}</strong>
             </li>
             {% else %}
             <li>No sales yet today.</li>

@@ -77,7 +77,7 @@ new Chart(document.getElementById('docsMixChart'), {
             </div>
             <div style="margin-top:0.5rem; display:flex; gap:1rem; align-items:center; flex-wrap:wrap;">
                 <button type="submit">💾 Save Document</button>
-                <button type="button" onclick="generateWithAI()" style="background:linear-gradient(135deg,#764ba2,#667eea);">✨ Generate with AI</button>
+                <button type="button" onclick="draftNotes()" style="background:linear-gradient(135deg,#764ba2,#667eea);">✨ Generate with AI</button>
             </div>
         </form>
 
@@ -117,7 +117,7 @@ new Chart(document.getElementById('docsMixChart'), {
                 </td>
                 <td><strong>{{ doc.title }}</strong></td>
                 <td>{{ doc.client }}</td>
-                <td>{% if doc.amount %}${{ "%.2f"|format(doc.amount) }}{% else %}—{% endif %}</td>
+                <td>{% if doc.amount %}{{ money(doc.amount) }}{% else %}—{% endif %}</td>
                 <td>{{ doc.date }}</td>
                 <td style="max-width:200px; font-size:0.85rem; color:#666;">{{ doc.notes or '—' }}</td>
                 <td>
@@ -158,41 +158,19 @@ function filterDocs(type) {
     });
 }
 
-async function generateWithAI() {
-    const title = document.querySelector('input[name="title"]').value || 'business document';
-    const client = document.querySelector('input[name="client"]').value || 'the client';
+function draftNotes() {
+    const title = document.querySelector('input[name="title"]').value || 'this document';
+    const client = document.querySelector('input[name="client"]').value || 'the other party';
     const type = document.querySelector('select[name="doc_type"]').value;
-    const notes = document.querySelector('textarea[name="notes"]').value || 'general business services';
     const amount = document.querySelector('input[name="amount"]').value;
-
-    const box = document.getElementById('ai-output-box');
-    const out = document.getElementById('ai-output-text');
-    box.style.display = 'block';
-    out.textContent = '⏳ Generating your document...';
-
-    try {
-        const res = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                model: 'claude-sonnet-4-20250514',
-                max_tokens: 1000,
-                messages: [{
-                    role: 'user',
-                    content: `Write a professional ${type} titled "${title}" for ${client}${amount ? ' for $' + amount : ''}. Details: ${notes}. Keep it under 200 words, plain text, well structured. No markdown.`
-                }]
-            })
-        });
-        const data = await res.json();
-        out.textContent = data.content?.map(b => b.text || '').join('') || 'Could not generate content.';
-    } catch(e) {
-        out.textContent = 'Generation failed. Check your connection and try again.';
-    }
+    const notes = document.querySelector('textarea[name="notes"]');
+    const moneyBit = amount ? (' Amount: ' + amount + '.') : '';
+    notes.value = 'This ' + type + ' (“' + title + '”) is between our business and ' + client + '.' + moneyBit + '\n\nScope: describe the goods or work.\nTerms: payment due as agreed.\nNotes: add delivery or extra conditions here.';
 }
 
 function copyAI() {
-    const text = document.getElementById('ai-output-text').textContent;
-    navigator.clipboard.writeText(text).then(() => alert('Copied to clipboard!'));
+    const text = document.getElementById('ai-output-text') ? document.getElementById('ai-output-text').textContent : '';
+    if (text) navigator.clipboard.writeText(text);
 }
 </script>
 {% endblock %}

@@ -64,9 +64,9 @@
   {% else %}{% set ns.out = ns.out + e.amount %}{% endif %}
 {% endfor %}
 <div class="stat-grid">
-    <div class="stat-chip"><span>Cash in</span><strong class="income-amount">${{ "%.2f"|format(ns.inn) }}</strong></div>
-    <div class="stat-chip"><span>Cash out</span><strong class="expense-amount">${{ "%.2f"|format(ns.out) }}</strong></div>
-    <div class="stat-chip"><span>Net cash</span><strong>${{ "%.2f"|format(ns.inn - ns.out) }}</strong></div>
+    <div class="stat-chip"><span>Cash in</span><strong class="income-amount">{{ money(ns.inn) }}</strong></div>
+    <div class="stat-chip"><span>Cash out</span><strong class="expense-amount">{{ money(ns.out) }}</strong></div>
+    <div class="stat-chip"><span>Net cash</span><strong>{{ money(ns.inn - ns.out) }}</strong></div>
     <div class="stat-chip"><span>Entries</span><strong>{{ entries|length }}</strong></div>
 </div>
 {% if entries %}
@@ -101,7 +101,7 @@ new Chart(document.getElementById('cashMixChart'), {
                 </td>
                 <td>{{ entry.category }}</td>
                 <td>{{ entry.description }}</td>
-                <td>${{ "%.2f"|format(entry.amount) }}</td>
+                <td>{{ money(entry.amount) }}</td>
                 <td>{{ entry.date }}</td>
                 <td>
                     <a href="{{ url_for('edit_cash_entry', id=entry.id) }}">Edit</a>

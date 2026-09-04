@@ -48,7 +48,7 @@
     {% for name, value, side in extra.statement %}
     <div class="stat-chip">
         <span>{{ name }}</span>
-        <strong>${{ "%.2f"|format(value) }}</strong>
+        <strong>{{ money(value) }}</strong>
     </div>
     {% endfor %}
 </div>
@@ -79,17 +79,17 @@
         <tr>
             {% if side in ['dr', 'out', 'asset'] %}
             <td>{{ name }}</td>
-            <td class="num">${{ "%.2f"|format(value) }}</td>
+            <td class="num">{{ money(value) }}</td>
             <td></td>
             <td class="num"></td>
             {% elif side in ['cr', 'in', 'capital', 'net'] %}
             <td></td>
             <td class="num"></td>
             <td>{{ name }}</td>
-            <td class="num">${{ "%.2f"|format(value) }}</td>
+            <td class="num">{{ money(value) }}</td>
             {% else %}
             <td colspan="2">{{ name }} ({{ side }})</td>
-            <td colspan="2" class="num">${{ "%.2f"|format(value) }}</td>
+            <td colspan="2" class="num">{{ money(value) }}</td>
             {% endif %}
         </tr>
         {% endfor %}
@@ -117,9 +117,9 @@
         {% set ns.cr = ns.cr + cr %}
         <tr>
             <td>{{ row.account }}</td>
-            <td class="num">${{ "%.2f"|format(dr) }}</td>
-            <td class="num">${{ "%.2f"|format(cr) }}</td>
-            <td class="num">${{ "%.2f"|format(dr - cr) }}</td>
+            <td class="num">{{ money(dr) }}</td>
+            <td class="num">{{ money(cr) }}</td>
+            <td class="num">{{ money(dr - cr) }}</td>
         </tr>
     {% else %}
         <tr><td colspan="4">Nothing posted to this ledger yet.</td></tr>
@@ -128,9 +128,9 @@
     <tfoot>
         <tr>
             <td>Totals</td>
-            <td class="num">${{ "%.2f"|format(ns.dr) }}</td>
-            <td class="num">${{ "%.2f"|format(ns.cr) }}</td>
-            <td class="num">${{ "%.2f"|format(ns.dr - ns.cr) }}</td>
+            <td class="num">{{ money(ns.dr) }}</td>
+            <td class="num">{{ money(ns.cr) }}</td>
+            <td class="num">{{ money(ns.dr - ns.cr) }}</td>
         </tr>
     </tfoot>
 </table>
@@ -144,8 +144,8 @@
 {% endif %}
 
 <div class="stat-grid">
-    <div class="stat-chip"><span>Debit total</span><strong>${{ "%.2f"|format(totals.debit) }}</strong></div>
-    <div class="stat-chip"><span>Credit total</span><strong>${{ "%.2f"|format(totals.credit) }}</strong></div>
+    <div class="stat-chip"><span>Debit total</span><strong>{{ money(totals.debit) }}</strong></div>
+    <div class="stat-chip"><span>Credit total</span><strong>{{ money(totals.credit) }}</strong></div>
 </div>
 
 <div class="ledger-wrap">
@@ -169,8 +169,8 @@
             <td>{{ r.reference }}</td>
             <td>{{ r.account }}</td>
             <td>{{ r.particulars }}</td>
-            <td class="num">{% if r.debit %}${{ "%.2f"|format(r.debit) }}{% endif %}</td>
-            <td class="num">{% if r.credit %}${{ "%.2f"|format(r.credit) }}{% endif %}</td>
+            <td class="num">{% if r.debit %}{{ money(r.debit) }}{% endif %}</td>
+            <td class="num">{% if r.credit %}{{ money(r.credit) }}{% endif %}</td>
             <td class="src">Auto</td>
             <td></td>
         </tr>
@@ -181,8 +181,8 @@
             <td>{{ r.reference }}</td>
             <td>{{ r.account }}</td>
             <td>{{ r.particulars }}</td>
-            <td class="num">{% if r.debit %}${{ "%.2f"|format(r.debit) }}{% endif %}</td>
-            <td class="num">{% if r.credit %}${{ "%.2f"|format(r.credit) }}{% endif %}</td>
+            <td class="num">{% if r.debit %}{{ money(r.debit) }}{% endif %}</td>
+            <td class="num">{% if r.credit %}{{ money(r.credit) }}{% endif %}</td>
             <td class="src">Typed</td>
             <td><a href="{{ url_for('delete_journal_entry', id=r.id) }}" class="delete-btn" onclick="return confirm('Delete this line?')">Delete</a></td>
         </tr>
@@ -206,8 +206,8 @@
     <tfoot>
         <tr>
             <td colspan="4">Totals</td>
-            <td class="num">${{ "%.2f"|format(totals.debit) }}</td>
-            <td class="num">${{ "%.2f"|format(totals.credit) }}</td>
+            <td class="num">{{ money(totals.debit) }}</td>
+            <td class="num">{{ money(totals.credit) }}</td>
             <td colspan="2"></td>
         </tr>
     </tfoot>

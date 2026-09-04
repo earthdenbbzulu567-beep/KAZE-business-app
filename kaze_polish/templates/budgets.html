@@ -34,8 +34,8 @@
 {% endfor %}
 <div class="stat-grid">
     <div class="stat-chip"><span>Budgets</span><strong>{{ budgets|length }}</strong></div>
-    <div class="stat-chip"><span>Total limit</span><strong>${{ "%.2f"|format(ns.limit) }}</strong></div>
-    <div class="stat-chip"><span>Spent this month</span><strong>${{ "%.2f"|format(ns.spent) }}</strong></div>
+    <div class="stat-chip"><span>Total limit</span><strong>{{ money(ns.limit) }}</strong></div>
+    <div class="stat-chip"><span>Spent this month</span><strong>{{ money(ns.spent) }}</strong></div>
 </div>
 {% if budgets %}
 <div class="chart-container">
@@ -66,7 +66,7 @@ new Chart(document.getElementById('budgetChart'), {
         <a href="{{ url_for('delete_budget', id=b.id) }}" class="delete-btn" onclick="return confirm('Remove this budget?')">Remove</a>
     </div>
     <div style="display:flex; justify-content:space-between; font-size:0.85rem; color:#666; margin-bottom:4px;">
-        <span>${{ "%.2f"|format(spent) }} of ${{ "%.2f"|format(b.monthly_limit) }}</span>
+        <span>{{ money(spent) }} of {{ money(b.monthly_limit) }}</span>
         <span style="{% if over %}color:#e74c3c; font-weight:600;{% endif %}">{{ "%.0f"|format(pct) }}%{% if over %} — over budget{% endif %}</span>
     </div>
     <div style="background:rgba(0,0,0,0.08); border-radius:8px; height:14px; overflow:hidden;">

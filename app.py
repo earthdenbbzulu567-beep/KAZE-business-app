@@ -2,7 +2,7 @@
 # Merged version: includes original features + activity feed, pagination, bulk stock actions,
 # global search, enhanced reports, and timesince filter.
 
-from flask import Flask, render_template, request, redirect, url_for, flash, Response, send_file
+from flask import Flask, render_template, request, redirect, url_for, flash, Response, send_file, g
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
@@ -433,6 +433,40 @@ class User(UserMixin):
     def get_id(self):
         return str(self.db_id)
 
+def _format_money(amount):
+    try:
+        n = float(amount or 0)
+    except (TypeError, ValueError):
+        n = 0.0
+    symbol = '$'
+    decimals = 2
+    try:
+        cached = getattr(g, '_money_fmt', None)
+        if cached:
+            symbol, decimals = cached
+        elif current_user.is_authenticated:
+            conn = get_db()
+            cur = conn.cursor()
+            cur.execute('SELECT currency_symbol, number_decimals FROM settings WHERE user_id = %s', (current_user.id,))
+            row = cur.fetchone()
+            cur.close()
+            conn.close()
+            if row:
+                symbol = row.get('currency_symbol') or '$'
+                if row.get('number_decimals') is not None:
+                    decimals = int(row['number_decimals'])
+            g._money_fmt = (symbol, decimals)
+    except Exception:
+        pass
+    sign = '-' if n < 0 else ''
+    return '{}{}{:,.{}f}'.format(sign, symbol, abs(n), decimals)
+
+
+@app.template_filter('money')
+def money_filter(amount):
+    return _format_money(amount)
+
+
 @app.context_processor
 def inject_settings():
     if current_user.is_authenticated:
@@ -444,8 +478,18 @@ def inject_settings():
         unread_row = cur.fetchone()
         cur.close()
         conn.close()
-        return dict(user_settings=settings, unread_notifications=unread_row['unread_count'] if unread_row else 0)
-    return dict(user_settings=None, unread_notifications=0)
+        if settings:
+            try:
+                g._money_fmt = (settings.get('currency_symbol') or '$', int(settings.get('number_decimals') if settings.get('number_decimals') is not None else 2))
+            except Exception:
+                g._money_fmt = ('$', 2)
+        return dict(
+            user_settings=settings,
+            unread_notifications=unread_row['unread_count'] if unread_row else 0,
+            money=_format_money,
+        )
+    return dict(user_settings=None, unread_notifications=0, money=_format_money)
+
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -877,11 +921,13 @@ def delete_customer(id):
 @login_required
 def stock():
     page = request.args.get('page', 1, type=int)
-    per_page = 20
-    offset = (page - 1) * per_page
-    
     conn = get_db()
     cur = conn.cursor()
+    cur.execute('SELECT items_per_page, low_stock_threshold FROM settings WHERE user_id = %s', (current_user.id,))
+    srow = cur.fetchone()
+    per_page = int((srow['items_per_page'] if srow and srow.get('items_per_page') else 25) or 25)
+    threshold = srow['low_stock_threshold'] if srow and srow.get('low_stock_threshold') is not None else 10
+    offset = (page - 1) * per_page
     cur.execute('SELECT COUNT(*) as total FROM stock WHERE user_id = %s', (current_user.id,))
     total = cur.fetchone()['total']
     
@@ -903,7 +949,8 @@ def stock():
                          inventory_values=inventory_values,
                          page=page,
                          total_pages=total_pages,
-                         per_page=per_page)
+                         per_page=per_page,
+                         threshold=threshold)
 
 @app.route('/stock/add', methods=['POST'])
 @login_required
@@ -1002,11 +1049,13 @@ def edit_stock(id):
         cost_price = float(request.form['cost_price'])
         selling_price = float(request.form['selling_price'])
         unit = request.form.get('unit', '')
+        sku = request.form.get('sku', '')
+        category = request.form.get('category', '')
         cur.execute('''
             UPDATE stock 
-            SET product_name=%s, quantity=%s, cost_price=%s, selling_price=%s, unit=%s
+            SET product_name=%s, quantity=%s, cost_price=%s, selling_price=%s, unit=%s, sku=%s, category=%s
             WHERE id=%s AND user_id=%s
-        ''', (product_name, quantity, cost_price, selling_price, unit, id, current_user.id))
+        ''', (product_name, quantity, cost_price, selling_price, unit, sku, category, id, current_user.id))
         conn.commit()
         cur.close()
         conn.close()
@@ -4275,6 +4324,317 @@ def guide_pdf():
     doc.build(story)
     buffer.seek(0)
     return send_file(buffer, mimetype='application/pdf', as_attachment=True, download_name='kaze-practical-guide.pdf')
+
+
+def _stats_bundle(uid, start_date=None, end_date=None):
+    """One-shot statistics for tables + charts."""
+    conn = get_db()
+    cur = conn.cursor()
+    sales_where = 'user_id = %s'
+    exp_where = 'user_id = %s'
+    cash_where = 'user_id = %s'
+    params_s = [uid]
+    params_e = [uid]
+    params_c = [uid]
+    if start_date and end_date:
+        sales_where += ' AND sale_date BETWEEN %s AND %s'
+        exp_where += ' AND date BETWEEN %s AND %s'
+        cash_where += ' AND date BETWEEN %s AND %s'
+        params_s += [start_date, end_date]
+        params_e += [start_date, end_date]
+        params_c += [start_date, end_date]
+    cur.execute(
+        'SELECT COUNT(*) AS n, COALESCE(SUM(total_amount),0) AS s, COALESCE(AVG(total_amount),0) AS a, '
+        'COALESCE(MIN(total_amount),0) AS mn, COALESCE(MAX(total_amount),0) AS mx, COALESCE(SUM(profit),0) AS p '
+        'FROM sales WHERE ' + sales_where, params_s)
+    sales = cur.fetchone()
+    cur.execute(
+        'SELECT COUNT(*) AS n, COALESCE(SUM(amount),0) AS s, COALESCE(AVG(amount),0) AS a, '
+        'COALESCE(MIN(amount),0) AS mn, COALESCE(MAX(amount),0) AS mx FROM expenses WHERE ' + exp_where, params_e)
+    expenses = cur.fetchone()
+    cur.execute(
+        'SELECT COUNT(*) AS n, COALESCE(SUM(amount),0) AS s FROM income WHERE user_id = %s', (uid,))
+    income = cur.fetchone()
+    cur.execute(
+        "SELECT COUNT(*) AS n, COALESCE(SUM(CASE WHEN entry_type='in' THEN amount ELSE 0 END),0) AS cin, "
+        "COALESCE(SUM(CASE WHEN entry_type='out' THEN amount ELSE 0 END),0) AS cout FROM cash_books WHERE " + cash_where,
+        params_c)
+    cash = cur.fetchone()
+    cur.execute(
+        'SELECT COUNT(*) AS n, COALESCE(SUM(quantity),0) AS qty, '
+        'COALESCE(SUM(quantity * cost_price),0) AS cost_val, '
+        'COALESCE(SUM(quantity * selling_price),0) AS sell_val FROM stock WHERE user_id = %s', (uid,))
+    stock = cur.fetchone()
+    cur.execute('SELECT COUNT(*) AS n FROM customers WHERE user_id = %s', (uid,))
+    customers = cur.fetchone()
+    cur.execute(
+        'SELECT stock.product_name AS name, COUNT(sales.id) AS n, '
+        'COALESCE(SUM(sales.quantity_sold),0) AS units, '
+        'COALESCE(SUM(sales.total_amount),0) AS revenue, '
+        'COALESCE(AVG(sales.total_amount),0) AS avg_sale, '
+        'COALESCE(SUM(sales.profit),0) AS profit '
+        'FROM sales JOIN stock ON sales.stock_id = stock.id '
+        'WHERE sales.user_id = %s '
+        'GROUP BY stock.product_name ORDER BY revenue DESC LIMIT 12',
+        (uid,))
+    by_product = cur.fetchall()
+    cur.execute(
+        'SELECT category AS name, COUNT(*) AS n, COALESCE(SUM(amount),0) AS total, '
+        'COALESCE(AVG(amount),0) AS avg FROM expenses WHERE user_id = %s '
+        'GROUP BY category ORDER BY total DESC',
+        (uid,))
+    by_expense = cur.fetchall()
+    cur.close()
+    conn.close()
+    return {
+        'sales': sales, 'expenses': expenses, 'income': income, 'cash': cash,
+        'stock': stock, 'customers': customers,
+        'by_product': by_product, 'by_expense': by_expense,
+        'start_date': start_date, 'end_date': end_date,
+    }
+
+
+@app.route('/stats')
+@login_required
+def stats():
+    start_date = request.args.get('start_date') or ''
+    end_date = request.args.get('end_date') or ''
+    bundle = _stats_bundle(
+        current_user.id,
+        start_date or None,
+        end_date or None,
+    )
+    return render_template('stats.html', **bundle)
+
+
+@app.route('/stats/csv')
+@login_required
+def stats_csv():
+    start_date = request.args.get('start_date') or ''
+    end_date = request.args.get('end_date') or ''
+    b = _stats_bundle(current_user.id, start_date or None, end_date or None)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['KAZE Statistics export'])
+    writer.writerow(['From', start_date or 'all', 'To', end_date or 'all'])
+    writer.writerow([])
+    writer.writerow(['Summary'])
+    writer.writerow(['Set', 'Count', 'Total', 'Average', 'Min', 'Max', 'Notes'])
+    s, e, inc, cash, st, cust = b['sales'], b['expenses'], b['income'], b['cash'], b['stock'], b['customers']
+    writer.writerow(['Sales', s['n'], s['s'], s['a'], s['mn'], s['mx'], 'Profit {}'.format(s['p'])])
+    writer.writerow(['Expenses', e['n'], e['s'], e['a'], e['mn'], e['mx'], ''])
+    writer.writerow(['Other income', inc['n'], inc['s'], '', '', '', ''])
+    writer.writerow(['Cash in', cash['n'], cash['cin'], '', '', '', ''])
+    writer.writerow(['Cash out', cash['n'], cash['cout'], '', '', '', 'Net {}'.format((cash['cin'] or 0) - (cash['cout'] or 0))])
+    writer.writerow(['Stock', st['n'], st['cost_val'], '', '', '', 'Units {} shelf {}'.format(st['qty'], st['sell_val'])])
+    writer.writerow(['Customers', cust['n'], '', '', '', '', ''])
+    writer.writerow([])
+    writer.writerow(['Product sales'])
+    writer.writerow(['Product', 'Sales', 'Units', 'Revenue', 'Avg sale', 'Profit'])
+    for r in b['by_product']:
+        writer.writerow([r['name'], r['n'], r['units'], r['revenue'], r['avg_sale'], r['profit']])
+    writer.writerow([])
+    writer.writerow(['Expense categories'])
+    writer.writerow(['Category', 'Entries', 'Total', 'Average'])
+    for r in b['by_expense']:
+        writer.writerow([r['name'], r['n'], r['total'], r['avg']])
+    data = output.getvalue()
+    filename = 'kaze-statistics.csv'
+    return Response(data, mimetype='text/csv',
+                    headers={'Content-Disposition': 'attachment; filename={}'.format(filename)})
+
+
+@app.route('/stats/xlsx')
+@login_required
+def stats_xlsx():
+    start_date = request.args.get('start_date') or ''
+    end_date = request.args.get('end_date') or ''
+    b = _stats_bundle(current_user.id, start_date or None, end_date or None)
+    try:
+        from openpyxl import Workbook
+        from openpyxl.chart import BarChart, Reference
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+        from openpyxl.worksheet.page import PageMargins
+    except ImportError:
+        flash('Install openpyxl to download Excel files: pip install openpyxl', 'danger')
+        return redirect(url_for('stats'))
+
+    settings_row = _get_settings_row(current_user.id)
+    symbol = (settings_row.get('currency_symbol') if settings_row else None) or '$'
+    money_fmt = '"{}"#,##0.00'.format(symbol.replace('"', ''))
+
+    wb = Workbook()
+    header_font = Font(name='Calibri', bold=True, color='FFFFFF')
+    header_fill = PatternFill('solid', fgColor='0C3823')
+    zebra = PatternFill('solid', fgColor='F5F0E8')
+    title_font = Font(name='Calibri', bold=True, size=16, color='0C3823')
+    thin = Border(
+        left=Side(style='thin', color='D4CFC4'),
+        right=Side(style='thin', color='D4CFC4'),
+        top=Side(style='thin', color='D4CFC4'),
+        bottom=Side(style='thin', color='D4CFC4'),
+    )
+
+    def paint_header(ws, row, cols):
+        for i, title in enumerate(cols, 1):
+            cell = ws.cell(row=row, column=i, value=title)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='left', wrap_text=True)
+            cell.border = thin
+
+    def autosize(ws):
+        for col in ws.columns:
+            letter = get_column_letter(col[0].column)
+            width = 12
+            for cell in col:
+                if cell.value is not None:
+                    width = max(width, min(len(str(cell.value)) + 2, 42))
+            ws.column_dimensions[letter].width = width
+
+    def page_setup(ws, title):
+        ws.page_setup.orientation = 'landscape'
+        ws.page_setup.fitToPage = True
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 1
+        ws.page_margins = PageMargins(left=0.5, right=0.5, top=0.75, bottom=0.75)
+        ws.oddHeader.left.text = title
+        ws.oddFooter.right.text = 'Page &P of &N'
+        ws.sheet_properties.pageSetUpPr.fitToPage = True
+
+    s, e, inc, cash, st, cust = b['sales'], b['expenses'], b['income'], b['cash'], b['stock'], b['customers']
+    ws = wb.active
+    ws.title = 'Summary'
+    ws.sheet_properties.tabColor = '0C3823'
+    ws['A1'] = 'KAZE Statistics'
+    ws['A1'].font = title_font
+    ws.merge_cells('A1:G1')
+    ws['A2'] = 'From'
+    ws['B2'] = start_date or 'all'
+    ws['C2'] = 'To'
+    ws['D2'] = end_date or 'all'
+    ws['E2'] = 'Currency'
+    ws['F2'] = symbol
+    paint_header(ws, 4, ['Set', 'Count', 'Total', 'Average', 'Min', 'Max', 'Notes'])
+    rows = [
+        ['Sales', s['n'], s['s'], s['a'], s['mn'], s['mx'], 'Profit {}'.format(s['p'])],
+        ['Expenses', e['n'], e['s'], e['a'], e['mn'], e['mx'], ''],
+        ['Other income', inc['n'], inc['s'], None, None, None, ''],
+        ['Cash in', cash['n'], cash['cin'], None, None, None, ''],
+        ['Cash out', cash['n'], cash['cout'], None, None, None, 'Net {}'.format((cash['cin'] or 0) - (cash['cout'] or 0))],
+        ['Stock', st['n'], st['cost_val'], None, None, None, 'Units {} shelf {}'.format(st['qty'], st['sell_val'])],
+        ['Customers', cust['n'], None, None, None, None, ''],
+    ]
+    for r_i, row in enumerate(rows, 5):
+        for c_i, val in enumerate(row, 1):
+            cell = ws.cell(row=r_i, column=c_i, value=val)
+            cell.font = Font(name='Calibri')
+            cell.border = thin
+            if r_i % 2 == 1:
+                cell.fill = zebra
+            if c_i >= 3 and c_i <= 6 and isinstance(val, (int, float)):
+                cell.number_format = money_fmt
+                cell.alignment = Alignment(horizontal='right')
+            if c_i == 7:
+                cell.alignment = Alignment(wrap_text=True)
+    ws.freeze_panes = 'A5'
+    ws.auto_filter.ref = 'A4:G11'
+    autosize(ws)
+    page_setup(ws, 'KAZE Statistics')
+    chart = BarChart()
+    chart.type = 'col'
+    chart.title = 'Totals'
+    data = Reference(ws, min_col=3, min_row=4, max_row=10)
+    cats = Reference(ws, min_col=1, min_row=5, max_row=10)
+    chart.add_data(data, titles_from_data=True)
+    chart.set_categories(cats)
+    chart.legend = None
+    chart.shape = 4
+    ws.add_chart(chart, 'A13')
+
+    ws2 = wb.create_sheet('Product sales')
+    paint_header(ws2, 1, ['Product', 'Sales', 'Units', 'Revenue', 'Avg sale', 'Profit'])
+    for r_i, r in enumerate(b['by_product'], 2):
+        vals = [r['name'], r['n'], r['units'], r['revenue'], r['avg_sale'], r['profit']]
+        for c_i, val in enumerate(vals, 1):
+            cell = ws2.cell(row=r_i, column=c_i, value=val)
+            cell.font = Font(name='Calibri')
+            cell.border = thin
+            if r_i % 2 == 0:
+                cell.fill = zebra
+            if c_i >= 4:
+                cell.number_format = money_fmt
+                cell.alignment = Alignment(horizontal='right')
+    if not b['by_product']:
+        ws2.cell(row=2, column=1, value='No sales yet')
+    last = max(2, 1 + len(b['by_product']))
+    ws2.auto_filter.ref = 'A1:F{}'.format(last)
+    ws2.freeze_panes = 'A2'
+    autosize(ws2)
+    page_setup(ws2, 'KAZE product sales')
+
+    ws3 = wb.create_sheet('Expense categories')
+    paint_header(ws3, 1, ['Category', 'Entries', 'Total', 'Average'])
+    for r_i, r in enumerate(b['by_expense'], 2):
+        vals = [r['name'], r['n'], r['total'], r['avg']]
+        for c_i, val in enumerate(vals, 1):
+            cell = ws3.cell(row=r_i, column=c_i, value=val)
+            cell.font = Font(name='Calibri')
+            cell.border = thin
+            if r_i % 2 == 0:
+                cell.fill = zebra
+            if c_i >= 3:
+                cell.number_format = money_fmt
+                cell.alignment = Alignment(horizontal='right')
+    if not b['by_expense']:
+        ws3.cell(row=2, column=1, value='No expenses yet')
+    last = max(2, 1 + len(b['by_expense']))
+    ws3.auto_filter.ref = 'A1:D{}'.format(last)
+    ws3.freeze_panes = 'A2'
+    autosize(ws3)
+    page_setup(ws3, 'KAZE expenses')
+
+    guide = wb.create_sheet('Formatting options')
+    guide['A1'] = 'Excel formatting used in this file'
+    guide['A1'].font = title_font
+    guide.merge_cells('A1:B1')
+    tips = [
+        ('Number format', 'Money columns use your Settings currency symbol and two decimals.'),
+        ('Font', 'Calibri throughout. Headers are bold white on forest green.'),
+        ('Fill', 'Green header, cream zebra rows so lines are easier to read.'),
+        ('Border', 'Thin light grid around every data cell.'),
+        ('Alignment', 'Money is right-aligned. Notes can wrap.'),
+        ('Freeze panes', 'Header row stays visible when you scroll.'),
+        ('AutoFilter', 'Use the arrows on headers to sort or hide rows.'),
+        ('Chart', 'Summary sheet has a bar chart of totals.'),
+        ('Print', 'Landscape, fit-to-width, header and page number in footer.'),
+        ('Sheets', 'Summary, Product sales, Expense categories, plus this guide.'),
+    ]
+    paint_header(guide, 3, ['Option', 'What it does here'])
+    for i, (k, v) in enumerate(tips, 4):
+        guide.cell(i, 1, k).font = Font(name='Calibri', bold=True)
+        guide.cell(i, 2, v).font = Font(name='Calibri')
+        guide.cell(i, 2).alignment = Alignment(wrap_text=True)
+        for c in (1, 2):
+            guide.cell(i, c).border = thin
+            if i % 2 == 0:
+                guide.cell(i, c).fill = zebra
+    guide.column_dimensions['A'].width = 22
+    guide.column_dimensions['B'].width = 78
+    guide.freeze_panes = 'A4'
+    page_setup(guide, 'KAZE Excel formatting')
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return send_file(
+        buf,
+        as_attachment=True,
+        download_name='kaze-statistics.xlsx',
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+
 
 
 if __name__ == '__main__':

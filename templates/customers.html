@@ -68,7 +68,7 @@
 <div class="stat-grid">
     <div class="stat-chip"><span>Customers</span><strong>{{ customers|length }}</strong></div>
     <div class="stat-chip"><span>Orders</span><strong>{{ ns.orders }}</strong></div>
-    <div class="stat-chip"><span>Lifetime spend</span><strong>${{ "%.2f"|format(ns.spent) }}</strong></div>
+    <div class="stat-chip"><span>Lifetime spend</span><strong>{{ money(ns.spent) }}</strong></div>
 </div>
 {% if ns.values %}
 <div class="chart-container">
@@ -122,7 +122,7 @@ new Chart(document.getElementById('customerSpendChart'), {
                     <td>{{ c.phone or '—' }}</td>
                     <td>{{ c.address or '—' }}</td>
                     <td>{{ spend_by_customer[c.id].order_count if c.id in spend_by_customer else 0 }}</td>
-                    <td>${{ "%.2f"|format(spend_by_customer[c.id].total_spent if c.id in spend_by_customer else 0) }}</td>
+                    <td>{{ money(spend_by_customer[c.id].total_spent if c.id in spend_by_customer else 0) }}</td>
                     <td>
                         <a href="{{ url_for('customer_statement', id=c.id) }}">Statement</a> <a href="{{ url_for('edit_customer', id=c.id) }}">Edit</a>
                         <a href="{{ url_for('delete_customer', id=c.id) }}" class="delete-btn" onclick="return confirm('Delete this customer?')">Delete</a>

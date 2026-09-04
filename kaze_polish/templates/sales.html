@@ -33,7 +33,7 @@
     <select name="stock_id" required>
         <option value="">Select product</option>
         {% for item in stock_items %}
-        <option value="{{ item.id }}">{{ item.product_name }} (stock: {{ item.quantity }}, price: ${{ "%.2f"|format(item.selling_price) }})</option>
+        <option value="{{ item.id }}">{{ item.product_name }} (stock: {{ item.quantity }}, price: {{ money(item.selling_price) }})</option>
         {% endfor %}
     </select>
     <input type="number" step="any" name="quantity" placeholder="Quantity sold" required>
@@ -65,8 +65,8 @@
 <div class="stat-grid">
     <div class="stat-chip"><span>Sales on page</span><strong>{{ sales|length }}</strong></div>
     <div class="stat-chip"><span>Units sold</span><strong>{{ ns.units }}</strong></div>
-    <div class="stat-chip"><span>Revenue</span><strong>${{ "%.2f"|format(ns.rev) }}</strong></div>
-    <div class="stat-chip"><span>Profit</span><strong>${{ "%.2f"|format(ns.profit) }}</strong></div>
+    <div class="stat-chip"><span>Revenue</span><strong>{{ money(ns.rev) }}</strong></div>
+    <div class="stat-chip"><span>Profit</span><strong>{{ money(ns.profit) }}</strong></div>
 </div>
 
 <h2>Sales History</h2>
@@ -102,9 +102,9 @@
                     <td><input type="checkbox" name="selected_ids" value="{{ sale.id }}"></td>
                     <td>{{ sale.product_name }}</td>
                     <td>{{ sale.quantity_sold }}</td>
-                    <td>${{ "%.2f"|format(sale.selling_price_at_time) }}</td>
-                    <td>${{ "%.2f"|format(sale.total_amount) }}</td>
-                    <td>${{ "%.2f"|format(sale.profit) }}</td>
+                    <td>{{ money(sale.selling_price_at_time) }}</td>
+                    <td>{{ money(sale.total_amount) }}</td>
+                    <td>{{ money(sale.profit) }}</td>
                     <td>{{ sale.sale_date }}</td>
                     <td>{{ sale.customer_name or '—' }}</td>
                     <td>{{ sale.customer_email or '—' }}</td>

@@ -46,7 +46,7 @@
 <div class="stat-grid">
     <div class="stat-chip"><span>Pending</span><strong>{{ ns.pending }}</strong></div>
     <div class="stat-chip"><span>Received</span><strong>{{ ns.received }}</strong></div>
-    <div class="stat-chip"><span>Order value</span><strong>${{ "%.2f"|format(ns.cost) }}</strong></div>
+    <div class="stat-chip"><span>Order value</span><strong>{{ money(ns.cost) }}</strong></div>
 </div>
 {% if orders %}
 <div class="chart-container" style="max-width:420px;">
@@ -72,8 +72,8 @@ new Chart(document.getElementById('poChart'), {
                 <td>{{ po.item_description }}</td>
                 <td>{{ po.supplier_name or '—' }}</td>
                 <td>{{ po.quantity }}</td>
-                <td>${{ "%.2f"|format(po.unit_cost) }}</td>
-                <td>${{ "%.2f"|format(po.total_cost) }}</td>
+                <td>{{ money(po.unit_cost) }}</td>
+                <td>{{ money(po.total_cost) }}</td>
                 <td>
                     {% if po.status == 'received' %}<span style="color:#2ecc71;">Received</span>
                     {% else %}<span style="color:#e0a030;">Pending</span>{% endif %}

@@ -1287,6 +1287,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
                 <a href="{{ url_for('reports') }}" {% if request.endpoint == 'reports' %}class="active"{% endif %}>
                     <i data-lucide="bar-chart-3" class="icon"></i> Reports
                 </a>
+                <a href="{{ url_for('stats') }}" {% if request.endpoint == 'stats' %}class="active"{% endif %}>
+                    <i data-lucide="table-2" class="icon"></i> Statistics
+                </a>
                 <a href="{{ url_for('tax_summary') }}" {% if request.endpoint == 'tax_summary' %}class="active"{% endif %}>
                     <i data-lucide="percent" class="icon"></i> Tax summary
                 </a>
@@ -1301,20 +1304,19 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
                 </a>
             </div>
 
-            <!-- Integrations -->
             <div class="nav-section">
-                <div class="nav-section-title">Integrations</div>
-                <a href="#" onclick="alert('GitHub integration coming soon!')">
-                    <i data-lucide="github" class="icon"></i> GitHub
+                <div class="nav-section-title">Account</div>
+                <a href="{{ url_for('team') }}" {% if request.endpoint == 'team' %}class="active"{% endif %}>
+                    <i data-lucide="users-round" class="icon"></i> Team
                 </a>
-                <a href="#" onclick="alert('Render integration coming soon!')">
-                    <i data-lucide="zap" class="icon"></i> Render
+                <a href="{{ url_for('activity') }}" {% if request.endpoint == 'activity' %}class="active"{% endif %}>
+                    <i data-lucide="log-in" class="icon"></i> Login activity
                 </a>
-                <a href="#" onclick="alert('Gmail integration coming soon!')">
-                    <i data-lucide="mail" class="icon"></i> Gmail
+                <a href="{{ url_for('settings') }}" {% if request.endpoint == 'settings' %}class="active"{% endif %}>
+                    <i data-lucide="settings" class="icon"></i> Settings
                 </a>
-                <a href="#" onclick="alert('YouTube integration coming soon!')">
-                    <i data-lucide="youtube" class="icon"></i> YouTube
+                <a href="{{ url_for('backup_export') }}">
+                    <i data-lucide="download" class="icon"></i> Backup
                 </a>
             </div>
 
@@ -1352,7 +1354,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         </nav>
 
         <div class="sidebar-footer">
-            <span>KAZE v2.6.0</span>
+            <span>KAZE v2.6.2</span>
             <span class="version">⚡</span>
         </div>
     </div>
@@ -1504,6 +1506,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         ['Book keeping', '{{ url_for("bookkeeping") }}'],
         ['Account tracking', '{{ url_for("accounts") }}'],
         ['Reports', '{{ url_for("reports") }}'],
+        ['Statistics', '{{ url_for("stats") }}'],
         ['Reminders', '{{ url_for("reminders") }}'],
         ['Tax summary', '{{ url_for("tax_summary") }}'],
         ['Tasks', '{{ url_for("tasks") }}'],
