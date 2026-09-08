@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ label }}</h1>
+        <p>{{ hint }}</p>
+    </div>
+    <a href="{{ url_for('accounts') }}" class="btn-secondary" style="text-decoration:none;padding:10px 18px;">All books</a>
+</div>
+
+<style>
+    .ledger-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+    .ledger {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+    }
+    .ledger th, .ledger td {
+        border: 1px solid var(--border);
+        padding: 8px 10px;
+        vertical-align: middle;
+    }
+    .ledger thead th {
+        background: var(--bg3);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        font-size: 0.72rem;
+        color: var(--text3);
+        position: sticky;
+        top: 0;
+    }
+    .ledger .num { text-align: right; font-family: var(--mono); white-space: nowrap; }
+    .ledger tfoot td { font-weight: 700; background: var(--bg3); }
+    .ledger .src { font-size: 0.72rem; color: var(--text3); text-transform: uppercase; letter-spacing: 0.04em; }
+    .ledger input, .ledger select {
+        width: 100%;
+        min-width: 0;
+        margin: 0;
+        padding: 7px 8px;
+    }
+    .ledger .entry-row td { background: rgba(46,204,113,0.06); }
+    .t-account { width: 100%; }
+    .t-account th { width: 50%; }
+</style>
+
+{% if extra.statement is defined %}
+<div class="stat-grid">
+    {% for name, value, side in extra.statement %}
+    <div class="stat-chip">
+        <span>{{ name }}</span>
+        <strong>{{ money(value) }}</strong>
+    </div>
+    {% endfor %}
+</div>
+<div class="ledger-wrap">
+<table class="ledger t-account">
+    <thead>
+        <tr>
+            <th colspan="2">Debit (Dr)</th>
+            <th colspan="2">Credit (Cr)</th>
+        </tr>
+        <tr>
+            <th>Particulars</th><th class="num">Amount</th>
+            <th>Particulars</th><th class="num">Amount</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% set ns = namespace(dr=0, cr=0) %}
+        {% for name, value, side in extra.statement %}
+            {% if side in ['dr', 'out', 'asset', 'liability'] and side != 'cr' and side != 'in' and side != 'capital' and side != 'total' and side != 'net' %}
+                {% set ns.dr = ns.dr + value %}
+            {% elif side in ['cr', 'in', 'capital', 'net'] %}
+                {% set ns.cr = ns.cr + value %}
+            {% elif side == 'total' %}
+                {% set ns.dr = ns.dr + 0 %}
+            {% endif %}
+        {% endfor %}
+        {% for name, value, side in extra.statement %}
+        <tr>
+            {% if side in ['dr', 'out', 'asset'] %}
+            <td>{{ name }}</td>
+            <td class="num">{{ money(value) }}</td>
+            <td></td>
+            <td class="num"></td>
+            {% elif side in ['cr', 'in', 'capital', 'net'] %}
+            <td></td>
+            <td class="num"></td>
+            <td>{{ name }}</td>
+            <td class="num">{{ money(value) }}</td>
+            {% else %}
+            <td colspan="2">{{ name }} ({{ side }})</td>
+            <td colspan="2" class="num">{{ money(value) }}</td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+
+{% elif extra.ledger is defined %}
+{% set ns = namespace(dr=0, cr=0) %}
+<div class="ledger-wrap">
+<table class="ledger">
+    <thead>
+        <tr>
+            <th>Account</th>
+            <th class="num">Debit (Dr)</th>
+            <th class="num">Credit (Cr)</th>
+            <th class="num">Balance</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for row in extra.ledger %}
+        {% set dr = row.debit or 0 %}
+        {% set cr = row.credit or 0 %}
+        {% set ns.dr = ns.dr + dr %}
+        {% set ns.cr = ns.cr + cr %}
+        <tr>
+            <td>{{ row.account }}</td>
+            <td class="num">{{ money(dr) }}</td>
+            <td class="num">{{ money(cr) }}</td>
+            <td class="num">{{ money(dr - cr) }}</td>
+        </tr>
+    {% else %}
+        <tr><td colspan="4">Nothing posted to this ledger yet.</td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot>
+        <tr>
+            <td>Totals</td>
+            <td class="num">{{ money(ns.dr) }}</td>
+            <td class="num">{{ money(ns.cr) }}</td>
+            <td class="num">{{ money(ns.dr - ns.cr) }}</td>
+        </tr>
+    </tfoot>
+</table>
+</div>
+
+{% else %}
+{% if allow_manual %}
+<form method="POST" action="{{ url_for('add_journal_entry') }}" id="ledgerEntryForm">
+    <input type="hidden" name="book" value="{{ book }}">
+</form>
+{% endif %}
+
+<div class="stat-grid">
+    <div class="stat-chip"><span>Debit total</span><strong>{{ money(totals.debit) }}</strong></div>
+    <div class="stat-chip"><span>Credit total</span><strong>{{ money(totals.credit) }}</strong></div>
+</div>
+
+<div class="ledger-wrap">
+<table class="ledger">
+    <thead>
+        <tr>
+            <th>Date</th>
+            <th>Ref</th>
+            <th>Account</th>
+            <th>Particulars</th>
+            <th class="num">Debit (Dr)</th>
+            <th class="num">Credit (Cr)</th>
+            <th>Source</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for r in auto_rows %}
+        <tr>
+            <td>{{ r.entry_date }}</td>
+            <td>{{ r.reference }}</td>
+            <td>{{ r.account }}</td>
+            <td>{{ r.particulars }}</td>
+            <td class="num">{% if r.debit %}{{ money(r.debit) }}{% endif %}</td>
+            <td class="num">{% if r.credit %}{{ money(r.credit) }}{% endif %}</td>
+            <td class="src">Auto</td>
+            <td></td>
+        </tr>
+    {% endfor %}
+    {% for r in manual %}
+        <tr>
+            <td>{{ r.entry_date }}</td>
+            <td>{{ r.reference }}</td>
+            <td>{{ r.account }}</td>
+            <td>{{ r.particulars }}</td>
+            <td class="num">{% if r.debit %}{{ money(r.debit) }}{% endif %}</td>
+            <td class="num">{% if r.credit %}{{ money(r.credit) }}{% endif %}</td>
+            <td class="src">Typed</td>
+            <td><a href="{{ url_for('delete_journal_entry', id=r.id) }}" class="delete-btn" onclick="return confirm('Delete this line?')">Delete</a></td>
+        </tr>
+    {% endfor %}
+    {% if not auto_rows and not manual and not allow_manual %}
+        <tr><td colspan="8">No entries in this book yet.</td></tr>
+    {% endif %}
+    {% if allow_manual %}
+        <tr class="entry-row">
+            <td><input type="date" name="entry_date" form="ledgerEntryForm"></td>
+            <td><input type="text" name="reference" form="ledgerEntryForm" placeholder="Ref"></td>
+            <td><input type="text" name="account" form="ledgerEntryForm" required placeholder="Account"></td>
+            <td><input type="text" name="particulars" form="ledgerEntryForm" placeholder="Details"></td>
+            <td><input type="number" step="0.01" name="debit" form="ledgerEntryForm" value="0" class="num"></td>
+            <td><input type="number" step="0.01" name="credit" form="ledgerEntryForm" value="0" class="num"></td>
+            <td class="src">New</td>
+            <td><button type="submit" form="ledgerEntryForm">Post</button></td>
+        </tr>
+    {% endif %}
+    </tbody>
+    <tfoot>
+        <tr>
+            <td colspan="4">Totals</td>
+            <td class="num">{{ money(totals.debit) }}</td>
+            <td class="num">{{ money(totals.credit) }}</td>
+            <td colspan="2"></td>
+        </tr>
+    </tfoot>
+</table>
+</div>
+<p style="margin-top:0.75rem;font-size:0.82rem;color:var(--text3);">Type a new line in the last row and press Post. Debit and credit sit in their own columns, like a paper journal.</p>
+{% endif %}
+{% endblock %}

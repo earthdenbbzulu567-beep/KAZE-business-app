@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>👥 Team</h1>
+        <p>Invite staff to log in and manage this business alongside you.</p>
+    </div>
+</div>
+
+<div class="stat-grid">
+    <div class="stat-chip"><span>Owner</span><strong>1</strong></div>
+    <div class="stat-chip"><span>Staff</span><strong>{{ staff|length }}</strong></div>
+    <div class="stat-chip"><span>Total seats</span><strong>{{ 1 + (staff|length) }}</strong></div>
+</div>
+
+{% if current_user.role == 'owner' %}
+<details style="margin-bottom:1.5rem;">
+    <summary>➕ Invite Team Member</summary>
+    <div>
+        <form method="POST" action="{{ url_for('invite_staff') }}">
+            <div class="form-group">
+                <input type="text" name="username" maxlength="40" minlength="2" placeholder="Username" required>
+            </div>
+            <div class="form-group">
+                <input type="email" name="email" placeholder="Email" required>
+            </div>
+            <div class="form-group">
+                <input type="password" name="password" minlength="6" maxlength="80" placeholder="Temporary password" required>
+            </div>
+            <button type="submit">Add to Team</button>
+        </form>
+        <p style="font-size:0.8rem; color:#888; margin-top:0.5rem;">
+            They'll log in with this username/email and password, and will see the exact same data you do —
+            stock, sales, customers, everything.
+        </p>
+    </div>
+</details>
+{% else %}
+<p style="color:#888; font-size:0.9rem;">Only the account owner can invite or remove team members.</p>
+{% endif %}
+
+<h2>Team Members</h2>
+<div class="table-wrapper">
+    <table>
+        <thead><tr><th>Username</th><th>Email</th><th>Role</th>{% if current_user.role == 'owner' %}<th>Action</th>{% endif %}</tr></thead>
+        <tbody>
+            <tr>
+                <td>{{ current_user.username }}</td>
+                <td>{{ current_user.email }}</td>
+                <td>Owner</td>
+                {% if current_user.role == 'owner' %}<td>—</td>{% endif %}
+            </tr>
+            {% for member in staff %}
+            <tr>
+                <td>{{ member.username }}</td>
+                <td>{{ member.email }}</td>
+                <td>Staff</td>
+                {% if current_user.role == 'owner' %}
+                <td><a href="{{ url_for('remove_staff', id=member.id) }}" class="delete-btn" onclick="return confirm('Remove this team member?')">Remove</a></td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

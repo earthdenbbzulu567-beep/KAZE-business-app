@@ -1,0 +1,39 @@
+{
+  "expenses": [
+    {
+      "name": "Snacks",
+      "amount": 50.0,
+      "category": "Produce",
+      "date": "2026-1-21"
+    },
+    {
+      "name": "snacks",
+      "amount": 50.0,
+      "category": "marketing",
+      "date": "2026-1-22"
+    },
+    {
+      "name": "snacks",
+      "amount": 70.0,
+      "category": "food",
+      "date": "2026-1-23"
+    }
+  ],
+  "income": [
+    {
+      "source": "product sales",
+      "amount": 25.0,
+      "date": "2026-1-21"
+    },
+    {
+      "source": "sales",
+      "amount": 200.0,
+      "date": "2026-1-22"
+    },
+    {
+      "source": "produce",
+      "amount": 10.0,
+      "date": "2026-1-23"
+    }
+  ]
+}

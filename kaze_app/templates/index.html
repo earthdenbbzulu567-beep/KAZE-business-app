@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="hero">
+    <div class="hero-ring"></div>
+    <img src="{{ url_for('static', filename='logo_full.png') }}" alt="KAZE Traders" class="hero-logo">
+    <h1 class="hero-title">Run your whole business<br>from one place</h1>
+    <p class="hero-subtitle">
+        Track income and expenses, manage stock, record sales, bill customers,
+        and keep your cash book — all in one clean dashboard.
+    </p>
+    <div class="hero-cta">
+        {% if current_user.is_authenticated %}
+        <a href="{{ url_for('dashboard') }}"><button>Go to Dashboard</button></a>
+        {% else %}
+        <a href="{{ url_for('signup') }}"><button>Get Started — It's Free</button></a>
+        <a href="{{ url_for('login') }}"><button class="btn-secondary">Log In</button></a>
+        {% endif %}
+    </div>
+</section>
+
+<h2>Everything your business needs</h2>
+<div class="feature-grid">
+    <div class="feature-card">
+        <div class="feature-icon">💰</div>
+        <h3>Income &amp; Expenses</h3>
+        <p>Log every dollar in and out, see profit/loss at a glance, and track trends over time with built-in charts.</p>
+    </div>
+    <div class="feature-card">
+        <div class="feature-icon">📦</div>
+        <h3>Stock &amp; Inventory</h3>
+        <p>Keep tabs on quantity, cost, and selling price per product, with automatic low-stock alerts.</p>
+    </div>
+    <div class="feature-card">
+        <div class="feature-icon">🧾</div>
+        <h3>Sales &amp; Customers</h3>
+        <p>Record sales against your inventory, attach them to saved customers, and see lifetime spend per client.</p>
+    </div>
+    <div class="feature-card">
+        <div class="feature-icon">🖥️</div>
+        <h3>Counter mode</h3>
+        <p>A till page for the trading day. Tap a product, set the quantity, ring it up. Today’s take stays on screen.</p>
+    </div>
+    <div class="feature-card">
+        <div class="feature-icon">🎚️</div>
+        <h3>App modes</h3>
+        <p>Run only the till, only the books, or a custom set. Unused modules stay dormant so they do not get in the way.</p>
+    </div>
+    <div class="feature-card">
+        <div class="feature-icon">📄</div>
+        <h3>Invoices &amp; Receipts</h3>
+        <p>Generate polished, downloadable PDF invoices and sales receipts with your business name and tax rate applied.</p>
+    </div>
+    <div class="feature-card">
+        <div class="feature-icon">📒</div>
+        <h3>Cash Book</h3>
+        <p>Track cash in and out separately from your income statement, categorized and dated.</p>
+    </div>
+    <div class="feature-card">
+        <div class="feature-icon">⬇️</div>
+        <h3>Export Anywhere</h3>
+        <p>Download income, expenses, sales, stock, cash book, and customer data as CSV whenever you need it.</p>
+    </div>
+</div>
+
+<section class="cta-band">
+    <h2 style="border:none;">Ready to get organized?</h2>
+    <p>Free to start. Set up your business in under two minutes.</p>
+    {% if current_user.is_authenticated %}
+    <a href="{{ url_for('dashboard') }}"><button>Go to Dashboard</button></a>
+    {% else %}
+    <a href="{{ url_for('signup') }}"><button>Create Your Account</button></a>
+    {% endif %}
+</section>
+
+<style>
+    .hero {
+        text-align: center;
+        padding: 4rem 1rem 3rem;
+        position: relative;
+        overflow: hidden;
+    }
+    .hero-ring {
+        position: absolute;
+        top: 50%; left: 50%;
+        width: 480px;
+        height: 480px;
+        margin: -240px 0 0 -240px;
+        border: 2px solid var(--red-dim);
+        border-radius: 50%;
+        opacity: 0.35;
+        z-index: 0;
+        animation: ringSpin 40s linear infinite;
+    }
+    .hero-ring::after {
+        content: '';
+        position: absolute;
+        inset: 28px;
+        border: 1px solid var(--red-dim);
+        border-radius: 50%;
+    }
+    @keyframes ringSpin {
+        from { transform: rotate(0deg); }
+        to   { transform: rotate(360deg); }
+    }
+    .hero > * { position: relative; z-index: 1; }
+    .hero-logo {
+        width: 180px;
+        height: auto;
+        margin: 0 auto 1.5rem;
+        display: block;
+        border-radius: 16px;
+        filter: drop-shadow(0 0 18px rgba(46, 204, 113, 0.35));
+        opacity: 0;
+        animation: cardEntrance 0.6s ease forwards;
+    }
+    .hero-title {
+        font-size: 2.6rem;
+        font-weight: 700;
+        letter-spacing: -1px;
+        line-height: 1.15;
+        margin-bottom: 1rem;
+    }
+    .hero-subtitle {
+        max-width: 560px;
+        margin: 0 auto 2rem;
+        font-size: 1.05rem;
+        color: var(--text2);
+    }
+    .hero-cta {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    .hero-cta button {
+        padding: 12px 28px;
+        font-size: 0.95rem;
+    }
+
+    .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        gap: 1.25rem;
+        margin: 1.5rem 0 3rem;
+    }
+    .feature-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.75rem 1.5rem;
+        transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+        opacity: 0;
+        animation: cardEntrance 0.5s ease forwards;
+    }
+    .feature-card:nth-child(1) { animation-delay: 0.05s; }
+    .feature-card:nth-child(2) { animation-delay: 0.12s; }
+    .feature-card:nth-child(3) { animation-delay: 0.19s; }
+    .feature-card:nth-child(4) { animation-delay: 0.26s; }
+    .feature-card:nth-child(5) { animation-delay: 0.33s; }
+    .feature-card:nth-child(6) { animation-delay: 0.40s; }
+    .feature-card:hover {
+        border-color: var(--red-dim);
+        transform: translateY(-4px);
+        box-shadow: 0 10px 24px rgba(0,0,0,0.45);
+    }
+    .feature-icon {
+        font-size: 1.8rem;
+        margin-bottom: 0.75rem;
+    }
+    .feature-card h3 {
+        font-size: 1rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        color: var(--text);
+    }
+    .feature-card p {
+        font-size: 0.88rem;
+        color: var(--text2);
+        line-height: 1.55;
+    }
+
+    .cta-band {
+        text-align: center;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 3rem 1.5rem;
+        margin-bottom: 2rem;
+    }
+    .cta-band p {
+        margin-bottom: 1.5rem;
+    }
+
+    @media (max-width: 600px) {
+        .hero-title { font-size: 1.9rem; }
+    }
+</style>
+{% endblock %}

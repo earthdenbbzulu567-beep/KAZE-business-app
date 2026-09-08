@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Notifications</h1>
+        <p>Alerts from across your business — low stock, recurring items, purchase orders, and more.</p>
+    </div>
+    {% if notifications %}
+    <a href="{{ url_for('clear_notifications') }}" class="btn-secondary" style="padding:10px 20px; border-radius:8px; text-decoration:none;" onclick="return confirm('Clear all notifications?')">Clear All</a>
+    {% endif %}
+</div>
+
+<div class="stat-grid">
+    <div class="stat-chip"><span>Notifications</span><strong>{{ notifications|length }}</strong></div>
+</div>
+
+<div class="table-wrapper">
+    <table>
+        <thead><tr><th>Message</th><th>Category</th><th>When</th></tr></thead>
+        <tbody>
+            {% for n in notifications %}
+            <tr>
+                <td>{{ n.message }}</td>
+                <td><span class="status-pill">{{ n.category }}</span></td>
+                <td style="font-size:0.85rem; color:var(--text3);">{{ n.created_date }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3">No notifications yet. You will see alerts here as things happen.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

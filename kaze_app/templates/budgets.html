@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>🎯 Budgets</h1>
+        <p>Set a monthly spending limit per expense category and track it in real time.</p>
+    </div>
+</div>
+
+<details style="margin-bottom:1.5rem;">
+    <summary>➕ Set a Budget</summary>
+    <div>
+        <form method="POST" action="{{ url_for('add_budget') }}">
+            <select name="category" required>
+                <option>Food</option>
+                <option>Rent</option>
+                <option>Supplies</option>
+                <option>Marketing</option>
+                <option>Other</option>
+            </select>
+            <input type="number" step="0.01" name="monthly_limit" placeholder="Monthly limit" required>
+            <button type="submit">Save Budget</button>
+        </form>
+        <p style="font-size:0.8rem; color:#888; margin-top:0.5rem;">Setting a budget for a category you've already budgeted will update its limit.</p>
+    </div>
+</details>
+
+<h2>This Month</h2>
+
+{% set ns = namespace(limit=0, spent=0) %}
+{% for b in budgets %}
+  {% set ns.limit = ns.limit + b.monthly_limit %}
+  {% set ns.spent = ns.spent + spend_by_category.get(b.category, 0) %}
+{% endfor %}
+<div class="stat-grid">
+    <div class="stat-chip"><span>Budgets</span><strong>{{ budgets|length }}</strong></div>
+    <div class="stat-chip"><span>Total limit</span><strong>{{ money(ns.limit) }}</strong></div>
+    <div class="stat-chip"><span>Spent this month</span><strong>{{ money(ns.spent) }}</strong></div>
+</div>
+{% if budgets %}
+<div class="chart-container">
+    <canvas id="budgetChart"></canvas>
+</div>
+<script>
+new Chart(document.getElementById('budgetChart'), {
+    type: 'bar',
+    data: {
+        labels: [{% for b in budgets %}'{{ b.category }}'{% if not loop.last %},{% endif %}{% endfor %}],
+        datasets: [
+            { label: 'Limit', data: [{% for b in budgets %}{{ b.monthly_limit }}{% if not loop.last %},{% endif %}{% endfor %}], backgroundColor: 'rgba(52,152,219,0.5)' },
+            { label: 'Spent', data: [{% for b in budgets %}{{ spend_by_category.get(b.category, 0) }}{% if not loop.last %},{% endif %}{% endfor %}], backgroundColor: 'rgba(46,204,113,0.7)' }
+        ]
+    },
+    options: { responsive: true, plugins: { title: { display: true, text: 'Budget vs spend' } }, scales: { y: { ticks: { callback: v => window.kazeMoney(v) } } } }
+});
+</script>
+{% endif %}
+
+{% for b in budgets %}
+{% set spent = spend_by_category.get(b.category, 0) %}
+{% set pct = (spent / b.monthly_limit * 100) if b.monthly_limit else 0 %}
+{% set over = spent > b.monthly_limit %}
+<div class="widget">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+        <h3 style="margin:0;">{{ b.category }}</h3>
+        <a href="{{ url_for('delete_budget', id=b.id) }}" class="delete-btn" onclick="return confirm('Remove this budget?')">Remove</a>
+    </div>
+    <div style="display:flex; justify-content:space-between; font-size:0.85rem; color:#666; margin-bottom:4px;">
+        <span>{{ money(spent) }} of {{ money(b.monthly_limit) }}</span>
+        <span style="{% if over %}color:#e74c3c; font-weight:600;{% endif %}">{{ "%.0f"|format(pct) }}%{% if over %} — over budget{% endif %}</span>
+    </div>
+    <div style="background:rgba(0,0,0,0.08); border-radius:8px; height:14px; overflow:hidden;">
+        <div style="background: {% if over %}#e74c3c{% else %}var(--red-bright, #2ecc71){% endif %}; height:100%; width:{{ [pct, 100]|min }}%; transition: width 0.6s;"></div>
+    </div>
+</div>
+{% else %}
+<p style="color:#888;">No budgets set yet. Add one above to start tracking spend by category.</p>
+{% endfor %}
+{% endblock %}
