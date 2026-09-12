@@ -1,0 +1,10 @@
+# KAZE currency (v2.7.0)
+
+Money everywhere uses Settings → Currency symbol and decimal places.
+
+- Screens: Jinja money() + window.kazeMoney
+- PDFs: same helper (receipts, invoices, statements, valuation, P&L)
+- Excel stats: number format uses your symbol and decimals
+- Flashes, activity log, emails: _format_money
+
+Always-on default if nothing is saved: $ and 2 decimals.

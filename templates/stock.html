@@ -110,6 +110,8 @@
                         <a href="{{ url_for('delete_stock', id=item.id) }}" onclick="return confirm('Delete?')">Delete</a>
                     </td>
                 </tr>
+                {% else %}
+                <tr><td colspan="9" class="empty-state">No stock yet. Add a product above.</td></tr>
                 {% endfor %}
             </tbody>
         </table>

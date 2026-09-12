@@ -1,16 +1,23 @@
-# KAZE 2.6.3
+# KAZE 2.6.2 polish
 
-Currency from Settings is used across the app.
+Same Flask app. Fixes plus a Statistics page.
 
-## Currency
-Set symbol and decimal places under Settings. Then:
-- Tables use the money() helper
-- Charts, till, calculator, and dashboard counters use the same symbol in the browser
-- Flash messages, activity log, and daily summary email use the same format
-- Tax page uses money() instead of a separate symbol prefix
+## Fixes
+- Stock edit saves SKU and category.
+- Stock table shows SKU and category.
+- Low-stock highlight uses your Settings threshold, not a hardcoded 10.
+- Stock page size uses Settings rows-per-page.
+- Removed invalid nested quantity form inside the stock bulk form.
+- Tasks empty row spans all columns.
+- Money filter uses Settings currency; format is cached on the request.
+- Fake sidebar integrations replaced with Team / Activity / Settings / Backup.
+- Documents outside AI call removed; local notes draft instead.
+
+## New
+- Statistics page (/stats): count, total, average, min, max tables plus bar and doughnut charts.
+- Date filter for sales, expenses, and cash.
+- Dashboard quick statistics table.
+- Reports links through to Statistics.
 
 ## Run
-templates/ + app.py. DATABASE_URL. pip install -r requirements.txt. gunicorn app:app.
-
-
-See PYTHONANYWHERE.md for PythonAnywhere deploy (wsgi.py).
+Put HTML in templates/. Set DATABASE_URL. pip install -r requirements.txt then gunicorn app:app.

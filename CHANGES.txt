@@ -1,0 +1,18 @@
+KAZE v2.7.1 — review, fixes, two shop-floor features
+
+Fixes
+- Receipt and document PDFs now use Settings currency + decimals
+- Login creates a settings row so currency / mode work on first visit
+- Sales and customers lists use Settings → rows per page
+- Sales charts stringify dates so Chart.js does not break
+- Stock table shows an empty state when there are no products
+
+New 1 — Multi-item till ticket
+- Counter: tap several products onto one ticket
+- Choose cash / mobile money / bank / card
+- One discount for the whole ticket, stock drops per line
+
+New 2 — Day close cash count
+- Opening float + counted drawer
+- Expected = float + cash sales + cash in − cash out
+- Saves variance and last 14 closes

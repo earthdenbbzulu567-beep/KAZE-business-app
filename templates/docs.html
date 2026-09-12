@@ -164,7 +164,7 @@ function draftNotes() {
     const type = document.querySelector('select[name="doc_type"]').value;
     const amount = document.querySelector('input[name="amount"]').value;
     const notes = document.querySelector('textarea[name="notes"]');
-    const moneyBit = amount ? (' Amount: ' + amount + '.') : '';
+    const moneyBit = amount ? (' Amount: ' + window.kazeMoney(amount) + '.') : '';
     notes.value = 'This ' + type + ' (“' + title + '”) is between our business and ' + client + '.' + moneyBit + '\n\nScope: describe the goods or work.\nTerms: payment due as agreed.\nNotes: add delivery or extra conditions here.';
 }
 

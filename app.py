@@ -365,6 +365,25 @@ def init_db():
     cur.execute("ALTER TABLE stock ADD COLUMN IF NOT EXISTS category TEXT DEFAULT ''")
     cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS discount REAL DEFAULT 0")
     cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS sale_notes TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'cash'")
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS day_closes (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            close_date TEXT NOT NULL,
+            opening_float REAL DEFAULT 0,
+            counted_cash REAL DEFAULT 0,
+            expected_cash REAL DEFAULT 0,
+            cash_sales REAL DEFAULT 0,
+            other_sales REAL DEFAULT 0,
+            cash_in REAL DEFAULT 0,
+            cash_out REAL DEFAULT 0,
+            variance REAL DEFAULT 0,
+            notes TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, close_date)
+        )
+    """)
     cur.execute('''
         CREATE TABLE IF NOT EXISTS journal_entries (
             id SERIAL PRIMARY KEY,
@@ -444,6 +463,27 @@ def _reject(*pairs):
             flash(err, 'danger')
             return True
     return False
+
+
+def _page_size(uid, default=25):
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute('SELECT items_per_page FROM settings WHERE user_id=%s', (uid,))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        n = int(row['items_per_page']) if row and row.get('items_per_page') else default
+        return n if n in (10, 25, 50, 100) else default
+    except Exception:
+        return default
+
+
+def _payment_method(raw=None):
+    val = (raw if raw is not None else request.form.get('payment_method') or 'cash').strip().lower()
+    if val not in ('cash', 'mobile', 'bank', 'card', 'other'):
+        return 'cash'
+    return val
 
 
 # ======================== App modes (run some parts, leave others dormant) ========================
@@ -544,7 +584,7 @@ _bind_module(
     'sales', 'add_sale', 'auto_sale', 'delete_sale', 'sales_bulk',
     'sale_receipt', 'repeat_sale', 'aged_sales', 'sale_to_invoice', 'export_sales_csv',
 )
-_bind_module('counter', 'counter', 'counter_sale')
+_bind_module('counter', 'counter', 'counter_sale', 'counter_checkout')
 _bind_module(
     'customers',
     'customers', 'add_customer', 'edit_customer', 'delete_customer',
@@ -711,33 +751,49 @@ class User(UserMixin):
     def get_id(self):
         return str(self.db_id)
 
-def _format_money(amount):
-    try:
-        n = float(amount or 0)
-    except (TypeError, ValueError):
-        n = 0.0
+def _money_fmt_parts(settings_row=None):
+    """Symbol + decimal places from Settings. Cached on g for the request."""
+    cached = getattr(g, '_money_fmt', None)
+    if cached and settings_row is None:
+        return cached
     symbol = '$'
     decimals = 2
+    row = settings_row
     try:
-        cached = getattr(g, '_money_fmt', None)
-        if cached:
-            symbol, decimals = cached
-        elif current_user.is_authenticated:
+        if row is None and current_user.is_authenticated:
             conn = get_db()
             cur = conn.cursor()
             cur.execute('SELECT currency_symbol, number_decimals FROM settings WHERE user_id = %s', (current_user.id,))
             row = cur.fetchone()
             cur.close()
             conn.close()
-            if row:
-                symbol = row.get('currency_symbol') or '$'
-                if row.get('number_decimals') is not None:
-                    decimals = int(row['number_decimals'])
-            g._money_fmt = (symbol, decimals)
+        if row:
+            symbol = (row.get('currency_symbol') or '$').strip() or '$'
+            if row.get('number_decimals') is not None:
+                decimals = max(0, min(6, int(row['number_decimals'])))
     except Exception:
         pass
+    g._money_fmt = (symbol, decimals)
+    return symbol, decimals
+
+
+def _format_money(amount, settings_row=None):
+    try:
+        n = float(amount or 0)
+    except (TypeError, ValueError):
+        n = 0.0
+    symbol, decimals = _money_fmt_parts(settings_row)
     sign = '-' if n < 0 else ''
     return '{}{}{:,.{}f}'.format(sign, symbol, abs(n), decimals)
+
+
+def _excel_money_format(settings_row=None):
+    symbol, decimals = _money_fmt_parts(settings_row)
+    safe = (symbol or '$').replace('"', '')
+    zeros = '0' * decimals if decimals else '0'
+    if decimals:
+        return '"{}"#,##0.{}'.format(safe, zeros)
+    return '"{}"#,##0'.format(safe)
 
 
 @app.template_filter('money')
@@ -859,7 +915,7 @@ def login():
         conn.close()
         if user and check_password_hash(user['password'], password):
             login_user(User(user['id'], user['username'], user['email'], user.get('role'), user.get('owner_id')))
-            # Log activity
+            # Log activity + ensure settings row exists
             try:
                 now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 ip = request.headers.get('X-Forwarded-For', request.remote_addr)
@@ -868,6 +924,8 @@ def login():
                 cur = conn.cursor()
                 cur.execute('INSERT INTO user_activity (user_id, username, login_time, ip_address) VALUES (%s, %s, %s, %s)',
                             (business_id, user['username'], now, ip))
+                cur.execute('INSERT INTO settings (user_id, notify_email) VALUES (%s, %s) ON CONFLICT (user_id) DO NOTHING',
+                            (business_id, user.get('email') or ''))
                 conn.commit()
                 cur.close()
                 conn.close()
@@ -1051,7 +1109,7 @@ def logout():
 @login_required
 def customers():
     page = request.args.get('page', 1, type=int)
-    per_page = 20
+    per_page = _page_size(current_user.id)
     offset = (page - 1) * per_page
     
     conn = get_db()
@@ -1651,7 +1709,7 @@ def delete_cash_entry(id):
 @login_required
 def sales():
     page = request.args.get('page', 1, type=int)
-    per_page = 20
+    per_page = _page_size(current_user.id)
     offset = (page - 1) * per_page
     
     conn = get_db()
@@ -1677,8 +1735,8 @@ def sales():
     
     sales_by_date = {}
     for sale in all_sales:
-        d = sale['sale_date']
-        sales_by_date[d] = sales_by_date.get(d, 0) + sale['total_amount']
+        d = str(sale['sale_date'] or '')[:10]
+        sales_by_date[d] = sales_by_date.get(d, 0) + (sale['total_amount'] or 0)
     
     cur.close()
     conn.close()
@@ -1742,9 +1800,9 @@ def add_sale():
     profit = total_amount - (cost_price * quantity_sold)
     
     cur.execute('''
-        INSERT INTO sales (user_id, stock_id, quantity_sold, selling_price_at_time, total_amount, profit, sale_date, customer_name, customer_email, customer_id, discount, sale_notes)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-    ''', (current_user.id, stock_id, quantity_sold, selling_price, total_amount, profit, sale_date, customer_name, customer_email, customer_id, discount, sale_notes))
+        INSERT INTO sales (user_id, stock_id, quantity_sold, selling_price_at_time, total_amount, profit, sale_date, customer_name, customer_email, customer_id, discount, sale_notes, payment_method)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    ''', (current_user.id, stock_id, quantity_sold, selling_price, total_amount, profit, sale_date, customer_name, customer_email, customer_id, discount, sale_notes, _payment_method()))
     
     new_quantity = stock_item['quantity'] - quantity_sold
     cur.execute('UPDATE stock SET quantity = %s WHERE id = %s', (new_quantity, stock_id))
@@ -1803,10 +1861,10 @@ def auto_sale():
     profit = total_amount - (cost_price * quantity_sold)
     cur.execute(
         'INSERT INTO sales (user_id, stock_id, quantity_sold, selling_price_at_time, total_amount, profit, '
-        'sale_date, customer_name, customer_email, customer_id, discount, sale_notes) '
-        'VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
+        'sale_date, customer_name, customer_email, customer_id, discount, sale_notes, payment_method) '
+        'VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
         (current_user.id, stock_id, quantity_sold, selling_price, total_amount, profit,
-         sale_date, customer_name, customer_email, customer_id, 0, 'auto sale')
+         sale_date, customer_name, customer_email, customer_id, 0, 'auto sale', _payment_method())
     )
     cur.execute('UPDATE stock SET quantity = quantity - %s WHERE id = %s', (quantity_sold, stock_id))
     conn.commit()
@@ -2221,10 +2279,10 @@ def doc_pdf(id):
         meta_lines.append(f"<b>Notes:</b> {doc_row['notes']}")
 
     table_data = [['Description', 'Amount']]
-    table_data.append([doc_row['title'], f"{symbol}{subtotal:.2f}"])
+    table_data.append([doc_row['title'], _format_money(subtotal, settings_row)])
     if tax_rate:
-        table_data.append([f"Tax ({tax_rate:.1f}%)", f"{symbol}{tax_amount:.2f}"])
-    table_data.append(['Total', f"{symbol}{total:.2f}"])
+        table_data.append([f"Tax ({tax_rate:.1f}%)", _format_money(tax_amount, settings_row)])
+    table_data.append(['Total', _format_money(total, settings_row)])
 
     buffer = io.BytesIO()
     _build_pdf(buffer, doc_row['title'], business_name, meta_lines, table_data,
@@ -2265,9 +2323,9 @@ def sale_receipt(id):
 
     table_data = [
         ['Product', 'Quantity', 'Unit Price', 'Total'],
-        [sale['product_name'], str(sale['quantity_sold']), f"{symbol}{sale['selling_price_at_time']:.2f}",
-         f"{symbol}{sale['total_amount']:.2f}"],
-        ['', '', 'Total', f"{symbol}{sale['total_amount']:.2f}"]
+        [sale['product_name'], str(sale['quantity_sold']), _format_money(sale['selling_price_at_time'], settings_row),
+         _format_money(sale['total_amount'], settings_row)],
+        ['', '', 'Total', _format_money(sale['total_amount'], settings_row)]
     ]
 
     buffer = io.BytesIO()
@@ -3726,14 +3784,14 @@ def bookkeeping_pdf(id):
             table_data.append([parts[0], parts[1], parts[2]])
         parsed = True
     if not parsed:
-        table_data.append([row['title'], '1', '{}{:.2f}'.format(symbol, row['amount'] or 0)])
+        table_data.append([row['title'], '1', _format_money(row['amount'] or 0, settings_row)])
     subtotal = row['amount'] or 0
     if row['kind'] in ('invoice', 'sales_invoice', 'proforma_invoice', 'quotation') and tax_rate:
         tax_amount = subtotal * (tax_rate / 100)
-        table_data.append(['Tax ({:.1f}%)'.format(tax_rate), '', '{}{:.2f}'.format(symbol, tax_amount)])
-        table_data.append(['Total', '', '{}{:.2f}'.format(symbol, subtotal + tax_amount)])
+        table_data.append(['Tax ({:.1f}%)'.format(tax_rate), '', _format_money(tax_amount, settings_row)])
+        table_data.append(['Total', '', _format_money(subtotal + tax_amount, settings_row)])
     else:
-        table_data.append(['Total', '', '{}{:.2f}'.format(symbol, subtotal)])
+        table_data.append(['Total', '', _format_money(subtotal, settings_row)])
     buffer = io.BytesIO()
     _build_pdf(
         buffer, label + ' - ' + row['title'], business_name, meta_lines, table_data,
@@ -4216,9 +4274,9 @@ def customer_statement(id):
         table.append([
             s['sale_date'], s['product_name'],
             str(s['quantity_sold']),
-            '{}{:.2f}'.format(symbol, s['total_amount'])
+            _format_money(s['total_amount'], settings_row)
         ])
-    table.append(['', '', 'Total', '{}{:.2f}'.format(symbol, total)])
+    table.append(['', '', 'Total', _format_money(total, settings_row)])
     buffer = io.BytesIO()
     _build_pdf(buffer, 'Statement of Account', business_name, meta, table,
                footer_lines=['Generated by KAZE Account tracking'])
@@ -4259,10 +4317,11 @@ def repeat_sale(id):
     total = price * qty
     cur.execute(
         '''INSERT INTO sales (user_id, stock_id, quantity_sold, selling_price_at_time, total_amount, profit,
-           sale_date, customer_name, customer_email, customer_id)
-           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''',
+           sale_date, customer_name, customer_email, customer_id, discount, sale_notes, payment_method)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''',
         (current_user.id, item['id'], qty, price, total, profit, today,
-         sale['customer_name'], sale['customer_email'], sale['customer_id'])
+         sale['customer_name'], sale['customer_email'], sale['customer_id'], 0, 'repeat',
+         sale.get('payment_method') or 'cash')
     )
     cur.execute('UPDATE stock SET quantity = quantity - %s WHERE id=%s', (qty, item['id']))
     conn.commit()
@@ -4292,7 +4351,7 @@ def price_list():
     for i in items:
         table.append([
             i['product_name'], i['unit'] or 'each',
-            '{}{:.2f}'.format(symbol, i['selling_price'] or 0),
+            _format_money(i['selling_price'] or 0, settings_row),
             str(i['quantity'])
         ])
     if len(table) == 1:
@@ -4380,9 +4439,9 @@ def stock_valuation_pdf():
         val = (i['quantity'] or 0) * (i['cost_price'] or 0)
         total += val
         table.append([i['product_name'], i['sku'] or '-', str(i['quantity']),
-                      '{}{:.2f}'.format(symbol, i['cost_price'] or 0),
-                      '{}{:.2f}'.format(symbol, val)])
-    table.append(['', '', '', 'Total', '{}{:.2f}'.format(symbol, total)])
+                      _format_money(i['cost_price'] or 0, settings_row),
+                      _format_money(val, settings_row)])
+    table.append(['', '', '', 'Total', _format_money(total, settings_row)])
     buffer = io.BytesIO()
     _build_pdf(buffer, 'Stock valuation', business_name,
                ['<b>Date:</b> {}'.format(datetime.today().strftime('%Y-%m-%d'))], table)
@@ -4412,12 +4471,12 @@ def pnl_pdf():
     business_name = (settings_row['business_name'] if settings_row else '') or 'Your Business'
     symbol = (settings_row['currency_symbol'] if settings_row else '$') or '$'
     table = [['Line', 'Amount'],
-             ['Sales', '{}{:.2f}'.format(symbol, sales_rev)],
-             ['Cost of goods sold', '{}{:.2f}'.format(symbol, cogs)],
-             ['Gross profit', '{}{:.2f}'.format(symbol, gross)],
-             ['Other income', '{}{:.2f}'.format(symbol, other_inc)],
-             ['Expenses', '{}{:.2f}'.format(symbol, exp)],
-             ['Net profit / (loss)', '{}{:.2f}'.format(symbol, net)]]
+             ['Sales', _format_money(sales_rev, settings_row)],
+             ['Cost of goods sold', _format_money(cogs, settings_row)],
+             ['Gross profit', _format_money(gross, settings_row)],
+             ['Other income', _format_money(other_inc, settings_row)],
+             ['Expenses', _format_money(exp, settings_row)],
+             ['Net profit / (loss)', _format_money(net, settings_row)]]
     buffer = io.BytesIO()
     _build_pdf(buffer, 'Profit and Loss', business_name,
                ['<b>Date:</b> {}'.format(datetime.today().strftime('%Y-%m-%d'))], table)
@@ -4527,7 +4586,7 @@ def sale_to_invoice(id):
         return redirect(url_for('sales'))
     today = datetime.today().strftime('%Y-%m-%d')
     title = 'Invoice for {} x{}'.format(sale['product_name'], sale['quantity_sold'])
-    lines = '{} | {} | {:.2f}'.format(sale['product_name'], sale['quantity_sold'], sale['total_amount'])
+    lines = '{} | {} | {}'.format(sale['product_name'], sale['quantity_sold'], _format_money(sale['total_amount']))
     cur.execute(
         '''INSERT INTO bookkeeping_docs
            (user_id, kind, title, party, reference, doc_date, amount, status, notes, line_items, created_date)
@@ -4570,22 +4629,102 @@ def shortcuts():
     return render_template('shortcuts.html')
 
 
-@app.route('/tools/day-close')
+@app.route('/tools/day-close', methods=['GET', 'POST'])
 @login_required
 def day_close():
     today = datetime.today().strftime('%Y-%m-%d')
     uid = current_user.id
     conn = get_db()
     cur = conn.cursor()
-    cur.execute('SELECT COALESCE(SUM(total_amount),0) as t, COUNT(*) as n FROM sales WHERE user_id=%s AND sale_date=%s', (uid, today))
+    cur.execute(
+        'SELECT COALESCE(SUM(total_amount),0) as t, COUNT(*) as n FROM sales WHERE user_id=%s AND sale_date=%s',
+        (uid, today)
+    )
     sales = cur.fetchone()
+    try:
+        cur.execute(
+            "SELECT COALESCE(SUM(total_amount),0) as t FROM sales WHERE user_id=%s AND sale_date=%s AND COALESCE(payment_method, 'cash') = 'cash'",
+            (uid, today)
+        )
+        cash_sales = cur.fetchone()['t'] or 0
+        cur.execute(
+            "SELECT COALESCE(SUM(total_amount),0) as t FROM sales WHERE user_id=%s AND sale_date=%s AND COALESCE(payment_method, 'cash') <> 'cash'",
+            (uid, today)
+        )
+        other_sales = cur.fetchone()['t'] or 0
+    except Exception:
+        conn.rollback()
+        cash_sales = sales['t'] or 0
+        other_sales = 0
     cur.execute("SELECT COALESCE(SUM(amount),0) as t FROM cash_books WHERE user_id=%s AND date=%s AND entry_type='in'", (uid, today))
     cin = cur.fetchone()['t'] or 0
     cur.execute("SELECT COALESCE(SUM(amount),0) as t FROM cash_books WHERE user_id=%s AND date=%s AND entry_type='out'", (uid, today))
     cout = cur.fetchone()['t'] or 0
+
+    saved = None
+    history = []
+    try:
+        cur.execute('SELECT * FROM day_closes WHERE user_id=%s AND close_date=%s', (uid, today))
+        saved = cur.fetchone()
+        cur.execute('SELECT * FROM day_closes WHERE user_id=%s ORDER BY close_date DESC LIMIT 14', (uid,))
+        history = cur.fetchall()
+    except Exception:
+        conn.rollback()
+
+    if request.method == 'POST':
+        opening, e1 = _clean_float('opening_float', required=False, min_v=0, max_v=1e9, label='opening float', default=0)
+        counted, e2 = _clean_float('counted_cash', required=True, min_v=0, max_v=1e9, label='counted cash')
+        notes, e3 = _clean_text('notes', required=False, max_len=400, label='notes')
+        if _reject((opening, e1), (counted, e2), (notes, e3)):
+            cur.close()
+            conn.close()
+            return redirect(url_for('day_close'))
+        expected = (opening or 0) + cash_sales + cin - cout
+        variance = (counted or 0) - expected
+        try:
+            cur.execute(
+                "INSERT INTO day_closes (user_id, close_date, opening_float, counted_cash, expected_cash, cash_sales, other_sales, cash_in, cash_out, variance, notes) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (user_id, close_date) DO UPDATE SET opening_float=EXCLUDED.opening_float, counted_cash=EXCLUDED.counted_cash, expected_cash=EXCLUDED.expected_cash, cash_sales=EXCLUDED.cash_sales, other_sales=EXCLUDED.other_sales, cash_in=EXCLUDED.cash_in, cash_out=EXCLUDED.cash_out, variance=EXCLUDED.variance, notes=EXCLUDED.notes",
+                (uid, today, opening or 0, counted or 0, expected, cash_sales, other_sales, cin, cout, variance, notes or '')
+            )
+            conn.commit()
+        except Exception as exc:
+            conn.rollback()
+            cur.close()
+            conn.close()
+            flash('Could not save day close. {}'.format(exc), 'danger')
+            return redirect(url_for('day_close'))
+        cur.close()
+        conn.close()
+        log_activity(uid, current_user.username, 'Day close',
+                     'Expected {} counted {} variance {}'.format(
+                         _format_money(expected), _format_money(counted), _format_money(variance)))
+        if abs(variance) < 0.005:
+            flash('Till matches. Variance is zero.', 'success')
+        elif variance > 0:
+            flash('Till is over by {}.'.format(_format_money(variance)), 'success')
+        else:
+            flash('Till is short by {}.'.format(_format_money(abs(variance))), 'danger')
+        return redirect(url_for('day_close'))
+
     cur.close()
     conn.close()
-    return render_template('day_close.html', today=today, sales_total=sales['t'] or 0, sales_n=sales['n'] or 0, cash_in=cin, cash_out=cout, cash_net=cin-cout)
+    opening = saved['opening_float'] if saved else 0
+    expected = (opening or 0) + cash_sales + cin - cout
+    return render_template(
+        'day_close.html',
+        today=today,
+        sales_total=sales['t'] or 0,
+        sales_n=sales['n'] or 0,
+        cash_sales=cash_sales,
+        other_sales=other_sales,
+        cash_in=cin,
+        cash_out=cout,
+        cash_net=cin - cout,
+        saved=saved,
+        history=history,
+        expected=expected,
+        opening=opening,
+    )
 
 
 @app.route('/counter')
@@ -4681,10 +4820,10 @@ def counter_sale():
 
     cur.execute(
         '''INSERT INTO sales (user_id, stock_id, quantity_sold, selling_price_at_time, total_amount, profit,
-           sale_date, customer_name, customer_email, customer_id, discount, sale_notes)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)''',
+           sale_date, customer_name, customer_email, customer_id, discount, sale_notes, payment_method)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)''',
         (current_user.id, stock_id, quantity_sold, selling_price, total_amount, profit, sale_date,
-         customer_name, customer_email, customer_id, discount, 'counter')
+         customer_name, customer_email, customer_id, discount, 'counter', _payment_method())
     )
     cur.execute('UPDATE stock SET quantity = quantity - %s WHERE id = %s', (quantity_sold, stock_id))
     conn.commit()
@@ -4693,6 +4832,97 @@ def counter_sale():
     log_activity(current_user.id, current_user.username, 'Counter sale',
                  '{} x{} {}'.format(stock_item['product_name'], quantity_sold, _format_money(total_amount)))
     flash('Rang up {} × {}. Collect {}.'.format(stock_item['product_name'], quantity_sold, _format_money(total_amount)), 'success')
+    return redirect(url_for('counter'))
+
+
+@app.route('/counter/checkout', methods=['POST'])
+@login_required
+def counter_checkout():
+    """Ring up a multi-item ticket from the till basket."""
+    ids = request.form.getlist('line_stock_id')
+    qtys = request.form.getlist('line_qty')
+    if not ids:
+        flash('Add at least one product to the ticket.', 'danger')
+        return redirect(url_for('counter'))
+    customer_id = request.form.get('customer_id') or None
+    customer_name = request.form.get('customer_name', '') or 'Walk-in'
+    customer_email = ''
+    pay = _payment_method()
+    try:
+        ticket_discount = float(request.form.get('discount') or 0)
+    except ValueError:
+        ticket_discount = 0
+    if ticket_discount < 0:
+        ticket_discount = 0
+    sale_date = datetime.today().strftime('%Y-%m-%d')
+    ticket_ref = 'T-' + datetime.now().strftime('%H%M%S')
+
+    conn = get_db()
+    cur = conn.cursor()
+    if customer_id:
+        cur.execute('SELECT name, email FROM customers WHERE id = %s AND user_id = %s', (customer_id, current_user.id))
+        saved = cur.fetchone()
+        if saved:
+            customer_name = saved['name']
+            customer_email = saved['email'] or ''
+
+    lines = []
+    for sid, qraw in zip(ids, qtys):
+        try:
+            stock_id = int(sid)
+            qty = float(qraw)
+        except (TypeError, ValueError):
+            continue
+        if qty <= 0:
+            continue
+        cur.execute('SELECT * FROM stock WHERE id = %s AND user_id = %s', (stock_id, current_user.id))
+        item = cur.fetchone()
+        if not item:
+            cur.close()
+            conn.close()
+            flash('A product on the ticket is missing.', 'danger')
+            return redirect(url_for('counter'))
+        if item['quantity'] < qty:
+            cur.close()
+            conn.close()
+            flash('Not enough {} in stock. Only {} left.'.format(item['product_name'], item['quantity']), 'danger')
+            return redirect(url_for('counter'))
+        lines.append((item, qty))
+    if not lines:
+        cur.close()
+        conn.close()
+        flash('Add at least one product to the ticket.', 'danger')
+        return redirect(url_for('counter'))
+
+    subtotal = sum(item['selling_price'] * qty for item, qty in lines)
+    remaining_disc = min(ticket_discount, subtotal)
+    ticket_total = 0
+    for idx, (item, qty) in enumerate(lines):
+        line_rev = item['selling_price'] * qty
+        if idx == len(lines) - 1:
+            line_disc = remaining_disc
+        else:
+            share = (line_rev / subtotal) * ticket_discount if subtotal else 0
+            line_disc = round(share, 2)
+            remaining_disc = max(remaining_disc - line_disc, 0)
+        total_amount = max(line_rev - line_disc, 0)
+        profit = total_amount - (item['cost_price'] * qty)
+        ticket_total += total_amount
+        note = 'ticket {} · {}'.format(ticket_ref, pay)
+        cur.execute(
+            "INSERT INTO sales (user_id, stock_id, quantity_sold, selling_price_at_time, total_amount, profit, sale_date, customer_name, customer_email, customer_id, discount, sale_notes, payment_method) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (current_user.id, item['id'], qty, item['selling_price'], total_amount, profit, sale_date,
+             customer_name, customer_email, customer_id, line_disc, note, pay)
+        )
+        cur.execute('UPDATE stock SET quantity = quantity - %s WHERE id = %s', (qty, item['id']))
+    conn.commit()
+    cur.close()
+    conn.close()
+    names = ', '.join('{}x{}'.format(item['product_name'], qty) for item, qty in lines)
+    log_activity(current_user.id, current_user.username, 'Till ticket',
+                 '{} {} {}'.format(ticket_ref, names, _format_money(ticket_total)))
+    flash('Ticket {} · {} lines · collect {} via {}.'.format(
+        ticket_ref, len(lines), _format_money(ticket_total), pay), 'success')
     return redirect(url_for('counter'))
 
 
@@ -4863,8 +5093,8 @@ def stats_xlsx():
         return redirect(url_for('stats'))
 
     settings_row = _get_settings_row(current_user.id)
-    symbol = (settings_row.get('currency_symbol') if settings_row else None) or '$'
-    money_fmt = '"{}"#,##0.00'.format(symbol.replace('"', ''))
+    symbol, decimals = _money_fmt_parts(settings_row)
+    money_fmt = _excel_money_format(settings_row)
 
     wb = Workbook()
     header_font = Font(name='Calibri', bold=True, color='FFFFFF')

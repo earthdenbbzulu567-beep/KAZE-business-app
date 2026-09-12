@@ -95,6 +95,13 @@
     <input type="email" name="customer_email" placeholder="Customer email (if new)">
     <input type="date" name="date">
     <input type="number" step="0.01" name="discount" min="0" placeholder="Discount">
+    <select name="payment_method">
+        <option value="cash">Cash</option>
+        <option value="mobile">Mobile money</option>
+        <option value="bank">Bank</option>
+        <option value="card">Card</option>
+        <option value="other">Other</option>
+    </select>
     <input type="text" name="sale_notes" placeholder="Note">
     <button type="submit">Record Sale</button>
 </form>
@@ -141,6 +148,7 @@
                     <th>Date</th>
                     <th>Customer</th>
                     <th>Customer Email</th>
+                    <th>Pay</th>
                     <th>Action</th>
                 </tr>
             </thead>
@@ -156,13 +164,14 @@
                     <td>{{ sale.sale_date }}</td>
                     <td>{{ sale.customer_name or '—' }}</td>
                     <td>{{ sale.customer_email or '—' }}</td>
+                    <td>{{ sale.payment_method or 'cash' }}</td>
                     <td>
                         <a href="{{ url_for('sale_receipt', id=sale.id) }}">Receipt</a> <a href="{{ url_for('sale_to_invoice', id=sale.id) }}">Invoice</a> <a href="{{ url_for('repeat_sale', id=sale.id) }}" onclick="return confirm('Record the same sale again for today?')">Repeat</a>
                         <a href="{{ url_for('delete_sale', id=sale.id) }}" onclick="return confirm('Delete? This will restore stock.')">Delete</a>
                     </td>
                 </tr>
                 {% else %}
-                <tr><td colspan="10">No sales recorded yet.</td></tr>
+                <tr><td colspan="11">No sales recorded yet.</td></tr>
                 {% endfor %}
             </tbody>
         </table>
