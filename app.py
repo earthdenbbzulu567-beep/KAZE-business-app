@@ -61,12 +61,89 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 
 # --------------------- Database ---------------------
-def get_db():
-    DATABASE_URL = os.environ.get('DATABASE_URL')
-    if not DATABASE_URL:
+_pool = None
+_pool_lock = __import__('threading').Lock()
+_recurring_ran_at = {}
+
+
+def _db_url():
+    url = os.environ.get('DATABASE_URL')
+    if not url:
         raise ValueError("DATABASE_URL environment variable is not set")
-    conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
-    return conn
+    return url
+
+
+def _get_pool():
+    global _pool
+    if _pool is False:
+        return None
+    if _pool is not None:
+        return _pool
+    with _pool_lock:
+        if _pool not in (None, False):
+            return _pool
+        try:
+            from psycopg2.pool import SimpleConnectionPool
+            _pool = SimpleConnectionPool(1, 10, _db_url(), cursor_factory=RealDictCursor)
+        except Exception:
+            _pool = False
+            return None
+    return _pool
+
+
+def get_db():
+    # Reuse one pooled connection for the whole request.
+    from flask import has_app_context
+    if has_app_context():
+        conn = getattr(g, '_kaze_conn', None)
+        if conn is not None and getattr(conn, 'closed', 0) == 0:
+            return conn
+        pool = _get_pool()
+        if pool:
+            conn = pool.getconn()
+        else:
+            conn = psycopg2.connect(_db_url(), cursor_factory=RealDictCursor)
+        if not getattr(conn, '_kaze_soft_close', False):
+            conn._kaze_real_close = conn.close
+            conn.close = lambda: None
+            conn._kaze_soft_close = True
+        g._kaze_conn = conn
+        return conn
+    return psycopg2.connect(_db_url(), cursor_factory=RealDictCursor)
+
+
+@app.teardown_appcontext
+def _return_db(_exc):
+    conn = getattr(g, '_kaze_conn', None)
+    if conn is None:
+        return
+    g._kaze_conn = None
+    try:
+        if _exc:
+            conn.rollback()
+    except Exception:
+        pass
+    pool = _get_pool()
+    if pool:
+        try:
+            pool.putconn(conn)
+            return
+        except Exception:
+            pass
+    try:
+        closer = getattr(conn, '_kaze_real_close', None)
+        if closer:
+            closer()
+    except Exception:
+        pass
+
+
+@app.after_request
+def _fast_headers(resp):
+    if request.path.startswith('/static/'):
+        resp.headers.setdefault('Cache-Control', 'public, max-age=86400')
+    return resp
+
 
 def init_db():
     conn = get_db()
@@ -398,6 +475,17 @@ def init_db():
             created_date TEXT NOT NULL
         )
     ''')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_sales_user_date ON sales (user_id, sale_date)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_expenses_user_date ON expenses (user_id, date)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_income_user_date ON income (user_id, date)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_cash_user ON cash_books (user_id)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_stock_user ON stock (user_id)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_customers_user ON customers (user_id)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_activities_user ON activities (user_id, created_at DESC)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications (user_id, is_read)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_journal_user_book ON journal_entries (user_id, book)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_bookdocs_user ON bookkeeping_docs (user_id)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_settings_user ON settings (user_id)')
     conn.commit()
     cur.close()
     conn.close()
@@ -484,6 +572,43 @@ def _payment_method(raw=None):
     if val not in ('cash', 'mobile', 'bank', 'card', 'other'):
         return 'cash'
     return val
+
+
+def _hex_to_rgb(hex_color):
+    h = str(hex_color or '#2ecc71').strip().lstrip('#')
+    if len(h) == 3:
+        h = ''.join(c * 2 for c in h)
+    if len(h) != 6:
+        h = '2ecc71'
+    try:
+        return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    except ValueError:
+        return 46, 204, 113
+
+
+def _accent_palette(hex_color):
+    r, g, b = _hex_to_rgb(hex_color)
+    dark = (max(0, int(r * 0.42)), max(0, int(g * 0.42)), max(0, int(b * 0.42)))
+    dim = (max(0, int(r * 0.16)), max(0, int(g * 0.16)), max(0, int(b * 0.16)))
+    bg = (max(6, min(28, int(8 + r * 0.10))), max(6, min(28, int(8 + g * 0.10))), max(6, min(28, int(8 + b * 0.10))))
+    bg2 = (max(10, min(36, int(14 + r * 0.09))), max(10, min(36, int(14 + g * 0.09))), max(10, min(36, int(14 + b * 0.09))))
+    surface = (max(16, min(46, int(22 + r * 0.08))), max(16, min(46, int(22 + g * 0.08))), max(16, min(46, int(22 + b * 0.08))))
+    light_bg = (min(255, 245 + int(r * 0.02)), min(255, 245 + int(g * 0.02)), min(255, 245 + int(b * 0.02)))
+    return {
+        'hex': '#{:02x}{:02x}{:02x}'.format(r, g, b),
+        'rgb': '{},{},{}'.format(r, g, b),
+        'dark': '#{:02x}{:02x}{:02x}'.format(*dark),
+        'dim': '#{:02x}{:02x}{:02x}'.format(*dim),
+        'glow': 'rgba({},{},{},0.20)'.format(r, g, b),
+        'wash': 'rgba({},{},{},0.12)'.format(r, g, b),
+        'grid': 'rgba({},{},{},0.07)'.format(r, g, b),
+        'bg': '#{:02x}{:02x}{:02x}'.format(*bg),
+        'bg2': '#{:02x}{:02x}{:02x}'.format(*bg2),
+        'surface': '#{:02x}{:02x}{:02x}'.format(*surface),
+        'light_bg': '#{:02x}{:02x}{:02x}'.format(*light_bg),
+    }
+
+
 
 
 # ======================== App modes (run some parts, leave others dormant) ========================
@@ -677,10 +802,10 @@ def _apply_app_mode():
     try:
         conn = get_db()
         cur = conn.cursor()
-        cur.execute('SELECT app_mode, enabled_modules FROM settings WHERE user_id = %s', (current_user.id,))
+        cur.execute('SELECT * FROM settings WHERE user_id = %s', (current_user.id,))
         row = cur.fetchone()
         cur.close()
-        conn.close()
+        g._settings_row = row
     except Exception:
         return
     g.app_mode = ((row.get('app_mode') if row else None) or 'full')
@@ -713,24 +838,33 @@ def log_activity(user_id, username, action, details=None):
 
 # --------------------- Email function ---------------------
 def send_email(to_email, subject, body):
-    from_email = os.environ.get('MAIL_USERNAME')
-    password = os.environ.get('MAIL_PASSWORD')
+    to_email = (to_email or '').strip()
+    from_email = (os.environ.get('MAIL_USERNAME') or '').strip()
+    password = os.environ.get('MAIL_PASSWORD') or os.environ.get('MAIL_APP_PASSWORD')
+    if not to_email or '@' not in to_email:
+        print("Email error: no destination address")
+        return False
     if not from_email or not password:
         print("Email error: MAIL_USERNAME/MAIL_PASSWORD environment variables are not set")
         return False
-    msg = MIMEText(body)
+    msg = MIMEText(body, _charset='utf-8')
     msg['Subject'] = subject
     msg['From'] = from_email
     msg['To'] = to_email
+    host = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
     try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
+        port = int(os.environ.get('MAIL_PORT', '587'))
+    except ValueError:
+        port = 587
+    try:
+        server = smtplib.SMTP(host, port, timeout=20)
         server.starttls()
         server.login(from_email, password)
-        server.send_message(msg)
+        server.send_mail(from_email, [to_email], msg.as_string()) if False else server.send_message(msg)
         server.quit()
         return True
     except Exception as e:
-        print(f"Email error: {e}")
+        print("Email error: {}".format(e))
         return False
 
 # --------------------- User class ---------------------
@@ -804,14 +938,16 @@ def money_filter(amount):
 @app.context_processor
 def inject_settings():
     if current_user.is_authenticated:
+        settings = getattr(g, '_settings_row', None)
         conn = get_db()
         cur = conn.cursor()
-        cur.execute('SELECT * FROM settings WHERE user_id = %s', (current_user.id,))
-        settings = cur.fetchone()
+        if settings is None:
+            cur.execute('SELECT * FROM settings WHERE user_id = %s', (current_user.id,))
+            settings = cur.fetchone()
+            g._settings_row = settings
         cur.execute('SELECT COUNT(*) as unread_count FROM notifications WHERE user_id = %s AND is_read = 0', (current_user.id,))
         unread_row = cur.fetchone()
         cur.close()
-        conn.close()
         if settings:
             try:
                 g._money_fmt = (settings.get('currency_symbol') or '$', int(settings.get('number_decimals') if settings.get('number_decimals') is not None else 2))
@@ -832,6 +968,7 @@ def inject_settings():
             g.live_modules = live
             g.app_mode = (settings.get('app_mode') if settings else None) or 'full'
         pl_bar = getattr(g, 'pl_bar', None)
+        accent = _accent_palette((settings.get('accent_color') if settings else None) or '#2ecc71')
         return dict(
             user_settings=settings,
             unread_notifications=unread_row['unread_count'] if unread_row else 0,
@@ -846,6 +983,8 @@ def inject_settings():
             ui_device=(settings.get('ui_device') if settings else None) or 'auto',
             ui_devices=UI_DEVICES,
             pl_bar=pl_bar,
+            accent=accent,
+            theme_pref=(settings.get('theme') if settings else None) or 'dark',
         )
     return dict(
         user_settings=None, unread_notifications=0, money=_format_money,
@@ -853,6 +992,8 @@ def inject_settings():
         app_mode='full', live_modules=set(ALL_OPTIONAL),
         mode_on=lambda name: True, app_modes=APP_MODES, module_catalog=MODULE_CATALOG,
         ui_device='auto', ui_devices=UI_DEVICES, pl_bar=None,
+        accent=_accent_palette('#2ecc71'),
+        theme_pref='dark',
     )
 
 
@@ -1532,6 +1673,8 @@ def settings():
         email_notifications = 1 if request.form.get('email_notifications') == 'on' else 0
         notify_email = notify_email or current_user.email
         theme = request.form.get('theme', 'dark')
+        if theme not in ('dark', 'light', 'auto', 'matrix', 'inverted'):
+            theme = 'dark'
         font_family = request.form.get('font_family', 'Inter')
         font_size = request.form.get('font_size', 'medium')
         default_chart_type = request.form.get('default_chart_type', 'line')
@@ -2733,6 +2876,12 @@ def _process_due_recurring_items(user_id):
     """Auto-generate expenses/invoices for any recurring item that's come due. Safe to call often."""
     if not module_on('operations'):
         return
+
+    import time as _time
+    last = _recurring_ran_at.get(user_id, 0)
+    if _time.time() - last < 300:
+        return
+    _recurring_ran_at[user_id] = _time.time()
     conn = get_db()
     cur = conn.cursor()
     today = datetime.today().strftime('%Y-%m-%d')
@@ -3105,34 +3254,65 @@ def send_daily_summary():
     today = datetime.today().strftime('%Y-%m-%d')
     conn = get_db()
     cur = conn.cursor()
-    cur.execute('SELECT * FROM sales WHERE user_id = %s AND sale_date = %s', (current_user.id, today))
-    sales_today = cur.fetchall()
-    
-    if not sales_today:
-        flash('No sales recorded for today.', 'info')
-        return redirect(url_for('dashboard'))
-    
-    total_revenue = sum(sale['total_amount'] for sale in sales_today)
-    total_profit = sum(sale['profit'] for sale in sales_today)
-    
-    body = f"Daily Sales Summary for {today}\n\n"
-    body += f"Total Sales: {len(sales_today)} transactions\n"
-    body += f"Total Revenue: {_format_money(total_revenue)}\n"
-    body += f"Total Profit: {_format_money(total_profit)}\n\n"
-    body += "Details:\n"
-    for sale in sales_today:
-        body += f"- {sale['customer_name'] or 'Anonymous'}: {_format_money(sale['total_amount'])}\n"
-    
-    cur.execute('SELECT notify_email FROM settings WHERE user_id = %s', (current_user.id,))
-    settings = cur.fetchone()
-    to_email = settings['notify_email'] if settings else current_user.email
+    cur.execute(
+        """SELECT sales.customer_name, sales.quantity_sold, sales.total_amount, sales.profit,
+                  sales.payment_method, stock.product_name
+           FROM sales
+           LEFT JOIN stock ON sales.stock_id = stock.id
+           WHERE sales.user_id = %s AND sales.sale_date = %s
+           ORDER BY sales.id""",
+        (current_user.id, today),
+    )
+    sales_today = cur.fetchall() or []
+    cur.execute('SELECT notify_email, email_notifications, business_name FROM settings WHERE user_id = %s', (current_user.id,))
+    settings = cur.fetchone() or {}
     cur.close()
-    conn.close()
-    
-    subject = f"Daily Sales Summary - {today}"
-    send_email(to_email, subject, body)
-    flash(f'Daily sales summary sent to {to_email}', 'success')
+
+    if not sales_today:
+        flash('No sales recorded for today, so there is nothing to send.', 'danger')
+        return redirect(url_for('dashboard'))
+
+    total_revenue = sum(float(s['total_amount'] or 0) for s in sales_today)
+    total_profit = sum(float(s['profit'] or 0) for s in sales_today)
+    shop = (settings.get('business_name') or '').strip() or 'KAZE'
+    body = '{} — daily sales {}'.format(shop, today) + "\n\n"
+    body += 'Tickets: {}\n'.format(len(sales_today))
+    body += 'Revenue: {}\n'.format(_format_money(total_revenue))
+    body += 'Profit: {}\n\n'.format(_format_money(total_profit))
+    body += 'Lines:\n'
+    for sale in sales_today:
+        body += '- {} x{} · {} · {} ({})\n'.format(
+            sale.get('product_name') or 'Item',
+            sale.get('quantity_sold') or 0,
+            sale.get('customer_name') or 'Walk-in',
+            _format_money(sale.get('total_amount')),
+            sale.get('payment_method') or 'cash',
+        )
+    body += '\nSent from KAZE Traders Business Manager.'
+
+    to_email = (settings.get('notify_email') or current_user.email or '').strip()
+    subject = 'Daily sales summary — {}'.format(today)
+    sent = False
+    if to_email and '@' in to_email:
+        sent = send_email(to_email, subject, body)
+    try:
+        _notify(current_user.id, 'Daily sales {}: {} tickets, {}.'.format(
+            today, len(sales_today), _format_money(total_revenue)), 'sales')
+    except Exception:
+        pass
+    log_activity(current_user.id, current_user.username, 'Daily summary',
+                 '{} tickets {}'.format(len(sales_today), _format_money(total_revenue)))
+
+    if request.args.get('download') == '1':
+        return Response(body, mimetype='text/plain',
+                        headers={'Content-Disposition': 'attachment; filename=kaze-daily-{}.txt'.format(today)})
+
+    if sent:
+        flash('Daily sales summary emailed to {}.'.format(to_email), 'success')
+    else:
+        flash('Could not send email. Set Settings → Notify email and MAIL_USERNAME / MAIL_PASSWORD on the server. A copy is in Notifications, or download the file.', 'danger')
     return redirect(url_for('dashboard'))
+
 
 # ======================== Activity Log ========================
 
@@ -5267,6 +5447,30 @@ def stats_xlsx():
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     )
 
+
+
+
+@app.route('/theme', methods=['POST'])
+def set_display_theme():
+    """Save dark / light / auto (or special themes) and remember it on this browser."""
+    name = (request.form.get('theme') or '').strip()
+    if request.is_json:
+        name = (request.get_json(silent=True) or {}).get('theme') or name
+    if name not in ('dark', 'light', 'auto', 'matrix', 'inverted'):
+        return {'ok': False, 'error': 'Unknown theme'}, 400
+    if current_user.is_authenticated:
+        try:
+            conn = get_db()
+            cur = conn.cursor()
+            cur.execute('UPDATE settings SET theme=%s WHERE user_id=%s', (name, current_user.id))
+            conn.commit()
+            cur.close()
+            conn.close()
+        except Exception:
+            pass
+    resp = app.response_class(response='{"ok": true, "theme": "%s"}' % name, mimetype='application/json')
+    resp.set_cookie('kaze_theme', name, max_age=60 * 60 * 24 * 400, samesite='Lax')
+    return resp
 
 
 if __name__ == '__main__':

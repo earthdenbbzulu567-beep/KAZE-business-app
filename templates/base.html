@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="theme-{{ (user_settings.theme if user_settings else 'dark') }} size-{{ (user_settings.font_size if user_settings else 'medium') }} density-{{ (user_settings.density if user_settings and user_settings.density else 'comfortable') }} device-{{ ui_device or 'auto' }}">
+<html lang="en" data-theme-pref="{{ theme_pref if theme_pref is defined else (user_settings.theme if user_settings else 'dark') }}" class="theme-{{ theme_pref if theme_pref is defined else (user_settings.theme if user_settings else 'dark') }} size-{{ (user_settings.font_size if user_settings else 'medium') }} density-{{ (user_settings.density if user_settings and user_settings.density else 'comfortable') }} device-{{ ui_device or 'auto' }}">
 <head>
     <title>KAZE Traders Business Manager</title>
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32.png') }}">
@@ -23,6 +23,30 @@
             return sign + s + Math.abs(x).toLocaleString('en-US', {minimumFractionDigits: d, maximumFractionDigits: d});
         };
     </script>
+
+    <script>
+    (function () {
+        var root = document.documentElement;
+        var stored = null;
+        try { stored = localStorage.getItem('kaze-theme'); } catch (e) {}
+        var pref = stored || root.getAttribute('data-theme-pref') || 'dark';
+        function resolve(p) {
+            if (p === 'auto') {
+                return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+            }
+            return p || 'dark';
+        }
+        var resolved = resolve(pref);
+        root.setAttribute('data-theme-pref', pref);
+        ['dark','light','auto','matrix','inverted'].forEach(function (n) {
+            root.classList.remove('theme-' + n);
+        });
+        root.classList.add('theme-' + resolved);
+        root.style.colorScheme = (resolved === 'light') ? 'light' : 'dark';
+        window.KAZE_THEME = { pref: pref, resolved: resolved };
+    })();
+    </script>
+
 
     <style>
         :root {
@@ -51,6 +75,8 @@
             --display: 'Outfit', 'Plus Jakarta Sans', sans-serif;
             --mono: 'JetBrains Mono', ui-monospace, monospace;
             --icon: #8ee0ad;
+            --accent-wash: rgba(46, 204, 113, 0.12);
+            --accent-grid: rgba(46, 204, 113, 0.06);
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -74,10 +100,10 @@
             pointer-events: none;
             z-index: 0;
             background-image:
-                radial-gradient(circle at 12% 8%, rgba(46, 204, 113, 0.07), transparent 32%),
-                radial-gradient(circle at 88% 92%, rgba(46, 204, 113, 0.05), transparent 28%),
-                linear-gradient(rgba(46, 204, 113, 0.035) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(46, 204, 113, 0.035) 1px, transparent 1px);
+                radial-gradient(circle at 12% 8%, var(--accent-wash), transparent 34%),
+                radial-gradient(circle at 88% 92%, var(--red-glow), transparent 30%),
+                linear-gradient(var(--accent-grid) 1px, transparent 1px),
+                linear-gradient(90deg, var(--accent-grid) 1px, transparent 1px);
             background-size: auto, auto, 42px 42px, 42px 42px;
             animation: gridDrift 40s linear infinite;
         }
@@ -100,8 +126,10 @@
             left: 0;
             width: var(--sidebar-width);
             height: 100vh;
-            background: var(--bg2);
-            border-right: 1px solid var(--border);
+            background:
+                linear-gradient(180deg, var(--accent-wash), transparent 28%),
+                var(--bg2);
+            border-right: 1px solid var(--red-dim);
             display: flex;
             flex-direction: column;
             overflow-y: auto;
@@ -119,16 +147,32 @@
             align-items: center;
             gap: 10px;
             padding: 1.2rem 1.5rem;
-            border-bottom: 1px solid var(--border);
+            border-bottom: 1px solid var(--red-dim);
             margin-bottom: 0.5rem;
+            background: linear-gradient(90deg, var(--red-glow), transparent 80%);
+        }
+        .brand-mark {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--red-bright);
+            box-shadow: 0 0 0 2px var(--red-glow), 0 8px 18px var(--red-glow);
+            flex-shrink: 0;
         }
         .sidebar-brand img {
-            width: 34px;
-            height: 34px;
+            width: 30px;
+            height: 30px;
             border-radius: 7px;
+            display: block;
+            background: var(--red-dim);
+            filter: drop-shadow(0 0 6px var(--red-glow));
             transition: transform 0.3s var(--ease-spring);
         }
-        .sidebar-brand img:hover { transform: scale(1.05) rotate(-3deg); }
+        .sidebar-brand:hover .brand-mark { transform: scale(1.06) rotate(-4deg); }
+        .sidebar-brand .brand-mark { transition: transform 0.3s var(--ease-spring); }
         .sidebar-brand span {
             font-size: 1.1rem;
             font-weight: 700;
@@ -146,7 +190,7 @@
             font-size: 0.65rem;
             text-transform: uppercase;
             letter-spacing: 1.5px;
-            color: var(--text3);
+            color: var(--red-bright);
             padding: 0.5rem 0.75rem 0.25rem;
             font-weight: 600;
         }
@@ -182,11 +226,23 @@
             min-width: 18px;
             stroke: currentColor;
             color: var(--icon);
-            fill: none;
+            fill: none !important;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             transition: transform 0.25s var(--ease-spring), color 0.2s ease;
+        }
+        /* Outline-only icons everywhere — no fill colour */
+        svg.lucide, svg.icon, i[data-lucide], .feature-icon svg, .mobile-dock svg {
+            fill: none !important;
+            stroke: currentColor;
+            stroke-width: 1.75;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+        svg.lucide *, svg.icon *, .feature-icon svg * {
+            fill: none !important;
+            stroke: inherit;
         }
         .sidebar-nav a { color: var(--text2); }
         .sidebar-nav a .icon { color: var(--icon); }
@@ -246,7 +302,8 @@
 
         .sidebar-footer {
             padding: 0.75rem 1.5rem;
-            border-top: 1px solid var(--border);
+            border-top: 1px solid var(--red-dim);
+            background: linear-gradient(0deg, var(--red-glow), transparent);
             font-size: 0.75rem;
             color: var(--text3);
             display: flex;
@@ -279,18 +336,23 @@
 
         /* ── Top bar ── */
         .topbar {
-            background: var(--bg2);
-            border-bottom: 1px solid var(--border);
-            padding: 0.5rem 2rem;
+            padding: 0.5rem 1.25rem 0.5rem 1.5rem;
             display: flex;
             align-items: center;
-            gap: 1rem;
+            justify-content: flex-end;
+            gap: 0.75rem;
             height: 60px;
             position: sticky;
             top: 0;
             z-index: 50;
-            backdrop-filter: blur(4px);
-            background: rgba(17,17,17,0.85);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--red-dim);
+            background:
+                linear-gradient(90deg, var(--accent-wash), transparent 45%),
+                color-mix(in srgb, var(--bg2) 82%, var(--red-bright) 18%);
+        }
+        @supports not (background: color-mix(in srgb, red 10%, blue)) {
+            .topbar { background: var(--bg2); }
         }
 
         /* Hamburger */
@@ -302,16 +364,17 @@
             font-size: 1.5rem;
             cursor: pointer;
             padding: 0 0.5rem;
+            margin-right: auto;
         }
         .hamburger:focus { outline: none; }
 
         /* Search form */
         .search-form {
-            flex: 1;
+            flex: 0 1 280px;
             display: flex;
-            justify-content: center;
-            max-width: 400px;
-            margin: 0 1rem;
+            justify-content: flex-end;
+            max-width: 280px;
+            margin: 0 0 0 auto;
             position: relative;
         }
         .search-form input {
@@ -351,6 +414,29 @@
             box-shadow: none;
             transform: translateY(-50%) scale(1.1);
         }
+
+        
+        .theme-toggle {
+            background: var(--red-glow);
+            border: 1px solid var(--red-dim);
+            color: var(--text);
+            width: 36px; height: 36px;
+            border-radius: 999px;
+            cursor: pointer;
+            font-size: 1rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            clip-path: none;
+            box-shadow: none;
+        }
+        .theme-toggle:hover {
+            transform: scale(1.08);
+            border-color: var(--red-bright);
+            background: var(--accent-wash);
+        }
+        html.theme-light .theme-toggle { color: #111; }
 
         .topbar .right-group {
             display: flex;
@@ -1198,20 +1284,53 @@
             {% elif user_settings.font_size == 'large' %} --base-font-size: 18px;
             {% elif user_settings.font_size == 'xlarge' %} --base-font-size: 20px;
             {% else %} --base-font-size: 16px; {% endif %}
-            {% if user_settings.accent_color %}
-            --red-bright: {{ user_settings.accent_color }};
-            --red: {{ user_settings.accent_color }};
-            --icon: {{ user_settings.accent_color }};
-            --green: {{ user_settings.accent_color }};
+            {% if accent %}
+            --red-bright: {{ accent.hex }};
+            --red: {{ accent.dark }};
+            --red-dim: {{ accent.dim }};
+            --red-glow: {{ accent.glow }};
+            --icon: {{ accent.hex }};
+            --green: {{ accent.hex }};
+            --accent-wash: {{ accent.wash }};
+            --accent-grid: {{ accent.grid }};
+            {% if user_settings and user_settings.theme == 'light' %}
+            --bg: {{ accent.light_bg }};
+            {% elif not user_settings or user_settings.theme != 'matrix' %}
+            --bg: {{ accent.bg }};
+            --bg2: {{ accent.bg2 }};
+            --bg3: {{ accent.surface }};
+            --surface: {{ accent.surface }};
+            {% endif %}
             {% endif %}
             {% if user_settings.rounded_ui == 0 %} --radius: 2px; {% else %} --radius: 10px; {% endif %}
-            {% if user_settings.theme == 'light' %}
-            --bg: #f5f5f5; --bg2: #ffffff; --surface: #ffffff; --surface2: #f0f0f0; --border: #ddd; --text: #111; --text2: #333; --text3: #666; --icon: {{ user_settings.accent_color or '#1f8a3d' }};
-            {% elif user_settings.theme == 'matrix' %}
-            --bg: #0a0f0a; --bg2: #0f1a0f; --surface: #0f1a0f; --surface2: #1a2a1a; --border: #2a4a2a; --text: #00ff41; --text2: #00cc33; --text3: #009922; --red-bright: #00ff41; --red: #00cc33; --icon: #00ff41;
-            {% elif user_settings.theme == 'inverted' %}
-            --bg: #f0f0f0; --bg2: #111; --surface: #1a1a1a; --surface2: #222; --border: #333; --text: #f5f5f5; --text2: #ccc; --icon: {{ user_settings.accent_color or '#2ecc71' }};
-            {% endif %}
+        }
+        html.theme-dark, html.theme-auto { color-scheme: dark; }
+        html.theme-light {
+            color-scheme: light;
+            --bg: {{ accent.light_bg if accent else '#f4f7f5' }};
+            --bg2: #ffffff;
+            --bg3: #eef2ef;
+            --surface: #ffffff;
+            --surface2: #f3f7f4;
+            --border: #d5ddd7;
+            --border2: #c4cdc6;
+            --text: #111111;
+            --text2: #3a3a3a;
+            --text3: #667066;
+        }
+        html.theme-matrix {
+            color-scheme: dark;
+            --bg: #0a0f0a; --bg2: #0f1a0f; --bg3: #122112;
+            --surface: #0f1a0f; --surface2: #1a2a1a;
+            --border: #2a4a2a; --border2: #3a6a3a;
+            --text: #00ff41; --text2: #00cc33; --text3: #009922;
+            --red-bright: #00ff41; --red: #00cc33; --icon: #00ff41;
+            --accent-wash: rgba(0,255,65,0.12); --accent-grid: rgba(0,255,65,0.08);
+        }
+        html.theme-inverted {
+            color-scheme: dark;
+            --bg: #f0f0f0; --bg2: #111; --surface: #1a1a1a; --surface2: #222;
+            --border: #333; --text: #f5f5f5; --text2: #ccc; --text3: #888;
         }
         html { font-size: var(--base-font-size) !important; }
         body { font-family: var(--font); font-size: 1rem; }
@@ -1287,7 +1406,7 @@
             document.querySelectorAll('.sidebar-nav a').forEach(link => {
                 link.addEventListener('click', createRipple);
             });
-            if (window.lucide) lucide.createIcons({ attrs: { stroke: 'currentColor', width: 18, height: 18 } });
+            if (window.lucide) lucide.createIcons({ attrs: { fill: 'none', stroke: 'currentColor', 'stroke-width': '1.75', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', width: 18, height: 18 } });
         });
     </script>
 
@@ -1386,7 +1505,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     <!-- ─── Sidebar ─── -->
     <div class="sidebar" id="sidebar">
         <div class="sidebar-brand">
-            <img src="{{ url_for('static', filename='logo_icon.png') }}" alt="KAZE">
+            <span class="brand-mark"><img src="{{ url_for('static', filename='logo_icon.png') }}" alt="KAZE"></span>
             <span>KAZE</span>
         </div>
 
@@ -1541,7 +1660,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         </nav>
 
         <div class="sidebar-footer">
-            <span>KAZE v2.7.1 · {{ app_modes[app_mode].label if app_mode in app_modes else 'Full suite' }}</span>
+            <span>KAZE v2.7.8 · {{ app_modes[app_mode].label if app_mode in app_modes else 'Full suite' }}</span>
             <span class="version">⚡</span>
         </div>
     </div>
@@ -1561,6 +1680,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
             <!-- Right group: notifications + user menu -->
             <div class="right-group">
+                <button type="button" class="theme-toggle" id="themeToggle" title="Switch dark / light mode" aria-label="Switch dark or light mode">🌙</button>
                 <span class="live-clock" id="liveClock" title="Local time"></span>
                 <a href="{{ url_for('notifications') }}" class="bell-link" title="Notifications">
                     🔔{% if unread_notifications and unread_notifications > 0 %}<span class="bell-badge">{{ unread_notifications }}</span>{% endif %}
@@ -1776,6 +1896,58 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     const sb = document.getElementById('sidebar');
     if (sb) sb.classList.add('collapsed');
     {% endif %}
+})();
+</script>
+
+
+<script>
+(function () {
+    const root = document.documentElement;
+    const btn = document.getElementById('themeToggle');
+    function currentPref() {
+        return root.getAttribute('data-theme-pref') || 'dark';
+    }
+    function resolve(pref) {
+        if (pref === 'auto') {
+            return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        }
+        return pref;
+    }
+    function paint(pref) {
+        const resolved = resolve(pref);
+        root.setAttribute('data-theme-pref', pref);
+        ['dark','light','auto','matrix','inverted'].forEach(n => root.classList.remove('theme-' + n));
+        root.classList.add('theme-' + resolved);
+        root.style.colorScheme = resolved === 'light' ? 'light' : 'dark';
+        if (btn) btn.textContent = resolved === 'light' ? '☀️' : '🌙';
+        if (btn) btn.title = pref === 'auto'
+            ? 'Theme: auto (' + resolved + '). Click for light/dark.'
+            : 'Theme: ' + resolved + '. Click to switch.';
+        try { localStorage.setItem('kaze-theme', pref); } catch (e) {}
+    }
+    function save(pref) {
+        paint(pref);
+        const body = new URLSearchParams({ theme: pref });
+        fetch('{{ url_for("set_display_theme") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body.toString()
+        }).catch(function () {});
+    }
+    if (btn) {
+        btn.addEventListener('click', function () {
+            const pref = currentPref();
+            if (pref === 'light') save('dark');
+            else if (pref === 'dark' || pref === 'auto') save(resolve(pref) === 'dark' ? 'light' : 'dark');
+            else save(resolve(pref) === 'light' ? 'dark' : 'light');
+        });
+    }
+    paint(currentPref());
+    if (window.matchMedia) {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
+            if (currentPref() === 'auto') paint('auto');
+        });
+    }
 })();
 </script>
 

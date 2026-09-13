@@ -1,13 +1,74 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>{{ current_user.username }}'s Dashboard</h1>
-<div class="widget" style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;align-items:center;">
-    <div>
-        <h3 style="margin:0 0 4px;">Mode: {{ app_modes[app_mode].label if app_mode in app_modes else app_mode }}</h3>
-        <p style="margin:0;font-size:0.88rem;">{{ app_modes[app_mode].hint if app_mode in app_modes else '' }} Live: {{ (snap.ran or [])|join(', ') or 'none' }}. Dormant: {{ (snap.skipped or [])|join(', ') or 'none' }}.</p>
+<section class="dash-hero">
+    <div class="dash-hero-mark">
+        <img src="{{ url_for('static', filename='logo_icon.png') }}" alt="KAZE">
     </div>
-    <a href="{{ url_for('settings') }}#modes" class="btn-secondary" style="text-decoration:none;padding:10px 16px;">Change mode</a>
-</div>
+    <div class="dash-hero-copy">
+        <p class="dash-kicker">{{ user_settings.business_name if user_settings and user_settings.business_name else 'KAZE Traders' }}</p>
+        <h1>{{ current_user.username }}'s Dashboard</h1>
+        <p class="dash-hero-mode">{{ app_modes[app_mode].label if app_mode in app_modes else app_mode }} · live {{ (snap.ran or [])|join(', ') or 'none' }}</p>
+    </div>
+    <a href="{{ url_for('settings') }}#modes" class="btn-secondary dash-hero-btn">Change colour / mode</a>
+</section>
+<p class="dash-hero-hint">{{ app_modes[app_mode].hint if app_mode in app_modes else '' }} Dormant: {{ (snap.skipped or [])|join(', ') or 'none' }}.</p>
+<style>
+.dash-hero {
+    display: flex;
+    align-items: center;
+    gap: 1.1rem;
+    flex-wrap: wrap;
+    padding: 1.25rem 1.35rem;
+    margin: 0 0 1.1rem;
+    border-radius: 18px;
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--red-dim);
+    background:
+        radial-gradient(circle at 8% 20%, var(--accent-wash), transparent 42%),
+        radial-gradient(circle at 92% 80%, var(--red-glow), transparent 46%),
+        linear-gradient(135deg, var(--bg2), var(--surface));
+    box-shadow: 0 16px 40px rgba(0,0,0,0.28), inset 0 0 0 1px var(--red-glow);
+}
+.dash-hero::after {
+    content: '';
+    position: absolute;
+    right: -40px; top: -40px;
+    width: 160px; height: 160px;
+    border-radius: 50%;
+    background: var(--red-glow);
+    pointer-events: none;
+}
+.dash-hero-mark {
+    width: 76px; height: 76px;
+    border-radius: 20px;
+    background: var(--red-bright);
+    display: grid; place-items: center;
+    box-shadow: 0 0 0 4px var(--red-glow), 0 12px 28px var(--red-glow);
+    position: relative; z-index: 1;
+    flex-shrink: 0;
+}
+.dash-hero-mark img {
+    width: 56px; height: 56px;
+    border-radius: 14px;
+    display: block;
+    background: var(--red-dim);
+}
+.dash-hero-copy { flex: 1; min-width: 200px; position: relative; z-index: 1; }
+.dash-kicker {
+    margin: 0 0 4px;
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-weight: 800;
+    color: var(--red-bright);
+}
+.dash-hero h1 { margin: 0 0 6px; }
+.dash-hero-mode { margin: 0; font-size: 0.88rem; color: var(--text2); }
+.dash-hero-btn { position: relative; z-index: 1; text-decoration: none; padding: 10px 16px; }
+.dash-hero-hint { margin: -0.4rem 0 1.1rem; font-size: 0.84rem; color: var(--text3); }
+.page-content .summary-card { border-top: 2px solid var(--red-bright); }
+</style>
 
 {% if not tutorial_completed %}
 <div id="onboarding-banner" class="widget" style="border:2px solid var(--red-bright, #2ecc71); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
@@ -69,6 +130,7 @@ function dismissOnboarding() {
 <div style="margin-bottom: 1rem; display:flex; justify-content:flex-end; gap:0.75rem; flex-wrap:wrap;">
     {% if mode_on('reports') %}
     <a href="{{ url_for('send_daily_summary') }}" class="btn-secondary" style="background: #27ae60; color: rgb(0, 0, 0); padding: 10px 20px; border-radius: 8px; text-decoration: none;">Email today's sales</a>
+    <a href="{{ url_for('send_daily_summary', download=1) }}" class="btn-secondary" style="text-decoration:none;padding:10px 16px;">Download today's sales</a>
     {% endif %}
     <button type="button" class="btn-secondary popup-trigger-btn" onclick="openModal('dashboardActionsModal')">Export / Import books</button>
 </div>

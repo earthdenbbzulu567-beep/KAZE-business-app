@@ -238,7 +238,8 @@
     <div class="form-group">
         <label>Theme</label>
         <select name="theme" id="setTheme">
-            <option value="dark" {% if settings.theme == 'dark' %}selected{% endif %}>Dark (default)</option>
+            <option value="auto" {% if settings.theme == 'auto' %}selected{% endif %}>Auto (follow device)</option>
+            <option value="dark" {% if settings.theme == 'dark' or settings.theme not in ['auto','light','matrix','inverted'] %}selected{% endif %}>Dark</option>
             <option value="light" {% if settings.theme == 'light' %}selected{% endif %}>Light</option>
             <option value="matrix" {% if settings.theme == 'matrix' %}selected{% endif %}>Matrix Green</option>
             <option value="inverted" {% if settings.theme == 'inverted' %}selected{% endif %}>Inverted</option>
@@ -365,7 +366,17 @@
         }
         if (accent && accent.value) {
             document.documentElement.style.setProperty('--red-bright', accent.value);
+            document.documentElement.style.setProperty('--red', accent.value);
             document.documentElement.style.setProperty('--icon', accent.value);
+            document.documentElement.style.setProperty('--green', accent.value);
+            const hex = accent.value.replace('#','');
+            const n = parseInt(hex.length===3 ? hex.split('').map(c=>c+c).join('') : hex, 16);
+            if (!isNaN(n)) {
+                const r = (n>>16)&255, g=(n>>8)&255, b=n&255;
+                document.documentElement.style.setProperty('--red-glow', 'rgba('+r+','+g+','+b+',0.20)');
+                document.documentElement.style.setProperty('--accent-wash', 'rgba('+r+','+g+','+b+',0.12)');
+                document.documentElement.style.setProperty('--accent-grid', 'rgba('+r+','+g+','+b+',0.07)');
+            }
         }
         if (moneyEl) {
             moneyEl.textContent = formatSample(symbolEl && symbolEl.value, decEl && decEl.value);
@@ -375,6 +386,18 @@
             window.KAZE.decimals = Number((decEl && decEl.value) || window.KAZE.decimals);
         }
     }
+    const themeSel = document.getElementById('setTheme');
+    if (themeSel) themeSel.addEventListener('change', function () {
+        const pref = themeSel.value;
+        const root = document.documentElement;
+        const resolved = pref === 'auto'
+            ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+            : pref;
+        ['dark','light','auto','matrix','inverted'].forEach(n => root.classList.remove('theme-' + n));
+        root.classList.add('theme-' + resolved);
+        root.setAttribute('data-theme-pref', pref);
+        try { localStorage.setItem('kaze-theme', pref); } catch (e) {}
+    });
     [fam, size, accent, symbolEl, decEl].forEach(el => el && el.addEventListener('change', applyPreview));
     if (symbolEl) symbolEl.addEventListener('input', applyPreview);
     applyPreview();
