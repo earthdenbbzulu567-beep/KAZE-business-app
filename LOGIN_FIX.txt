@@ -1,0 +1,1 @@
+Login/signup 500 fix: do not set attributes on psycopg2 connections (Python 3.14). Wrapper used instead.

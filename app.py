@@ -91,49 +91,77 @@ def _get_pool():
     return _pool
 
 
+class _ReqConn:
+    """Wrap a psycopg2 connection. close() is a no-op so routes can call it safely."""
+    def __init__(self, raw):
+        object.__setattr__(self, '_raw', raw)
+
+    def cursor(self, *args, **kwargs):
+        return self._raw.cursor(*args, **kwargs)
+
+    def commit(self):
+        return self._raw.commit()
+
+    def rollback(self):
+        return self._raw.rollback()
+
+    def close(self):
+        return None
+
+    @property
+    def closed(self):
+        try:
+            return self._raw.closed
+        except Exception:
+            return 1
+
+    def __getattr__(self, name):
+        return getattr(self._raw, name)
+
+
 def get_db():
     # Reuse one pooled connection for the whole request.
     from flask import has_app_context
     if has_app_context():
-        conn = getattr(g, '_kaze_conn', None)
-        if conn is not None and getattr(conn, 'closed', 0) == 0:
-            return conn
+        wrap = getattr(g, '_kaze_conn', None)
+        if wrap is not None and getattr(wrap, 'closed', 1) == 0:
+            return wrap
         pool = _get_pool()
         if pool:
-            conn = pool.getconn()
+            raw = pool.getconn()
         else:
-            conn = psycopg2.connect(_db_url(), cursor_factory=RealDictCursor)
-        if not getattr(conn, '_kaze_soft_close', False):
-            conn._kaze_real_close = conn.close
-            conn.close = lambda: None
-            conn._kaze_soft_close = True
-        g._kaze_conn = conn
-        return conn
+            raw = psycopg2.connect(_db_url(), cursor_factory=RealDictCursor)
+        wrap = _ReqConn(raw)
+        g._kaze_conn = wrap
+        g._kaze_raw = raw
+        return wrap
     return psycopg2.connect(_db_url(), cursor_factory=RealDictCursor)
 
 
 @app.teardown_appcontext
 def _return_db(_exc):
-    conn = getattr(g, '_kaze_conn', None)
-    if conn is None:
-        return
+    wrap = getattr(g, '_kaze_conn', None)
+    raw = getattr(g, '_kaze_raw', None)
     g._kaze_conn = None
+    g._kaze_raw = None
+    if raw is None and wrap is not None:
+        raw = getattr(wrap, '_raw', wrap)
+    if raw is None:
+        return
     try:
         if _exc:
-            conn.rollback()
+            raw.rollback()
     except Exception:
         pass
     pool = _get_pool()
     if pool:
         try:
-            pool.putconn(conn)
+            pool.putconn(raw)
             return
         except Exception:
             pass
     try:
-        closer = getattr(conn, '_kaze_real_close', None)
-        if closer:
-            closer()
+        raw.close()
     except Exception:
         pass
 
