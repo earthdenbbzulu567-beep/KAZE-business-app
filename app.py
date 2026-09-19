@@ -373,9 +373,6 @@ def init_db():
     ''')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_stripe_user ON stripe_payments (user_id)')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_stripe_checkout ON stripe_payments (checkout_id)')
-    cur.execute("ALTER TABLE service_sessions ADD COLUMN IF NOT EXISTS stripe_checkout_id TEXT DEFAULT ''")
-    cur.execute("ALTER TABLE bookkeeping_docs ADD COLUMN IF NOT EXISTS stripe_checkout_id TEXT DEFAULT ''")
-    cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS stripe_checkout_id TEXT DEFAULT ''")
 
     # User activity log (for tracking logins)
     cur.execute('''
@@ -597,6 +594,7 @@ def init_db():
             payment_method TEXT DEFAULT 'cash',
             notes TEXT DEFAULT '',
             income_id INTEGER,
+            stripe_checkout_id TEXT DEFAULT '',
             created_date TEXT NOT NULL
         )
     ''')
@@ -613,6 +611,10 @@ def init_db():
     cur.execute('CREATE INDEX IF NOT EXISTS idx_journal_user_book ON journal_entries (user_id, book)')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_bookdocs_user ON bookkeeping_docs (user_id)')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_settings_user ON settings (user_id)')
+    cur.execute("ALTER TABLE service_sessions ADD COLUMN IF NOT EXISTS stripe_checkout_id TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE bookkeeping_docs ADD COLUMN IF NOT EXISTS stripe_checkout_id TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS stripe_checkout_id TEXT DEFAULT ''")
+
     conn.commit()
     cur.close()
     conn.close()

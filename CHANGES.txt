@@ -1,3 +1,5 @@
+v2.9.4 — Fix Render boot: create service_sessions before Stripe ALTER.
+
 v2.9.3 — Bulk actions: integer IDs, FK-safe deletes, export without fake confirm,
 stock/sales/customers/services/sessions/tasks bulk, nested-form fix.
 Single stock/customer delete no longer 500s on linked rows.
