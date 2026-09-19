@@ -1,3 +1,18 @@
+v2.9.3 — Bulk actions: integer IDs, FK-safe deletes, export without fake confirm,
+stock/sales/customers/services/sessions/tasks bulk, nested-form fix.
+Single stock/customer delete no longer 500s on linked rows.
+
+v2.9.2 — Plans: New user, Businessman, CEO. Module + desk limits.
+Stripe one-time upgrade, Settings override, plan badge in the sidebar.
+Existing accounts stay CEO. New signups start as New user.
+
+v2.9.1 — Stripe Checkout for service sessions, invoices, sales, and custom amounts.
+Keys from Settings or env. Webhook /webhooks/stripe. Card data stays at Stripe.
+
+v2.9.0 — Services module: catalog + session bookings for teaching, coaching,
+repairs and similar work. Done sessions post income. Wired into search,
+calendar, reminders, dashboard, backup, clear-data, modes, and multi-add.
+
 KAZE v2.7.1 — review, fixes, two shop-floor features
 
 Fixes

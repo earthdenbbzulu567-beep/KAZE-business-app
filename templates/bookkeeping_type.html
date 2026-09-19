@@ -99,6 +99,9 @@
         <a href="{{ url_for('bookkeeping_pdf', id=item.id) }}">PDF</a>
         <a href="{{ url_for('duplicate_book_doc', id=item.id) }}">Copy</a>
         <a href="{{ url_for('mark_book_doc_paid', id=item.id) }}">Paid</a>
+        {% if stripe_ready and item.status != 'paid' and (item.amount or 0) > 0 %}
+        <a href="{{ url_for('pay_book_doc', id=item.id) }}">Pay with card</a>
+        {% endif %}
         <a href="{{ url_for('delete_book_doc', id=item.id) }}" class="delete-btn" onclick="return confirm('Delete this document?')">Delete</a>
     </td>
 </tr>

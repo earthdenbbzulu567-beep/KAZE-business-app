@@ -220,6 +220,36 @@
         </select>
     </div>
 
+    
+    
+    <h2>Plan / tier</h2>
+    <p style="color:var(--text2);max-width:40rem;">New user, Businessman, or CEO. This limits modules and desk size. Staff cannot change it. You can also manage this on the Plans page.</p>
+    <div class="form-group">
+        <label>Current plan</label>
+        <select name="plan_tier">
+            <option value="starter" {% if settings.plan_tier in ['starter','new','new_user'] %}selected{% endif %}>New user</option>
+            <option value="businessman" {% if settings.plan_tier in ['businessman','business','pro'] %}selected{% endif %}>Businessman</option>
+            <option value="ceo" {% if not settings.plan_tier or settings.plan_tier in ['ceo','enterprise','full'] %}selected{% endif %}>CEO</option>
+        </select>
+    </div>
+    <p style="font-size:0.85rem;"><a href="{{ url_for('plans') }}">Compare plans</a></p>
+
+    <h2>Stripe payments</h2>
+    <p style="color:var(--text2);max-width:40rem;margin-bottom:1rem;">Used for service sessions, invoices, sales, and custom payment links. Prefer test keys until you are ready to take live money. Environment variables override these fields if set on the host.</p>
+    <div class="form-group">
+        <label>Publishable key</label>
+        <input type="text" name="stripe_publishable_key" value="{{ settings.stripe_publishable_key or '' }}" placeholder="pk_test_... or pk_live_..." autocomplete="off">
+    </div>
+    <div class="form-group">
+        <label>Secret key</label>
+        <input type="password" name="stripe_secret_key" value="{% if settings.stripe_secret_key %}••••••••{% endif %}" placeholder="sk_test_... leave blank to keep current" autocomplete="new-password">
+    </div>
+    <div class="form-group">
+        <label>Webhook secret (optional)</label>
+        <input type="password" name="stripe_webhook_secret" value="{% if settings.stripe_webhook_secret %}••••••••{% endif %}" placeholder="whsec_... leave blank to keep current" autocomplete="new-password">
+    </div>
+    <p style="font-size:0.85rem;color:var(--text3);">Webhook URL: <code>/webhooks/stripe</code> · event <code>checkout.session.completed</code></p>
+
     <h2>Notifications</h2>
     <div class="form-group">
         <label>Low stock threshold (units)</label>

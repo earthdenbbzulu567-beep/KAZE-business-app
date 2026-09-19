@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Payments</h1>
+        <p>Collect card payments with Stripe Checkout. Card numbers never pass through KAZE.</p>
+    </div>
+</div>
+
+<div class="stat-grid">
+    <div class="stat-chip"><span>Stripe</span><strong>{% if stripe_ready %}Ready{% else %}Not set{% endif %}</strong></div>
+    <div class="stat-chip"><span>Records</span><strong>{{ rows|length }}</strong></div>
+</div>
+
+{% if not stripe_ready %}
+<div class="widget">
+    <h2>Set up Stripe</h2>
+    <ol style="color:var(--text2);line-height:1.6;max-width:40rem;">
+        <li>Create a Stripe account and open Developers → API keys.</li>
+        <li>Paste the publishable key and secret key in Settings (or set STRIPE_SECRET_KEY and STRIPE_PUBLISHABLE_KEY on the host).</li>
+        <li>Optional: add a webhook to <code>/webhooks/stripe</code> for checkout.session.completed.</li>
+        <li>Use test keys first. Test card: 4242 4242 4242 4242, any future date, any CVC.</li>
+    </ol>
+    <p><a href="{{ url_for('settings') }}">Open Settings</a></p>
+</div>
+{% else %}
+<div class="widget">
+    <h2>Take a custom payment</h2>
+    <form method="POST" action="{{ url_for('pay_custom') }}">
+        <div class="form-group"><label>Title</label><input type="text" name="title" placeholder="Coaching package"></div>
+        <div class="form-group"><label>Amount</label><input type="number" name="amount" step="0.01" min="0.01" required></div>
+        <button type="submit">Open Stripe Checkout</button>
+    </form>
+</div>
+{% endif %}
+
+<h2>Payment log</h2>
+<div class="table-wrapper">
+<table>
+<thead><tr><th>When</th><th>What</th><th>Amount</th><th>Status</th><th>Ref</th></tr></thead>
+<tbody>
+{% for r in rows %}
+<tr>
+    <td>{{ r.created_date }}{% if r.paid_date %} · paid {{ r.paid_date }}{% endif %}</td>
+    <td>{{ r.title or r.kind }} <span style="color:var(--text3);font-size:0.8rem;">({{ r.kind }}{% if r.record_id %} #{{ r.record_id }}{% endif %})</span></td>
+    <td>{{ money(r.amount) }} {{ r.currency }}</td>
+    <td>
+        {% if r.status == 'paid' %}<span class="status-pill status-ok">Paid</span>
+        {% else %}<span class="status-pill status-warn">{{ r.status }}</span>{% endif %}
+    </td>
+    <td style="font-size:0.78rem;color:var(--text3);">{{ (r.checkout_id or '')[:18] }}</td>
+</tr>
+{% else %}
+<tr><td colspan="5">No Stripe payments yet.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endblock %}

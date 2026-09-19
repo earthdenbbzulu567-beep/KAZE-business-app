@@ -102,7 +102,7 @@
 
 
 <!-- Bulk Action Form -->
-<form method="POST" action="{{ url_for('stock_bulk') }}" onsubmit="return confirm('Are you sure?')">
+<form method="POST" action="{{ url_for('stock_bulk') }}" onsubmit="return kazeConfirmBulk(this)">
     <div style="display:flex; gap:0.5rem; margin-bottom:0.5rem; align-items:center;">
         <select name="action">
             <option value="">Bulk action</option>
@@ -118,7 +118,7 @@
         <table>
             <thead>
                 <tr>
-                    <th><input type="checkbox" onclick="toggleAll(this)"></th>
+                    <th><input type="checkbox" onclick="kazeToggleAll(this)"></th>
                     <th>Product</th>
                     <th>SKU</th>
                     <th>Category</th>

@@ -1281,7 +1281,21 @@
             flex-wrap: nowrap;
             padding: 0.5rem 2rem;
         }
-    </style>
+    
+.plan-badge {
+    display: inline-flex;
+    margin-left: 0.45rem;
+    padding: 0.12rem 0.5rem;
+    border: 1px solid color-mix(in srgb, var(--accent, #2ecc71) 55%, transparent);
+    border-radius: 999px;
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--accent, #2ecc71);
+    background: color-mix(in srgb, var(--accent, #2ecc71) 12%, transparent);
+}
+.sidebar.collapsed .plan-badge { display: none; }
+</style>
     {% block charts_js %}{% endblock %}
 
     <style>
@@ -1730,6 +1744,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         <div class="sidebar-brand">
             <span class="brand-mark"><img src="{{ url_for('static', filename='logo_icon.png') }}" alt="KAZE"></span>
             <span>KAZE</span>
+            {% if plan %}
+            <span class="plan-badge">{{ plan.label }}</span>
+            {% endif %}
         </div>
 
         <nav class="sidebar-nav">
@@ -1757,6 +1774,11 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
                 {% if mode_on('customers') %}
                 <a href="{{ url_for('customers') }}" {% if request.endpoint == 'customers' %}class="active"{% endif %}>
                     <i data-lucide="users" class="icon"></i> Customers
+                </a>
+                {% endif %}
+                {% if mode_on('services') %}
+                <a href="{{ url_for('services') }}" {% if request.endpoint == 'services' %}class="active"{% endif %}>
+                    <i data-lucide="graduation-cap" class="icon"></i> Services
                 </a>
                 {% endif %}
                 {% if mode_on('bookkeeping') %}
@@ -1833,6 +1855,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
                 <a href="{{ url_for('activity') }}" {% if request.endpoint == 'activity' %}class="active"{% endif %}>
                     <i data-lucide="log-in" class="icon"></i> Login activity
                 </a>
+                <a href="{{ url_for('plans') }}" {% if request.endpoint == 'plans' %}class="active"{% endif %}>
+                    <i data-lucide="layers" class="icon"></i> Plans
+                </a>
+                <a href="{{ url_for('payments') }}" {% if request.endpoint == 'payments' %}class="active"{% endif %}>
+                    <i data-lucide="credit-card" class="icon"></i> Payments
+                </a>
                 <a href="{{ url_for('settings') }}" {% if request.endpoint == 'settings' %}class="active"{% endif %}>
                     <i data-lucide="settings" class="icon"></i> Settings
                 </a>
@@ -1883,7 +1911,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         </nav>
 
         <div class="sidebar-footer">
-            <span>KAZE v2.8.5 · {{ app_modes[app_mode].label if app_mode in app_modes else 'Full suite' }}</span>
+            <span>KAZE v2.9.3 · {{ plan.label if plan else 'New user' }} · {{ app_modes[app_mode].label if app_mode in app_modes else 'Full suite' }}</span>
             <span class="version">⚡</span>
         </div>
     </div>
@@ -1977,6 +2005,27 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         </div>
     </div>
 
+    <script>
+function kazeToggleAll(source) {
+    const fid = source.getAttribute('form');
+    const form = (fid && document.getElementById(fid)) || source.closest('form') || document;
+    const boxes = fid
+        ? document.querySelectorAll('input[name="selected_ids"][form="'+fid+'"]')
+        : form.querySelectorAll('input[name="selected_ids"]');
+    boxes.forEach(cb => { cb.checked = source.checked; });
+}
+function kazeConfirmBulk(form) {
+    const sel = form.querySelector('[name="action"]');
+    const action = sel ? sel.value : '';
+    const count = form.id
+        ? document.querySelectorAll('input[name="selected_ids"][form="'+form.id+'"]:checked').length
+        : form.querySelectorAll('input[name="selected_ids"]:checked').length;
+    if (!action) { alert('Choose a bulk action first.'); return false; }
+    if (!count) { alert('Select at least one row.'); return false; }
+    if (action === 'delete') return confirm('Delete the selected rows? This cannot be undone.');
+    return true;
+}
+</script>
     <script src="https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.min.js" defer></script>
     <script>
         // Mobile hamburger toggle
@@ -2051,6 +2100,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     {% if mode_on('sales') %}<a href="{{ url_for('sales') }}">Record sale</a>{% endif %}
     {% if mode_on('stock') %}<a href="{{ url_for('stock') }}">Add stock</a>{% endif %}
     {% if mode_on('workspace') %}<a href="{{ url_for('tasks') }}">Add task</a>{% endif %}
+    {% if mode_on('services') %}<a href="{{ url_for('services') }}">Book service</a>{% endif %}
     {% if mode_on('bookkeeping') %}<a href="{{ url_for('bookkeeping') }}">New document</a>{% endif %}
     {% if mode_on('day_close') %}<a href="{{ url_for('day_close') }}">Day close</a>{% endif %}
     <a href="{{ url_for('shortcuts') }}">Shortcuts</a>
@@ -2076,6 +2126,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         {% if mode_on('sales') %}['Sales', '{{ url_for("sales") }}'],{% endif %}
         {% if mode_on('counter') %}['Counter', '{{ url_for("counter") }}'],{% endif %}
         {% if mode_on('customers') %}['Customers', '{{ url_for("customers") }}'],{% endif %}
+        {% if mode_on('services') %}['Services', '{{ url_for("services") }}'],{% endif %}
         ['Practical guide', '{{ url_for("tutorial") }}'],
         {% if mode_on('bookkeeping') %}['Book keeping', '{{ url_for("bookkeeping") }}'],{% endif %}
         {% if mode_on('accounts') %}['Account tracking', '{{ url_for("accounts") }}'],{% endif %}
@@ -2084,6 +2135,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         {% if mode_on('reminders') %}['Reminders', '{{ url_for("reminders") }}'],{% endif %}
         {% if mode_on('tax') %}['Tax summary', '{{ url_for("tax_summary") }}'],{% endif %}
         {% if mode_on('workspace') %}['Tasks', '{{ url_for("tasks") }}'],['Notes', '{{ url_for("notes") }}'],['Calendar', '{{ url_for("calendar") }}'],{% endif %}
+        ['Plans', '{{ url_for("plans") }}'],
+        ['Payments', '{{ url_for("payments") }}'],
         ['Settings', '{{ url_for("settings") }}'],
         {% if mode_on('day_close') %}['Day close', '{{ url_for("day_close") }}'],{% endif %}
         {% if mode_on('sales') %}['Aged sales', '{{ url_for("aged_sales") }}'],{% endif %}

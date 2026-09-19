@@ -3,7 +3,7 @@
 <div class="page-header">
     <div>
         <h1>Reminders</h1>
-        <p>Overdue work as of {{ today }} — tasks, late orders, unpaid papers, and low stock.</p>
+        <p>Overdue work as of {{ today }} — tasks, late orders, unpaid papers, services, and low stock.</p>
     </div>
 </div>
 <div class="stat-grid">
@@ -11,6 +11,7 @@
     <div class="stat-chip"><span>Late purchase orders</span><strong>{{ late_pos|length }}</strong></div>
     <div class="stat-chip"><span>Open documents</span><strong>{{ open_docs|length }}</strong></div>
     <div class="stat-chip"><span>Low stock</span><strong>{{ low|length }}</strong></div>
+    <div class="stat-chip"><span>Due sessions</span><strong>{{ due_sessions|length if due_sessions else 0 }}</strong></div>
 </div>
 
 <h2>Tasks past due</h2>
@@ -66,6 +67,26 @@
 </tr>
 {% else %}
 <tr><td colspan="5">Nothing waiting.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+
+
+<h2>Service sessions due or overdue</h2>
+<div class="table-wrapper">
+<table>
+<thead><tr><th>Service</th><th>Customer</th><th>Date</th><th></th></tr></thead>
+<tbody>
+{% for s in due_sessions or [] %}
+<tr>
+    <td>{{ s.service_name or 'Service' }}</td>
+    <td>{{ s.customer_name or 'Walk-in' }}</td>
+    <td>{{ s.session_date }}</td>
+    <td><a href="{{ url_for('set_session_status', id=s.id, action='done') }}">Mark done</a></td>
+</tr>
+{% else %}
+<tr><td colspan="4">No booked sessions waiting.</td></tr>
 {% endfor %}
 </tbody>
 </table>

@@ -22,6 +22,10 @@
                 <a href="{{ url_for('bookkeeping_pdf', id=result.id) }}">Open PDF</a>
             {% elif result.type == 'task' %}
                 <a href="{{ url_for('tasks') }}">Open tasks</a>
+            {% elif result.type == 'service' %}
+                <a href="{{ url_for('services') }}">Open services</a>
+            {% elif result.type == 'session' %}
+                <a href="{{ url_for('services') }}">Open sessions</a>
             {% endif %}
         </li>
     {% endfor %}

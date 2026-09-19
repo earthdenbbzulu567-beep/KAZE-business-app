@@ -510,6 +510,33 @@ function dismissOnboarding() {
 </div>
 {% endif %}
 
+
+{% if mode_on('services') and upcoming_sessions %}
+<div class="widget">
+    <h2>Upcoming services</h2>
+    <ul class="activity-feed">
+        {% for s in upcoming_sessions %}
+        <li>
+            <span class="user">{{ s.service_name or 'Service' }}</span>
+            <span class="action">{{ s.customer_name or 'Walk-in' }}</span>
+            <span class="details">{{ money(s.price) }}</span>
+            <span class="time">{{ s.session_date }}{% if s.session_time %} · {{ s.session_time }}{% endif %}</span>
+        </li>
+        {% endfor %}
+    </ul>
+    <p style="margin-top:0.75rem;"><a href="{{ url_for('services') }}">All services</a></p>
+</div>
+{% endif %}
+
+
+{% if plan and plan.key != 'ceo' %}
+<div class="widget">
+    <h2>{{ plan.label }} plan</h2>
+    <p style="color:var(--text2);">{{ plan.tagline }} Some modules stay off until you move up.</p>
+    <p><a href="{{ url_for('plans') }}">See Businessman and CEO</a></p>
+</div>
+{% endif %}
+
 {% if mode_on('workspace') and open_tasks %}
 <div class="widget">
     <h2>Open tasks</h2>

@@ -122,7 +122,7 @@ new Chart(document.getElementById('customerSpendChart'), {
 
 
 <!-- Bulk actions form -->
-<form method="POST" action="{{ url_for('customers_bulk') }}" onsubmit="return confirm('Are you sure?')">
+<form method="POST" action="{{ url_for('customers_bulk') }}" onsubmit="return kazeConfirmBulk(this)">
     <div style="display:flex; gap:0.5rem; margin-bottom:0.5rem; align-items:center; flex-wrap:wrap;">
         <select name="action">
             <option value="">Bulk action</option>
@@ -135,7 +135,7 @@ new Chart(document.getElementById('customerSpendChart'), {
         <table>
             <thead>
                 <tr>
-                    <th><input type="checkbox" onclick="toggleAll(this)"></th>
+                    <th><input type="checkbox" onclick="kazeToggleAll(this)"></th>
                     <th>Name</th>
                     <th>Email</th>
                     <th>Phone</th>

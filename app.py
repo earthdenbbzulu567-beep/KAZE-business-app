@@ -21,6 +21,7 @@ from reportlab.lib.enums import TA_LEFT
 import json
 import re
 import mode_runtime
+import stripe_payments
 
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
 _TPL_DIR = os.path.join(_APP_DIR, 'templates') if os.path.isdir(os.path.join(_APP_DIR, 'templates')) else _APP_DIR
@@ -349,6 +350,33 @@ def init_db():
     cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS app_mode TEXT DEFAULT 'full'")
     cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS enabled_modules TEXT DEFAULT ''")
     cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS ui_device TEXT DEFAULT 'auto'")
+    cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS stripe_secret_key TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS stripe_publishable_key TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS stripe_webhook_secret TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS plan_tier TEXT DEFAULT 'ceo'")
+
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS stripe_payments (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            kind TEXT NOT NULL,
+            record_id INTEGER DEFAULT 0,
+            amount REAL NOT NULL DEFAULT 0,
+            currency TEXT DEFAULT 'USD',
+            status TEXT NOT NULL DEFAULT 'pending',
+            checkout_id TEXT DEFAULT '',
+            payment_intent TEXT DEFAULT '',
+            title TEXT DEFAULT '',
+            created_date TEXT NOT NULL,
+            paid_date TEXT DEFAULT ''
+        )
+    ''')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_stripe_user ON stripe_payments (user_id)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_stripe_checkout ON stripe_payments (checkout_id)')
+    cur.execute("ALTER TABLE service_sessions ADD COLUMN IF NOT EXISTS stripe_checkout_id TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE bookkeeping_docs ADD COLUMN IF NOT EXISTS stripe_checkout_id TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS stripe_checkout_id TEXT DEFAULT ''")
+
     # User activity log (for tracking logins)
     cur.execute('''
         CREATE TABLE IF NOT EXISTS user_activity (
@@ -540,6 +568,40 @@ def init_db():
             created_date TEXT NOT NULL
         )
     ''')
+
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS services (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            name TEXT NOT NULL,
+            category TEXT NOT NULL DEFAULT 'Other',
+            description TEXT DEFAULT '',
+            duration_minutes INTEGER DEFAULT 60,
+            price REAL NOT NULL DEFAULT 0,
+            active INTEGER DEFAULT 1,
+            created_date TEXT NOT NULL
+        )
+    ''')
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS service_sessions (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            service_id INTEGER REFERENCES services(id),
+            customer_id INTEGER REFERENCES customers(id),
+            customer_name TEXT DEFAULT '',
+            session_date TEXT NOT NULL,
+            session_time TEXT DEFAULT '',
+            duration_minutes INTEGER DEFAULT 60,
+            price REAL NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'booked',
+            payment_method TEXT DEFAULT 'cash',
+            notes TEXT DEFAULT '',
+            income_id INTEGER,
+            created_date TEXT NOT NULL
+        )
+    ''')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_services_user ON services (user_id)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_sessions_user_date ON service_sessions (user_id, session_date)')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_sales_user_date ON sales (user_id, sale_date)')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_expenses_user_date ON expenses (user_id, date)')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_income_user_date ON income (user_id, date)')
@@ -705,6 +767,10 @@ def multi_add(kind):
                 if not name:
                     skipped += 1
                     continue
+                blocked = _plan_block('stock')
+                if blocked:
+                    errors.append(blocked)
+                    break
                 qty = _cell_float(bag, 'quantity', i, 0)
                 cost = _cell_float(bag, 'cost_price', i, 0)
                 sell = _cell_float(bag, 'selling_price', i, 0)
@@ -1084,6 +1150,95 @@ def multi_add(kind):
                 log_activity(uid, current_user.username, 'Multi-add purchase orders', '{} orders'.format(saved))
             return bounce('purchase_orders')
 
+
+        if kind == 'services':
+            if not module_on('services'):
+                flash('Services is dormant in this mode.', 'danger')
+                return redirect(url_for('dashboard'))
+            bag, n = _form_lists('name', 'category', 'duration_minutes', 'price', 'description')
+            for i in range(n):
+                name = _cell(bag, 'name', i)
+                if not name:
+                    skipped += 1
+                    continue
+                price = _cell_float(bag, 'price', i, 0)
+                if price is None or price < 0:
+                    errors.append('Row {}: price must be 0 or more.'.format(i + 1))
+                    skipped += 1
+                    continue
+                try:
+                    dur = int(float(_cell(bag, 'duration_minutes', i) or 60))
+                except (TypeError, ValueError):
+                    dur = 60
+                if dur < 0:
+                    dur = 0
+                cat = _cell(bag, 'category', i) or 'Other'
+                if cat not in SERVICE_CATEGORIES:
+                    cat = 'Other'
+                cur.execute(
+                    "INSERT INTO services (user_id, name, category, description, duration_minutes, price, active, created_date) VALUES (%s,%s,%s,%s,%s,%s,1,%s)",
+                    (uid, name[:160], cat[:40], _cell(bag, 'description', i)[:2000], dur, price, today)
+                )
+                saved += 1
+            conn.commit()
+            if saved:
+                log_activity(uid, current_user.username, 'Multi-add services', '{} services'.format(saved))
+            return bounce('services')
+
+        if kind == 'sessions':
+            if not module_on('services'):
+                flash('Services is dormant in this mode.', 'danger')
+                return redirect(url_for('dashboard'))
+            bag, n = _form_lists('service_id', 'customer_id', 'customer_name', 'session_date', 'session_time', 'price', 'notes')
+            for i in range(n):
+                try:
+                    sid = int(_cell(bag, 'service_id', i) or 0)
+                except ValueError:
+                    sid = 0
+                if not sid:
+                    skipped += 1
+                    continue
+                cur.execute('SELECT * FROM services WHERE id=%s AND user_id=%s', (sid, uid))
+                svc = cur.fetchone()
+                if not svc:
+                    errors.append('Row {}: service not found.'.format(i + 1))
+                    skipped += 1
+                    continue
+                d = _cell(bag, 'session_date', i) or today
+                try:
+                    datetime.strptime(d, '%Y-%m-%d')
+                except ValueError:
+                    d = today
+                price = _cell_float(bag, 'price', i, svc['price'])
+                if price is None or price < 0:
+                    price = svc['price']
+                cust_id = _cell(bag, 'customer_id', i) or None
+                cust_name = _cell(bag, 'customer_name', i) or ''
+                if cust_id:
+                    try:
+                        cust_id = int(cust_id)
+                    except ValueError:
+                        cust_id = None
+                if cust_id:
+                    cur.execute('SELECT name FROM customers WHERE id=%s AND user_id=%s', (cust_id, uid))
+                    saved_c = cur.fetchone()
+                    if saved_c:
+                        cust_name = saved_c['name']
+                    else:
+                        cust_id = None
+                if not cust_name:
+                    cust_name = 'Walk-in'
+                cur.execute(
+                    "INSERT INTO service_sessions (user_id, service_id, customer_id, customer_name, session_date, session_time, duration_minutes, price, status, payment_method, notes, created_date) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'booked','cash',%s,%s)",
+                    (uid, sid, cust_id, cust_name[:120], d, _cell(bag, 'session_time', i)[:10],
+                     svc['duration_minutes'] or 60, price, _cell(bag, 'notes', i)[:2000], today)
+                )
+                saved += 1
+            conn.commit()
+            if saved:
+                log_activity(uid, current_user.username, 'Multi-add sessions', '{} bookings'.format(saved))
+            return bounce('services')
+
         flash('Unknown multi-add type.', 'danger')
         return redirect(url_for('dashboard'))
     except Exception as exc:
@@ -1140,9 +1295,153 @@ def _accent_palette(hex_color):
 
 # ======================== App modes (run some parts, leave others dormant) ========================
 # Always-on pieces stay reachable so you can switch mode back on.
+SERVICE_CATEGORIES = (
+    'Teaching', 'Coaching', 'Tutoring', 'Training', 'Consulting',
+    'Mentoring', 'Repair', 'Installation', 'Delivery', 'Design', 'Other',
+)
+
+
+PLAN_TIERS = {
+    'starter': {
+        'key': 'starter',
+        'label': 'New user',
+        'tagline': 'Learn the desk and record the first sales.',
+        'price': 0,
+        'modules': [
+            'stock', 'sales', 'counter', 'customers', 'services',
+            'calculator', 'reminders', 'workspace',
+        ],
+        'limits': {
+            'stock': 40,
+            'customers': 40,
+            'services': 8,
+            'sales_month': 80,
+            'team': 1,
+        },
+    },
+    'businessman': {
+        'key': 'businessman',
+        'label': 'Businessman',
+        'tagline': 'Shop floor plus books, suppliers, and reports.',
+        'price': 29,
+        'modules': [
+            'stock', 'sales', 'counter', 'customers', 'services',
+            'calculator', 'reminders', 'workspace',
+            'bookkeeping', 'operations', 'reports', 'tax',
+            'documents', 'day_close', 'planning',
+        ],
+        'limits': {
+            'stock': 400,
+            'customers': 400,
+            'services': 80,
+            'sales_month': 2000,
+            'team': 5,
+        },
+    },
+    'ceo': {
+        'key': 'ceo',
+        'label': 'CEO',
+        'tagline': 'Every module. No practical desk limits.',
+        'price': 79,
+        'modules': None,
+        'limits': {
+            'stock': 0,
+            'customers': 0,
+            'services': 0,
+            'sales_month': 0,
+            'team': 0,
+        },
+    },
+}
+PLAN_ORDER = ('starter', 'businessman', 'ceo')
+PLAN_RANK = {k: i for i, k in enumerate(PLAN_ORDER)}
+
+
+def normalize_plan(raw):
+    key = str(raw or '').strip().lower()
+    if key in ('new', 'new user', 'new_user', 'starter', 'free'):
+        return 'starter'
+    if key in ('business', 'businessman', 'trader', 'pro'):
+        return 'businessman'
+    if key in ('ceo', 'enterprise', 'full'):
+        return 'ceo'
+    return 'ceo' if not raw else 'starter'
+
+
+def plan_info(settings=None):
+    raw = None
+    if settings:
+        raw = settings.get('plan_tier')
+    key = normalize_plan(raw if raw not in (None, '') else 'ceo')
+    info = dict(PLAN_TIERS[key])
+    info['key'] = key
+    return info
+
+
+def plan_modules(settings=None):
+    info = plan_info(settings)
+    mods = info.get('modules')
+    if mods is None:
+        return set(ALL_OPTIONAL)
+    return {m for m in mods if m in ALL_OPTIONAL}
+
+
+def plan_limit(settings, name):
+    info = plan_info(settings)
+    try:
+        return int((info.get('limits') or {}).get(name) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+def _plan_count(cur, uid, kind):
+    if kind == 'stock':
+        cur.execute('SELECT COUNT(*) AS n FROM stock WHERE user_id=%s', (uid,))
+    elif kind == 'customers':
+        cur.execute('SELECT COUNT(*) AS n FROM customers WHERE user_id=%s', (uid,))
+    elif kind == 'services':
+        cur.execute('SELECT COUNT(*) AS n FROM services WHERE user_id=%s', (uid,))
+    elif kind == 'sales_month':
+        month = datetime.today().strftime('%Y-%m')
+        cur.execute(
+            "SELECT COUNT(*) AS n FROM sales WHERE user_id=%s AND sale_date LIKE %s",
+            (uid, month + '%')
+        )
+    elif kind == 'team':
+        cur.execute(
+            "SELECT COUNT(*) AS n FROM users WHERE id=%s OR owner_id=%s",
+            (uid, uid)
+        )
+    else:
+        return 0
+    row = cur.fetchone() or {}
+    try:
+        return int(row.get('n') or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _plan_block(kind, extra=1):
+    settings = getattr(g, '_settings_row', None)
+    cap = plan_limit(settings, kind)
+    if cap <= 0:
+        return None
+    conn = get_db()
+    cur = conn.cursor()
+    n = _plan_count(cur, current_user.id, kind)
+    cur.close()
+    conn.close()
+    if n + extra > cap:
+        info = plan_info(settings)
+        return 'The {} plan allows {} {}. Upgrade on the Plans page to add more.'.format(
+            info['label'], cap, kind.replace('_', ' ')
+        )
+    return None
+
+
+
 ALWAYS_ON = frozenset({
     'dashboard', 'settings', 'search', 'notifications', 'tutorial',
-    'shortcuts', 'activity', 'team', 'backup', 'index', 'auth',
+    'shortcuts', 'activity', 'team', 'backup', 'index', 'auth', 'plans', 'payments',
 })
 
 MODULE_CATALOG = [
@@ -1162,6 +1461,7 @@ MODULE_CATALOG = [
     ('calculator', 'Profit calculator'),
     ('day_close', 'Day close'),
     ('reminders', 'Reminders'),
+    ('services', 'Services (teaching, coaching, jobs)'),
 ]
 ALL_OPTIONAL = [m[0] for m in MODULE_CATALOG]
 
@@ -1174,7 +1474,7 @@ APP_MODES = {
     'till': {
         'label': 'Till / shop floor',
         'hint': 'Sell and count stock. Books and planning stay dormant.',
-        'modules': ['stock', 'sales', 'counter', 'customers', 'day_close', 'calculator', 'reminders'],
+        'modules': ['stock', 'sales', 'counter', 'customers', 'day_close', 'calculator', 'reminders', 'services'],
     },
     'books': {
         'label': 'Books and reports',
@@ -1184,7 +1484,7 @@ APP_MODES = {
     'office': {
         'label': 'Office / planning',
         'hint': 'Tasks, notes, SWOT, plan, reports. Shop-floor selling stays dormant.',
-        'modules': ['workspace', 'planning', 'reports', 'stats', 'documents', 'reminders', 'calculator'],
+        'modules': ['workspace', 'planning', 'reports', 'stats', 'documents', 'reminders', 'calculator', 'services'],
     },
     'quiet': {
         'label': 'Quiet / dashboard only',
@@ -1279,6 +1579,12 @@ _bind_module('calculator', 'calculator')
 _bind_module('day_close', 'day_close')
 _bind_module('reminders', 'reminders')
 _bind_module(
+    'services',
+    'services', 'add_service', 'update_service', 'toggle_service', 'delete_service',
+    'add_service_session', 'set_session_status', 'delete_service_session', 'export_services_csv',
+    'services_bulk', 'sessions_bulk',
+)
+_bind_module(
     'dashboard',
     'add_income', 'add_expense', 'delete_income', 'delete_expense',
     'export_income_csv', 'export_expenses_csv', 'import_income_csv', 'import_expenses_csv',
@@ -1307,8 +1613,11 @@ def resolve_live_modules(settings):
         mode = 'full'
     if mode == 'custom':
         chosen = _parse_custom_modules(settings.get('enabled_modules') or '')
-        return {m for m in chosen if m in ALL_OPTIONAL}
-    return set(APP_MODES[mode]['modules'] or [])
+        live = {m for m in chosen if m in ALL_OPTIONAL}
+    else:
+        live = set(APP_MODES[mode]['modules'] or [])
+    allowed = plan_modules(settings)
+    return {m for m in live if m in allowed}
 
 
 def module_on(name):
@@ -1516,6 +1825,8 @@ def inject_settings():
             pl_bar=pl_bar,
             accent=accent,
             theme_pref=(settings.get('theme') if settings else None) or 'dark',
+            stripe_ready=stripe_payments.stripe_ready(settings),
+            plan=plan_info(settings),
         )
     return dict(
         user_settings=None, unread_notifications=0, money=_format_money,
@@ -1525,6 +1836,8 @@ def inject_settings():
         ui_device='auto', ui_devices=UI_DEVICES, pl_bar=None,
         accent=_accent_palette('#2ecc71'),
         theme_pref='dark',
+        stripe_ready=False,
+        plan=plan_info({'plan_tier': 'starter'}),
     )
 
 
@@ -1596,7 +1909,7 @@ def login():
                 cur = conn.cursor()
                 cur.execute('INSERT INTO user_activity (user_id, username, login_time, ip_address) VALUES (%s, %s, %s, %s)',
                             (business_id, user['username'], now, ip))
-                cur.execute('INSERT INTO settings (user_id, notify_email) VALUES (%s, %s) ON CONFLICT (user_id) DO NOTHING',
+                cur.execute("INSERT INTO settings (user_id, notify_email, plan_tier) VALUES (%s, %s, 'starter') ON CONFLICT (user_id) DO NOTHING",
                             (business_id, user.get('email') or ''))
                 conn.commit()
                 cur.close()
@@ -1619,6 +1932,20 @@ def dashboard():
     live = getattr(g, 'live_modules', None)
     snap = mode_runtime.run_selected_mode(cur, current_user.id, mode, live)
     activities = mode_runtime.activities_feed(cur, current_user.id)
+    upcoming_sessions = []
+    if module_on('services'):
+        try:
+            today = datetime.today().strftime('%Y-%m-%d')
+            cur.execute(
+                "SELECT ss.*, sv.name AS service_name FROM service_sessions ss "
+                "LEFT JOIN services sv ON sv.id = ss.service_id "
+                "WHERE ss.user_id=%s AND ss.status='booked' AND ss.session_date >= %s "
+                "ORDER BY ss.session_date, ss.id LIMIT 8",
+                (current_user.id, today)
+            )
+            upcoming_sessions = cur.fetchall()
+        except Exception:
+            upcoming_sessions = []
     cur.close()
     conn.close()
     g.pl_bar = snap['pl']
@@ -1646,6 +1973,7 @@ def dashboard():
         activities=activities,
         open_tasks=snap['office']['open_tasks'],
         upcoming_recurring=snap['office']['upcoming_recurring'],
+        upcoming_sessions=upcoming_sessions,
         pl=snap['pl'],
     )
 
@@ -1822,6 +2150,10 @@ def add_customer():
     notes, e5 = _clean_text('notes', required=False, max_len=2000, label='notes')
     if _reject((name, e1), (email, e2), (phone, e3), (address, e4), (notes, e5)):
         return redirect(url_for('customers'))
+    blocked = _plan_block('customers')
+    if blocked:
+        flash(blocked, 'danger')
+        return redirect(url_for('plans'))
     conn = get_db()
     cur = conn.cursor()
     cur.execute('''
@@ -1872,12 +2204,17 @@ def edit_customer(id):
 def delete_customer(id):
     conn = get_db()
     cur = conn.cursor()
+    cur.execute('UPDATE sales SET customer_id=NULL WHERE user_id=%s AND customer_id=%s', (current_user.id, id))
+    try:
+        cur.execute('UPDATE service_sessions SET customer_id=NULL WHERE user_id=%s AND customer_id=%s', (current_user.id, id))
+    except Exception:
+        pass
     cur.execute('DELETE FROM customers WHERE id = %s AND user_id = %s', (id, current_user.id))
     conn.commit()
     cur.close()
     conn.close()
     log_activity(current_user.id, current_user.username, 'Deleted customer', f'ID {id}')
-    flash('Customer deleted.', 'success')
+    flash('Customer deleted. Linked sales were kept.', 'success')
     return redirect(url_for('customers'))
 
 # ======================== Stock Management ========================
@@ -1929,6 +2266,10 @@ def add_stock():
     category, e7 = _clean_text('category', required=False, max_len=60, label='category')
     if _reject((product_name, e1), (quantity, e2), (cost_price, e3), (selling_price, e4), (unit, e5), (sku, e6), (category, e7)):
         return redirect(url_for('stock'))
+    blocked = _plan_block('stock')
+    if blocked:
+        flash(blocked, 'danger')
+        return redirect(url_for('plans'))
     conn = get_db()
     cur = conn.cursor()
     cur.execute('''
@@ -1991,6 +2332,12 @@ def update_stock(id):
 def delete_stock(id):
     conn = get_db()
     cur = conn.cursor()
+    cur.execute('SELECT COUNT(*) AS n FROM sales WHERE stock_id=%s AND user_id=%s', (id, current_user.id))
+    n = (cur.fetchone() or {}).get('n') or 0
+    if n:
+        cur.close(); conn.close()
+        flash('This product has sales, so it cannot be deleted. Delete those sales first.', 'danger')
+        return redirect(url_for('stock'))
     cur.execute('DELETE FROM stock WHERE id = %s AND user_id = %s', (id, current_user.id))
     conn.commit()
     cur.close()
@@ -2067,120 +2414,352 @@ def check_low_stock():
     flash(f'Low stock report sent to {to_email} ({len(low_items)} item(s)).', 'success')
     return redirect(url_for('stock'))
 
-# ─── Bulk actions for stock ───
+# ─── Bulk actions ───
+
+def _as_int_ids(values):
+    ids = []
+    for raw in values:
+        try:
+            n = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if n > 0:
+            ids.append(n)
+    return ids
+
+
+def _selected_ids():
+    return _as_int_ids(request.form.getlist('selected_ids'))
+
+
 @app.route('/stock/bulk', methods=['POST'])
 @login_required
 def stock_bulk():
-    action = request.form.get('action')
-    ids = request.form.getlist('selected_ids')
-    if not ids:
-        flash('No items selected.', 'danger')
+    action = (request.form.get('action') or '').strip()
+    ids = _selected_ids()
+    if not action:
+        flash('Choose a bulk action first.', 'danger')
         return redirect(url_for('stock'))
-    
+    if not ids:
+        flash('Select at least one stock row.', 'danger')
+        return redirect(url_for('stock'))
+
     conn = get_db()
     cur = conn.cursor()
-    if action == 'delete':
-        cur.execute('DELETE FROM stock WHERE id = ANY(%s) AND user_id = %s', (ids, current_user.id))
-        conn.commit()
-        log_activity(current_user.id, current_user.username, 'Bulk delete stock', f'{len(ids)} items')
-        flash(f'Deleted {len(ids)} items.', 'success')
-    elif action == 'update_quantity':
-        new_qty = request.form.get('new_quantity')
-        if new_qty is None or new_qty == '':
-            flash('Please enter a new quantity.', 'danger')
-            return redirect(url_for('stock'))
-        cur.execute('UPDATE stock SET quantity = %s WHERE id = ANY(%s) AND user_id = %s', (new_qty, ids, current_user.id))
-        conn.commit()
-        log_activity(current_user.id, current_user.username, 'Bulk update stock quantity', f'{len(ids)} items to {new_qty}')
-        flash(f'Updated quantity for {len(ids)} items.', 'success')
-    elif action == 'export':
-        cur.execute('SELECT product_name, quantity, unit, cost_price, selling_price FROM stock WHERE id = ANY(%s) AND user_id = %s', (ids, current_user.id))
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
-        return _csv_response('selected_stock.csv',
-                          ['Product', 'Quantity', 'Unit', 'Cost Price', 'Selling Price'],
-                          [(r['product_name'], r['quantity'], r['unit'], r['cost_price'], r['selling_price']) for r in rows])
-    else:
-        flash('Invalid action.', 'danger')
-    cur.close()
-    conn.close()
+    try:
+        if action == 'delete':
+            cur.execute(
+                'SELECT DISTINCT stock_id FROM sales WHERE user_id=%s AND stock_id = ANY(%s)',
+                (current_user.id, ids)
+            )
+            blocked = {int(r['stock_id']) for r in cur.fetchall() if r.get('stock_id')}
+            free = [i for i in ids if i not in blocked]
+            if free:
+                cur.execute('DELETE FROM stock WHERE id = ANY(%s) AND user_id=%s', (free, current_user.id))
+            conn.commit()
+            msg = 'Deleted {} stock row(s).'.format(len(free))
+            if blocked:
+                msg += ' Kept {} because they still have sales. Delete those sales first.'.format(len(blocked))
+            log_activity(current_user.id, current_user.username, 'Bulk stock', msg)
+            flash(msg, 'success' if free else 'danger')
+        elif action == 'update_quantity':
+            qty, err = _clean_float('new_quantity', min_v=0, max_v=1e9, label='new quantity')
+            if err:
+                flash(err, 'danger')
+            else:
+                cur.execute(
+                    'UPDATE stock SET quantity=%s WHERE id = ANY(%s) AND user_id=%s',
+                    (qty, ids, current_user.id)
+                )
+                conn.commit()
+                log_activity(current_user.id, current_user.username, 'Bulk stock qty', '{} rows'.format(len(ids)))
+                flash('Updated quantity on {} row(s).'.format(len(ids)), 'success')
+        elif action == 'export':
+            cur.execute(
+                'SELECT product_name, sku, category, quantity, unit, cost_price, selling_price '
+                'FROM stock WHERE id = ANY(%s) AND user_id=%s ORDER BY product_name',
+                (ids, current_user.id)
+            )
+            rows = cur.fetchall()
+            return _csv_response(
+                'selected_stock.csv',
+                ['Product', 'SKU', 'Category', 'Quantity', 'Unit', 'Cost', 'Selling'],
+                [(r['product_name'], r.get('sku'), r.get('category'), r['quantity'], r.get('unit'), r['cost_price'], r['selling_price']) for r in rows]
+            )
+        else:
+            flash('Unknown bulk action.', 'danger')
+    except Exception as exc:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        flash('Bulk stock action failed. Nothing was changed.', 'danger')
+        print('stock_bulk:', exc)
+    finally:
+        try:
+            cur.close()
+            conn.close()
+        except Exception:
+            pass
     return redirect(url_for('stock'))
 
-# ─── Bulk actions for sales ───
+
 @app.route('/sales/bulk', methods=['POST'])
 @login_required
 def sales_bulk():
-    action = request.form.get('action')
-    ids = request.form.getlist('selected_ids')
+    action = (request.form.get('action') or '').strip()
+    ids = _selected_ids()
+    if not action:
+        flash('Choose a bulk action first.', 'danger')
+        return redirect(url_for('sales'))
     if not ids:
-        flash('No sales selected.', 'danger')
+        flash('Select at least one sale.', 'danger')
         return redirect(url_for('sales'))
 
     conn = get_db()
     cur = conn.cursor()
-    if action == 'delete':
-        # Restore stock for each sale before deleting
-        for sid in ids:
-            cur.execute('SELECT stock_id, quantity_sold FROM sales WHERE id = %s AND user_id = %s', (sid, current_user.id))
-            sale = cur.fetchone()
-            if sale:
-                cur.execute('UPDATE stock SET quantity = quantity + %s WHERE id = %s AND user_id = %s',
-                            (sale['quantity_sold'], sale['stock_id'], current_user.id))
-        cur.execute('DELETE FROM sales WHERE id = ANY(%s) AND user_id = %s', (ids, current_user.id))
-        conn.commit()
-        log_activity(current_user.id, current_user.username, 'Bulk delete sales', f'{len(ids)} items')
-        flash(f'Deleted {len(ids)} sales and restored stock.', 'success')
-    elif action == 'export':
-        cur.execute('''
-            SELECT stock.product_name, sales.quantity_sold, sales.selling_price_at_time,
-                   sales.total_amount, sales.profit, sales.sale_date, sales.customer_name, sales.customer_email
-            FROM sales JOIN stock ON sales.stock_id = stock.id
-            WHERE sales.id = ANY(%s) AND sales.user_id = %s
-        ''', (ids, current_user.id))
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
-        return _csv_response('selected_sales.csv',
-                             ['Product', 'Quantity', 'Selling Price', 'Total', 'Profit', 'Date', 'Customer', 'Customer Email'],
-                             [(r['product_name'], r['quantity_sold'], r['selling_price_at_time'], r['total_amount'],
-                               r['profit'], r['sale_date'], r['customer_name'], r['customer_email']) for r in rows])
-    else:
-        flash('Invalid action.', 'danger')
-    cur.close()
-    conn.close()
+    try:
+        if action == 'delete':
+            cur.execute(
+                'SELECT id, stock_id, quantity_sold FROM sales WHERE id = ANY(%s) AND user_id=%s',
+                (ids, current_user.id)
+            )
+            rows = cur.fetchall()
+            restored = 0
+            for sale in rows:
+                if sale.get('stock_id'):
+                    cur.execute(
+                        'UPDATE stock SET quantity = quantity + %s WHERE id=%s AND user_id=%s',
+                        (sale['quantity_sold'], sale['stock_id'], current_user.id)
+                    )
+                    restored += 1
+            cur.execute('DELETE FROM sales WHERE id = ANY(%s) AND user_id=%s', (ids, current_user.id))
+            conn.commit()
+            log_activity(current_user.id, current_user.username, 'Bulk delete sales', '{} tickets'.format(len(rows)))
+            flash('Deleted {} sale(s) and restored stock on {} product(s).'.format(len(rows), restored), 'success')
+        elif action == 'export':
+            cur.execute(
+                "SELECT COALESCE(stock.product_name, 'Item removed') AS product_name, "
+                "sales.quantity_sold, sales.selling_price_at_time, sales.total_amount, sales.profit, "
+                "sales.sale_date, sales.customer_name, sales.customer_email, sales.payment_method "
+                "FROM sales LEFT JOIN stock ON sales.stock_id = stock.id "
+                "WHERE sales.id = ANY(%s) AND sales.user_id=%s "
+                "ORDER BY sales.sale_date DESC, sales.id DESC",
+                (ids, current_user.id)
+            )
+            rows = cur.fetchall()
+            return _csv_response(
+                'selected_sales.csv',
+                ['Product', 'Quantity', 'Selling Price', 'Total', 'Profit', 'Date', 'Customer', 'Email', 'Pay'],
+                [(r['product_name'], r['quantity_sold'], r['selling_price_at_time'], r['total_amount'],
+                  r['profit'], r['sale_date'], r['customer_name'], r['customer_email'], r.get('payment_method')) for r in rows]
+            )
+        else:
+            flash('Unknown bulk action.', 'danger')
+    except Exception as exc:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        flash('Bulk sales action failed. Nothing was changed.', 'danger')
+        print('sales_bulk:', exc)
+    finally:
+        try:
+            cur.close()
+            conn.close()
+        except Exception:
+            pass
     return redirect(url_for('sales'))
 
-# ─── Bulk actions for customers ───
+
 @app.route('/customers/bulk', methods=['POST'])
 @login_required
 def customers_bulk():
-    action = request.form.get('action')
-    ids = request.form.getlist('selected_ids')
+    action = (request.form.get('action') or '').strip()
+    ids = _selected_ids()
+    if not action:
+        flash('Choose a bulk action first.', 'danger')
+        return redirect(url_for('customers'))
     if not ids:
-        flash('No customers selected.', 'danger')
+        flash('Select at least one customer.', 'danger')
         return redirect(url_for('customers'))
 
     conn = get_db()
     cur = conn.cursor()
-    if action == 'delete':
-        cur.execute('DELETE FROM customers WHERE id = ANY(%s) AND user_id = %s', (ids, current_user.id))
-        conn.commit()
-        log_activity(current_user.id, current_user.username, 'Bulk delete customers', f'{len(ids)} items')
-        flash(f'Deleted {len(ids)} customers.', 'success')
-    elif action == 'export':
-        cur.execute('SELECT name, email, phone, address, notes FROM customers WHERE id = ANY(%s) AND user_id = %s',
-                    (ids, current_user.id))
-        rows = [(r['name'], r['email'], r['phone'], r['address'], r['notes']) for r in cur.fetchall()]
-        cur.close()
-        conn.close()
-        return _csv_response('selected_customers.csv',
-                             ['Name', 'Email', 'Phone', 'Address', 'Notes'], rows)
-    else:
-        flash('Invalid action.', 'danger')
-    cur.close()
-    conn.close()
+    try:
+        if action == 'delete':
+            cur.execute(
+                'UPDATE sales SET customer_id=NULL WHERE user_id=%s AND customer_id = ANY(%s)',
+                (current_user.id, ids)
+            )
+            try:
+                cur.execute(
+                    'UPDATE service_sessions SET customer_id=NULL WHERE user_id=%s AND customer_id = ANY(%s)',
+                    (current_user.id, ids)
+                )
+            except Exception:
+                conn.rollback()
+                cur.execute(
+                    'UPDATE sales SET customer_id=NULL WHERE user_id=%s AND customer_id = ANY(%s)',
+                    (current_user.id, ids)
+                )
+            cur.execute('DELETE FROM customers WHERE id = ANY(%s) AND user_id=%s', (ids, current_user.id))
+            conn.commit()
+            log_activity(current_user.id, current_user.username, 'Bulk delete customers', '{} contacts'.format(len(ids)))
+            flash('Deleted {} customer(s). Linked sales were kept and unlinked.'.format(len(ids)), 'success')
+        elif action == 'export':
+            cur.execute(
+                'SELECT name, email, phone, address, notes FROM customers WHERE id = ANY(%s) AND user_id=%s ORDER BY name',
+                (ids, current_user.id)
+            )
+            rows = cur.fetchall()
+            return _csv_response(
+                'selected_customers.csv',
+                ['Name', 'Email', 'Phone', 'Address', 'Notes'],
+                [(r['name'], r['email'], r['phone'], r['address'], r['notes']) for r in rows]
+            )
+        else:
+            flash('Unknown bulk action.', 'danger')
+    except Exception as exc:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        flash('Bulk customer action failed. Nothing was changed.', 'danger')
+        print('customers_bulk:', exc)
+    finally:
+        try:
+            cur.close()
+            conn.close()
+        except Exception:
+            pass
     return redirect(url_for('customers'))
+
+
+@app.route('/services/bulk', methods=['POST'])
+@login_required
+def services_bulk():
+    action = (request.form.get('action') or '').strip()
+    ids = _selected_ids()
+    if not action:
+        flash('Choose a bulk action first.', 'danger')
+        return redirect(url_for('services'))
+    if not ids:
+        flash('Select at least one service.', 'danger')
+        return redirect(url_for('services'))
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        if action == 'hide':
+            cur.execute('UPDATE services SET active=0 WHERE id = ANY(%s) AND user_id=%s', (ids, current_user.id))
+            conn.commit()
+            flash('Hid {} service(s).'.format(len(ids)), 'success')
+        elif action == 'show':
+            cur.execute('UPDATE services SET active=1 WHERE id = ANY(%s) AND user_id=%s', (ids, current_user.id))
+            conn.commit()
+            flash('Showed {} service(s).'.format(len(ids)), 'success')
+        elif action == 'delete':
+            cur.execute(
+                'SELECT DISTINCT service_id FROM service_sessions WHERE user_id=%s AND service_id = ANY(%s)',
+                (current_user.id, ids)
+            )
+            blocked = {int(r['service_id']) for r in cur.fetchall() if r.get('service_id')}
+            free = [i for i in ids if i not in blocked]
+            if free:
+                cur.execute('DELETE FROM services WHERE id = ANY(%s) AND user_id=%s', (free, current_user.id))
+            if blocked:
+                cur.execute('UPDATE services SET active=0 WHERE id = ANY(%s) AND user_id=%s', (list(blocked), current_user.id))
+            conn.commit()
+            flash('Deleted {} unused service(s). Hid {} that still have sessions.'.format(len(free), len(blocked)), 'success')
+        elif action == 'export':
+            cur.execute(
+                'SELECT name, category, duration_minutes, price, active, description FROM services WHERE id = ANY(%s) AND user_id=%s ORDER BY name',
+                (ids, current_user.id)
+            )
+            rows = cur.fetchall()
+            return _csv_response(
+                'selected_services.csv',
+                ['Name', 'Category', 'Minutes', 'Price', 'Active', 'Notes'],
+                [(r['name'], r['category'], r['duration_minutes'], r['price'], r['active'], r.get('description')) for r in rows]
+            )
+        else:
+            flash('Unknown bulk action.', 'danger')
+    except Exception as exc:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        flash('Bulk services action failed.', 'danger')
+        print('services_bulk:', exc)
+    finally:
+        try:
+            cur.close()
+            conn.close()
+        except Exception:
+            pass
+    return redirect(url_for('services'))
+
+
+@app.route('/services/sessions/bulk', methods=['POST'])
+@login_required
+def sessions_bulk():
+    action = (request.form.get('action') or '').strip()
+    ids = _selected_ids()
+    if not action:
+        flash('Choose a bulk action first.', 'danger')
+        return redirect(url_for('services'))
+    if not ids:
+        flash('Select at least one session.', 'danger')
+        return redirect(url_for('services'))
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        if action == 'delete':
+            cur.execute('DELETE FROM service_sessions WHERE id = ANY(%s) AND user_id=%s', (ids, current_user.id))
+            conn.commit()
+            flash('Deleted {} session(s).'.format(len(ids)), 'success')
+        elif action in ('done', 'cancelled', 'booked'):
+            today = datetime.today().strftime('%Y-%m-%d')
+            cur.execute('SELECT * FROM service_sessions WHERE id = ANY(%s) AND user_id=%s', (ids, current_user.id))
+            rows = cur.fetchall()
+            for row in rows:
+                if action == 'done' and not row.get('income_id'):
+                    svc_name = _service_row_name(cur, row.get('service_id'), current_user.id)
+                    source = 'Service: {} — {}'.format(svc_name, row.get('customer_name') or 'Walk-in')
+                    cur.execute(
+                        'INSERT INTO income (user_id, source, amount, date) VALUES (%s,%s,%s,%s) RETURNING id',
+                        (current_user.id, source[:120], float(row.get('price') or 0), row.get('session_date') or today)
+                    )
+                    inc = cur.fetchone()
+                    inc_id = inc['id'] if inc else None
+                    cur.execute(
+                        "UPDATE service_sessions SET status='done', payment_method=COALESCE(payment_method,'cash'), income_id=%s WHERE id=%s AND user_id=%s",
+                        (inc_id, row['id'], current_user.id)
+                    )
+                else:
+                    cur.execute(
+                        'UPDATE service_sessions SET status=%s WHERE id=%s AND user_id=%s',
+                        (action, row['id'], current_user.id)
+                    )
+            conn.commit()
+            flash('Updated {} session(s).'.format(len(rows)), 'success')
+        else:
+            flash('Unknown bulk action.', 'danger')
+    except Exception as exc:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        flash('Bulk sessions action failed.', 'danger')
+        print('sessions_bulk:', exc)
+    finally:
+        try:
+            cur.close()
+            conn.close()
+        except Exception:
+            pass
+    return redirect(url_for('services'))
+
 
 # ======================== Settings ========================
 
@@ -2248,6 +2827,20 @@ def settings():
         ui_device = (request.form.get('ui_device') or 'auto').strip()
         if ui_device not in UI_DEVICES:
             ui_device = 'auto'
+        cur.execute('SELECT stripe_secret_key, stripe_webhook_secret, plan_tier FROM settings WHERE user_id=%s', (current_user.id,))
+        prior_keys = cur.fetchone() or {}
+        stripe_publishable_key = (request.form.get('stripe_publishable_key') or '').strip()
+        stripe_secret_key = (request.form.get('stripe_secret_key') or '').strip()
+        stripe_webhook_secret = (request.form.get('stripe_webhook_secret') or '').strip()
+        if (not stripe_secret_key) or stripe_secret_key.startswith('••••'):
+            stripe_secret_key = (prior_keys.get('stripe_secret_key') if prior_keys else '') or ''
+        if (not stripe_webhook_secret) or stripe_webhook_secret.startswith('••••'):
+            stripe_webhook_secret = (prior_keys.get('stripe_webhook_secret') if prior_keys else '') or ''
+
+        plan_tier = normalize_plan(request.form.get('plan_tier') or 'ceo')
+        if getattr(current_user, 'role', 'owner') != 'owner':
+            plan_tier = normalize_plan((prior_keys.get('plan_tier') if prior_keys else None) or 'ceo')
+
         if font_size not in ('xsmall', 'small', 'medium', 'large', 'xlarge'):
             font_size = 'medium'
         if items_per_page not in (10, 25, 50, 100):
@@ -2267,7 +2860,8 @@ def settings():
                 date_format=%s, show_clock=%s, rounded_ui=%s, high_contrast=%s,
                 invoice_prefix=%s, business_phone=%s, business_address=%s,
                 fiscal_year_start=%s, number_decimals=%s, sidebar_collapsed=%s,
-                app_mode=%s, enabled_modules=%s, ui_device=%s
+                app_mode=%s, enabled_modules=%s, ui_device=%s,
+                stripe_publishable_key=%s, stripe_secret_key=%s, stripe_webhook_secret=%s, plan_tier=%s
             WHERE user_id=%s
         ''', (low_stock_threshold, email_notifications, notify_email,
               theme, font_family, font_size, default_chart_type,
@@ -2278,6 +2872,7 @@ def settings():
               invoice_prefix, business_phone, business_address,
               fiscal_year_start, number_decimals, sidebar_collapsed,
               app_mode, enabled_modules, ui_device,
+              stripe_publishable_key, stripe_secret_key, stripe_webhook_secret, plan_tier,
               current_user.id))
         conn.commit()
         cur.close()
@@ -2442,6 +3037,10 @@ def add_sale():
     customer_email, e4 = _clean_email('customer_email', required=False)
     if _reject((quantity_sold, e1), (sale_date, e2), (customer_name, e3), (customer_email, e4)):
         return redirect(url_for('sales'))
+    blocked = _plan_block('sales_month')
+    if blocked:
+        flash(blocked, 'danger')
+        return redirect(url_for('plans'))
     customer_id = request.form.get('customer_id') or None
     
     conn = get_db()
@@ -3344,6 +3943,10 @@ def invite_staff():
     if len(password) < 6:
         flash('Temporary password must be at least 6 characters.', 'danger')
         return redirect(url_for('team'))
+    blocked = _plan_block('team')
+    if blocked:
+        flash(blocked, 'danger')
+        return redirect(url_for('plans'))
     hashed = generate_password_hash(password)
     conn = get_db()
     cur = conn.cursor()
@@ -3949,8 +4552,336 @@ def search():
     cur.close()
     conn.close()
 
-    results = customers + products + docs + note_hits + task_hits + book_hits + sku_hits
+
+    service_hits = []
+    session_hits = []
+    try:
+        cur.execute(
+            "SELECT id, name, 'service' as type FROM services WHERE user_id = %s AND (name ILIKE %s OR category ILIKE %s OR description ILIKE %s) LIMIT 10",
+            (current_user.id, '%'+q+'%', '%'+q+'%', '%'+q+'%')
+        )
+        service_hits = cur.fetchall()
+        cur.execute(
+            "SELECT id, customer_name as name, 'session' as type FROM service_sessions WHERE user_id = %s AND (customer_name ILIKE %s OR notes ILIKE %s) LIMIT 10",
+            (current_user.id, '%'+q+'%', '%'+q+'%')
+        )
+        session_hits = cur.fetchall()
+    except Exception:
+        pass
+
+    results = customers + products + docs + note_hits + task_hits + book_hits + sku_hits + service_hits + session_hits
     return render_template('search_results.html', results=results, q=q)
+
+# ======================== Services ========================
+
+def _service_row_name(cur, service_id, uid):
+    if not service_id:
+        return 'Service'
+    cur.execute('SELECT name FROM services WHERE id=%s AND user_id=%s', (service_id, uid))
+    row = cur.fetchone()
+    return row['name'] if row else 'Service'
+
+
+@app.route('/services')
+@login_required
+def services():
+    uid = current_user.id
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        'SELECT * FROM services WHERE user_id=%s ORDER BY active DESC, category, name',
+        (uid,)
+    )
+    catalog = cur.fetchall()
+    cur.execute(
+        "SELECT s.*, sv.name AS service_name, sv.category AS service_category "
+        "FROM service_sessions s LEFT JOIN services sv ON sv.id = s.service_id "
+        "WHERE s.user_id=%s ORDER BY s.session_date DESC, s.id DESC LIMIT 250",
+        (uid,)
+    )
+    sessions = cur.fetchall()
+    cur.execute('SELECT id, name FROM customers WHERE user_id=%s ORDER BY name', (uid,))
+    customers = cur.fetchall()
+    today = datetime.today().strftime('%Y-%m-%d')
+    booked = sum(1 for s in sessions if (s.get('status') or '') == 'booked')
+    done = sum(1 for s in sessions if (s.get('status') or '') == 'done')
+    earned = sum(float(s.get('price') or 0) for s in sessions if (s.get('status') or '') == 'done')
+    upcoming = [s for s in sessions if (s.get('status') or '') == 'booked' and (s.get('session_date') or '') >= today]
+    cur.close()
+    conn.close()
+    return render_template(
+        'services.html',
+        catalog=catalog,
+        sessions=sessions,
+        customers=customers,
+        categories=SERVICE_CATEGORIES,
+        booked=booked,
+        done=done,
+        earned=earned,
+        upcoming_count=len(upcoming),
+        today=today,
+        active_catalog=[c for c in catalog if c.get('active')],
+    )
+
+
+@app.route('/services/add', methods=['POST'])
+@login_required
+def add_service():
+    name, e1 = _clean_text('name', max_len=160, label='service name')
+    price, e2 = _clean_float('price', min_v=0, max_v=1e12, label='price')
+    desc, _ = _clean_text('description', required=False, max_len=2000, label='description')
+    cat = (request.form.get('category') or 'Other').strip()
+    if cat not in SERVICE_CATEGORIES:
+        cat = 'Other'
+    try:
+        dur = int(float(request.form.get('duration_minutes') or 60))
+    except (TypeError, ValueError):
+        dur = 60
+    if dur < 0:
+        dur = 0
+    if _reject((name, e1), (price, e2)):
+        return redirect(url_for('services'))
+    blocked = _plan_block('services')
+    if blocked:
+        flash(blocked, 'danger')
+        return redirect(url_for('plans'))
+    today = datetime.today().strftime('%Y-%m-%d')
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO services (user_id, name, category, description, duration_minutes, price, active, created_date) VALUES (%s,%s,%s,%s,%s,%s,1,%s)",
+        (current_user.id, name, cat, desc or '', dur, price, today)
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    log_activity(current_user.id, current_user.username, 'Added service', name)
+    flash('Service saved.', 'success')
+    return redirect(url_for('services'))
+
+
+@app.route('/services/update/<int:id>', methods=['POST'])
+@login_required
+def update_service(id):
+    name, e1 = _clean_text('name', max_len=160, label='service name')
+    price, e2 = _clean_float('price', min_v=0, max_v=1e12, label='price')
+    desc, _ = _clean_text('description', required=False, max_len=2000, label='description')
+    cat = (request.form.get('category') or 'Other').strip()
+    if cat not in SERVICE_CATEGORIES:
+        cat = 'Other'
+    try:
+        dur = int(float(request.form.get('duration_minutes') or 60))
+    except (TypeError, ValueError):
+        dur = 60
+    if dur < 0:
+        dur = 0
+    if _reject((name, e1), (price, e2)):
+        return redirect(url_for('services'))
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        "UPDATE services SET name=%s, category=%s, description=%s, duration_minutes=%s, price=%s WHERE id=%s AND user_id=%s",
+        (name, cat, desc or '', dur, price, id, current_user.id)
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Service updated.', 'success')
+    return redirect(url_for('services'))
+
+
+@app.route('/services/toggle/<int:id>')
+@login_required
+def toggle_service(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT active FROM services WHERE id=%s AND user_id=%s', (id, current_user.id))
+    row = cur.fetchone()
+    if row:
+        nxt = 0 if row['active'] else 1
+        cur.execute('UPDATE services SET active=%s WHERE id=%s AND user_id=%s', (nxt, id, current_user.id))
+        conn.commit()
+        flash('Service is now {}.'.format('active' if nxt else 'hidden'), 'success')
+    cur.close()
+    conn.close()
+    return redirect(url_for('services'))
+
+
+@app.route('/services/delete/<int:id>')
+@login_required
+def delete_service(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT COUNT(*) AS n FROM service_sessions WHERE service_id=%s AND user_id=%s', (id, current_user.id))
+    n = (cur.fetchone() or {}).get('n') or 0
+    if n:
+        cur.execute('UPDATE services SET active=0 WHERE id=%s AND user_id=%s', (id, current_user.id))
+        conn.commit()
+        flash('This service has bookings, so it was hidden instead of deleted.', 'info')
+    else:
+        cur.execute('DELETE FROM services WHERE id=%s AND user_id=%s', (id, current_user.id))
+        conn.commit()
+        flash('Service deleted.', 'success')
+    cur.close()
+    conn.close()
+    return redirect(url_for('services'))
+
+
+@app.route('/services/sessions/add', methods=['POST'])
+@login_required
+def add_service_session():
+    try:
+        service_id = int(request.form.get('service_id') or 0)
+    except ValueError:
+        service_id = 0
+    if not service_id:
+        flash('Choose a service.', 'danger')
+        return redirect(url_for('services'))
+    session_date, e1 = _clean_date('session_date')
+    price, e2 = _clean_float('price', required=False, min_v=0, max_v=1e12, label='price')
+    notes, _ = _clean_text('notes', required=False, max_len=2000, label='notes')
+    time_txt, _ = _clean_text('session_time', required=False, max_len=10, label='time')
+    if e1:
+        flash(e1, 'danger')
+        return redirect(url_for('services'))
+    uid = current_user.id
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM services WHERE id=%s AND user_id=%s', (service_id, uid))
+    svc = cur.fetchone()
+    if not svc:
+        cur.close()
+        conn.close()
+        flash('Service not found.', 'danger')
+        return redirect(url_for('services'))
+    if price is None:
+        price = float(svc['price'] or 0)
+    cust_id = request.form.get('customer_id') or None
+    cust_name = (request.form.get('customer_name') or '').strip()
+    if cust_id:
+        try:
+            cust_id = int(cust_id)
+        except ValueError:
+            cust_id = None
+    if cust_id:
+        cur.execute('SELECT name FROM customers WHERE id=%s AND user_id=%s', (cust_id, uid))
+        saved_c = cur.fetchone()
+        if saved_c:
+            cust_name = saved_c['name']
+        else:
+            cust_id = None
+    if not cust_name:
+        cust_name = 'Walk-in'
+    pay = _payment_method(request.form.get('payment_method') or 'cash')
+    today = datetime.today().strftime('%Y-%m-%d')
+    cur.execute(
+        "INSERT INTO service_sessions (user_id, service_id, customer_id, customer_name, session_date, session_time, duration_minutes, price, status, payment_method, notes, created_date) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'booked',%s,%s,%s)",
+        (uid, service_id, cust_id, cust_name[:120], session_date, time_txt or '',
+         svc['duration_minutes'] or 60, price, pay, notes or '', today)
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    log_activity(uid, current_user.username, 'Booked service', '{} for {}'.format(svc['name'], cust_name))
+    flash('Session booked.', 'success')
+    return redirect(url_for('services'))
+
+
+@app.route('/services/sessions/<int:id>/status/<action>')
+@login_required
+def set_session_status(id, action):
+    action = (action or '').lower()
+    if action not in ('done', 'cancelled', 'booked'):
+        flash('Unknown session action.', 'danger')
+        return redirect(url_for('services'))
+    uid = current_user.id
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM service_sessions WHERE id=%s AND user_id=%s', (id, uid))
+    row = cur.fetchone()
+    if not row:
+        cur.close()
+        conn.close()
+        flash('Session not found.', 'danger')
+        return redirect(url_for('services'))
+    if action == 'done' and not row.get('income_id'):
+        svc_name = _service_row_name(cur, row.get('service_id'), uid)
+        source = 'Service: {} — {}'.format(svc_name, row.get('customer_name') or 'Walk-in')
+        cur.execute(
+            'INSERT INTO income (user_id, source, amount, date) VALUES (%s,%s,%s,%s) RETURNING id',
+            (uid, source[:120], float(row.get('price') or 0), row.get('session_date'))
+        )
+        inc = cur.fetchone()
+        inc_id = inc['id'] if inc else None
+        cur.execute(
+            'UPDATE service_sessions SET status=%s, income_id=%s WHERE id=%s AND user_id=%s',
+            ('done', inc_id, id, uid)
+        )
+        log_activity(uid, current_user.username, 'Completed service', source)
+        flash('Session marked done and income recorded.', 'success')
+    else:
+        cur.execute(
+            'UPDATE service_sessions SET status=%s WHERE id=%s AND user_id=%s',
+            (action, id, uid)
+        )
+        flash('Session set to {}.'.format(action), 'success')
+    conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for('services'))
+
+
+@app.route('/services/sessions/<int:id>/delete')
+@login_required
+def delete_service_session(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('DELETE FROM service_sessions WHERE id=%s AND user_id=%s', (id, current_user.id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Session removed.', 'success')
+    return redirect(url_for('services'))
+
+
+@app.route('/export/services.csv')
+@login_required
+def export_services_csv():
+    uid = current_user.id
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM services WHERE user_id=%s ORDER BY name', (uid,))
+    catalog = cur.fetchall()
+    cur.execute(
+        "SELECT s.*, sv.name AS service_name FROM service_sessions s "
+        "LEFT JOIN services sv ON sv.id = s.service_id WHERE s.user_id=%s ORDER BY s.session_date",
+        (uid,)
+    )
+    sessions = cur.fetchall()
+    cur.close()
+    conn.close()
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(['# catalog'])
+    w.writerow(['name', 'category', 'duration_minutes', 'price', 'active', 'description'])
+    for row in catalog:
+        w.writerow([row['name'], row['category'], row['duration_minutes'], row['price'], row['active'], row.get('description') or ''])
+    w.writerow([])
+    w.writerow(['# sessions'])
+    w.writerow(['date', 'time', 'service', 'customer', 'price', 'status', 'payment', 'notes'])
+    for row in sessions:
+        w.writerow([
+            row.get('session_date'), row.get('session_time'), row.get('service_name'),
+            row.get('customer_name'), row.get('price'), row.get('status'),
+            row.get('payment_method'), row.get('notes') or ''
+        ])
+    body = buf.getvalue()
+    return Response(
+        body,
+        mimetype='text/csv',
+        headers={'Content-Disposition': 'attachment; filename=kaze-services.csv'}
+    )
+
 
 # ======================== Tasks ========================
 
@@ -4141,6 +5072,23 @@ def calendar():
             'title': row['title'],
             'extra': ('done' if row['done'] else row['priority'])
         })
+
+    try:
+        cur.execute(
+            "SELECT ss.session_date, ss.session_time, ss.status, ss.customer_name, sv.name AS service_name "
+            "FROM service_sessions ss LEFT JOIN services sv ON sv.id = ss.service_id "
+            "WHERE ss.user_id=%s AND ss.session_date <= %s AND ss.status <> 'cancelled'",
+            (current_user.id, horizon)
+        )
+        for row in cur.fetchall():
+            events.append({
+                'date': row['session_date'],
+                'kind': 'Service',
+                'title': '{} — {}'.format(row.get('service_name') or 'Service', row.get('customer_name') or 'Walk-in'),
+                'extra': '{} {}'.format(row.get('session_time') or '', row.get('status') or '').strip()
+            })
+    except Exception:
+        pass
     cur.close()
     conn.close()
     events.sort(key=lambda e: e['date'] or '9999')
@@ -4206,7 +5154,8 @@ def backup_export():
     cur = conn.cursor()
     payload = {'exported_at': datetime.now().isoformat(), 'tables': {}}
     tables = ('income', 'expenses', 'stock', 'customers', 'cash_books', 'documents',
-              'tasks', 'notes', 'suppliers', 'budgets', 'recurring_items')
+              'tasks', 'notes', 'suppliers', 'budgets', 'recurring_items',
+              'services', 'service_sessions', 'stripe_payments')
     for table in tables:
         cur.execute('SELECT * FROM {} WHERE user_id = %s'.format(table), (uid,))
         rows = cur.fetchall()
@@ -4275,6 +5224,14 @@ def backup_import():
                 'INSERT INTO tasks (user_id, title, notes, priority, due_date, done, created_date) VALUES (%s,%s,%s,%s,%s,%s,%s)',
                 (uid, row.get('title'), row.get('notes') or '', row.get('priority') or 'medium',
                  row.get('due_date') or '', row.get('done') or 0,
+                 row.get('created_date') or datetime.today().strftime('%Y-%m-%d'))
+            )
+            added += 1
+        for row in tables.get('services', []):
+            cur.execute(
+                'INSERT INTO services (user_id, name, category, description, duration_minutes, price, active, created_date) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)',
+                (uid, row.get('name'), row.get('category') or 'Other', row.get('description') or '',
+                 row.get('duration_minutes') or 60, row.get('price') or 0, row.get('active') if row.get('active') is not None else 1,
                  row.get('created_date') or datetime.today().strftime('%Y-%m-%d'))
             )
             added += 1
@@ -4976,12 +5933,25 @@ def reminders():
     low = cur.fetchall()
     cur.close()
     conn.close()
+    due_sessions = []
+    try:
+        cur.execute(
+            "SELECT ss.*, sv.name AS service_name FROM service_sessions ss "
+            "LEFT JOIN services sv ON sv.id = ss.service_id "
+            "WHERE ss.user_id=%s AND ss.status='booked' AND ss.session_date <= %s "
+            "ORDER BY ss.session_date",
+            (uid, today)
+        )
+        due_sessions = cur.fetchall()
+    except Exception:
+        due_sessions = []
     return render_template(
         'reminders.html',
         overdue_tasks=overdue_tasks,
         late_pos=late_pos,
         open_docs=open_docs,
         low=low,
+        due_sessions=due_sessions,
         today=today
     )
 
@@ -5166,6 +6136,9 @@ def clear_data():
     try:
         # Children first so foreign keys do not block the wipe.
         for sql in (
+            'DELETE FROM stripe_payments WHERE user_id = %s',
+            'DELETE FROM service_sessions WHERE user_id = %s',
+            'DELETE FROM services WHERE user_id = %s',
             'DELETE FROM sales WHERE user_id = %s',
             'DELETE FROM purchase_orders WHERE user_id = %s',
             'DELETE FROM bookkeeping_docs WHERE user_id = %s',
@@ -5390,18 +6363,34 @@ def sale_to_invoice(id):
 @app.route('/tasks/bulk-complete', methods=['POST'])
 @login_required
 def tasks_bulk_complete():
-    ids = request.form.getlist('selected_ids')
+    action = (request.form.get('action') or 'complete').strip()
+    ids = _selected_ids()
     if not ids:
         flash('Pick at least one task.', 'danger')
         return redirect(url_for('tasks'))
     conn = get_db()
     cur = conn.cursor()
-    for sid in ids:
-        cur.execute('UPDATE tasks SET done=1 WHERE id=%s AND user_id=%s', (sid, current_user.id))
-    conn.commit()
-    cur.close()
-    conn.close()
-    flash('Marked {} task(s) done.'.format(len(ids)), 'success')
+    try:
+        if action == 'delete':
+            cur.execute('DELETE FROM tasks WHERE id = ANY(%s) AND user_id=%s', (ids, current_user.id))
+            flash('Deleted {} task(s).'.format(len(ids)), 'success')
+        elif action == 'reopen':
+            cur.execute('UPDATE tasks SET done=0 WHERE id = ANY(%s) AND user_id=%s', (ids, current_user.id))
+            flash('Reopened {} task(s).'.format(len(ids)), 'success')
+        else:
+            cur.execute('UPDATE tasks SET done=1 WHERE id = ANY(%s) AND user_id=%s', (ids, current_user.id))
+            flash('Marked {} task(s) done.'.format(len(ids)), 'success')
+        conn.commit()
+    except Exception as exc:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        flash('Task bulk action failed.', 'danger')
+        print('tasks_bulk:', exc)
+    finally:
+        cur.close()
+        conn.close()
     return redirect(url_for('tasks'))
 
 
@@ -6073,6 +7062,388 @@ def set_display_theme():
     resp = app.response_class(response='{"ok": true, "theme": "%s"}' % name, mimetype='application/json')
     resp.set_cookie('kaze_theme', name, max_age=60 * 60 * 24 * 400, samesite='Lax')
     return resp
+
+
+# ======================== Stripe payments ========================
+
+def _stripe_settings(uid=None):
+    if uid is None and getattr(current_user, 'is_authenticated', False):
+        uid = current_user.id
+    if not uid:
+        return None
+    row = getattr(g, '_settings_row', None)
+    if row and getattr(g, '_settings_uid', None) == uid:
+        return row
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM settings WHERE user_id=%s', (uid,))
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    return row
+
+
+def _record_stripe_checkout(uid, kind, record_id, amount, title, session):
+    today = datetime.today().strftime('%Y-%m-%d')
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO stripe_payments (user_id, kind, record_id, amount, currency, status, checkout_id, title, created_date) "
+        "VALUES (%s,%s,%s,%s,%s,'pending',%s,%s,%s)",
+        (uid, kind, record_id or 0, float(amount or 0),
+         stripe_payments.currency_code(_stripe_settings(uid)),
+         session.id, (title or '')[:160], today)
+    )
+    if kind == 'session' and record_id:
+        cur.execute(
+            "UPDATE service_sessions SET stripe_checkout_id=%s WHERE id=%s AND user_id=%s",
+            (session.id, record_id, uid)
+        )
+    elif kind == 'book' and record_id:
+        cur.execute(
+            "UPDATE bookkeeping_docs SET stripe_checkout_id=%s WHERE id=%s AND user_id=%s",
+            (session.id, record_id, uid)
+        )
+    elif kind == 'sale' and record_id:
+        cur.execute(
+            "UPDATE sales SET stripe_checkout_id=%s WHERE id=%s AND user_id=%s",
+            (session.id, record_id, uid)
+        )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def _fulfill_stripe_payment(uid, kind, record_id, checkout_id, payment_intent, amount=None):
+    today = datetime.today().strftime('%Y-%m-%d')
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        "UPDATE stripe_payments SET status='paid', paid_date=%s, payment_intent=%s "
+        "WHERE user_id=%s AND checkout_id=%s",
+        (today, payment_intent or '', uid, checkout_id or '')
+    )
+    kind = (kind or '').lower()
+    if kind == 'session' and record_id:
+        cur.execute('SELECT * FROM service_sessions WHERE id=%s AND user_id=%s', (record_id, uid))
+        row = cur.fetchone()
+        if row and (row.get('status') or '') != 'done':
+            svc_name = _service_row_name(cur, row.get('service_id'), uid)
+            source = 'Stripe: {} — {}'.format(svc_name, row.get('customer_name') or 'Walk-in')
+            inc_id = row.get('income_id')
+            if not inc_id:
+                cur.execute(
+                    'INSERT INTO income (user_id, source, amount, date) VALUES (%s,%s,%s,%s) RETURNING id',
+                    (uid, source[:120], float(row.get('price') or amount or 0), row.get('session_date') or today)
+                )
+                inc = cur.fetchone()
+                inc_id = inc['id'] if inc else None
+            cur.execute(
+                "UPDATE service_sessions SET status='done', payment_method='card', income_id=%s, stripe_checkout_id=%s "
+                "WHERE id=%s AND user_id=%s",
+                (inc_id, checkout_id or row.get('stripe_checkout_id'), record_id, uid)
+            )
+    elif kind == 'book' and record_id:
+        cur.execute(
+            "UPDATE bookkeeping_docs SET status='paid', stripe_checkout_id=%s WHERE id=%s AND user_id=%s",
+            (checkout_id or '', record_id, uid)
+        )
+    elif kind == 'sale' and record_id:
+        cur.execute(
+            "UPDATE sales SET payment_method='card', stripe_checkout_id=%s WHERE id=%s AND user_id=%s",
+            (checkout_id or '', record_id, uid)
+        )
+    elif kind == 'plan':
+        cur.execute('SELECT title FROM stripe_payments WHERE user_id=%s AND checkout_id=%s', (uid, checkout_id or ''))
+        pay = cur.fetchone() or {}
+        title = (pay.get('title') or '').lower()
+        wanted = 'businessman'
+        if 'ceo' in title:
+            wanted = 'ceo'
+        elif 'business' in title:
+            wanted = 'businessman'
+        cur.execute('SELECT plan_tier FROM settings WHERE user_id=%s', (uid,))
+        row = cur.fetchone() or {}
+        current = normalize_plan(row.get('plan_tier') or 'starter')
+        if PLAN_RANK.get(wanted, 0) >= PLAN_RANK.get(current, 0):
+            cur.execute('UPDATE settings SET plan_tier=%s WHERE user_id=%s', (wanted, uid))
+    elif kind == 'custom':
+        if amount and float(amount) > 0:
+            cur.execute(
+                'INSERT INTO income (user_id, source, amount, date) VALUES (%s,%s,%s,%s)',
+                (uid, 'Stripe payment', float(amount), today)
+            )
+    conn.commit()
+    cur.close()
+    conn.close()
+    try:
+        log_activity(uid, 'stripe', 'Stripe payment received', '{} #{}'.format(kind, record_id or ''))
+    except Exception:
+        pass
+
+
+def _start_checkout(kind, record_id, amount, title, cancel_endpoint='dashboard'):
+    settings = _stripe_settings()
+    if not stripe_payments.stripe_ready(settings):
+        flash('Stripe is not set up yet. Add your keys in Settings.', 'danger')
+        return redirect(url_for('settings'))
+    success = url_for('stripe_pay_success', _external=True) + '?session_id={CHECKOUT_SESSION_ID}'
+    cancel = url_for('stripe_pay_cancel', _external=True)
+    session, err = stripe_payments.create_checkout(
+        settings,
+        amount=amount,
+        title=title,
+        success_url=success,
+        cancel_url=cancel,
+        metadata={
+            'user_id': current_user.id,
+            'kind': kind,
+            'record_id': record_id or 0,
+            'title': title,
+        },
+    )
+    if err:
+        flash(err, 'danger')
+        return redirect(url_for(cancel_endpoint))
+    _record_stripe_checkout(current_user.id, kind, record_id, amount, title, session)
+    return redirect(session.url, code=303)
+
+
+@app.route('/pay/session/<int:id>')
+@login_required
+def pay_service_session(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT s.*, sv.name AS service_name FROM service_sessions s "
+        "LEFT JOIN services sv ON sv.id = s.service_id "
+        "WHERE s.id=%s AND s.user_id=%s",
+        (id, current_user.id)
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not row:
+        flash('Session not found.', 'danger')
+        return redirect(url_for('services'))
+    if (row.get('status') or '') == 'done':
+        flash('That session is already marked done.', 'info')
+        return redirect(url_for('services'))
+    title = '{} — {}'.format(row.get('service_name') or 'Service', row.get('customer_name') or 'Walk-in')
+    return _start_checkout('session', id, row.get('price') or 0, title, 'services')
+
+
+@app.route('/pay/book/<int:id>')
+@login_required
+def pay_book_doc(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM bookkeeping_docs WHERE id=%s AND user_id=%s', (id, current_user.id))
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not row:
+        flash('Document not found.', 'danger')
+        return redirect(url_for('bookkeeping'))
+    if (row.get('status') or '') == 'paid':
+        flash('That document is already paid.', 'info')
+        return redirect(url_for('bookkeeping_type', kind=row.get('kind') or 'invoice'))
+    title = row.get('title') or row.get('reference') or 'Document'
+    return _start_checkout('book', id, row.get('amount') or 0, title, 'bookkeeping')
+
+
+@app.route('/pay/sale/<int:id>')
+@login_required
+def pay_sale(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM sales WHERE id=%s AND user_id=%s', (id, current_user.id))
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not row:
+        flash('Sale not found.', 'danger')
+        return redirect(url_for('sales'))
+    title = 'Sale #{} — {}'.format(id, row.get('customer_name') or 'Walk-in')
+    return _start_checkout('sale', id, row.get('total_amount') or 0, title, 'sales')
+
+
+@app.route('/pay/custom', methods=['POST'])
+@login_required
+def pay_custom():
+    amount, err = _clean_float('amount', min_v=0.01, max_v=1e12, label='amount')
+    title, _ = _clean_text('title', required=False, max_len=160, label='title')
+    if err:
+        flash(err, 'danger')
+        return redirect(url_for('payments'))
+    return _start_checkout('custom', 0, amount, title or 'Custom payment', 'payments')
+
+
+@app.route('/payments')
+@login_required
+def payments():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        'SELECT * FROM stripe_payments WHERE user_id=%s ORDER BY id DESC LIMIT 200',
+        (current_user.id,)
+    )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    settings = _stripe_settings()
+    return render_template(
+        'payments.html',
+        rows=rows,
+        stripe_ready=stripe_payments.stripe_ready(settings),
+        publishable=(stripe_payments.keys_from(settings)[1] or '')[:20],
+    )
+
+
+@app.route('/pay/success')
+@login_required
+def stripe_pay_success():
+    session_id = (request.args.get('session_id') or '').strip()
+    if not session_id:
+        flash('Payment finished. If the amount is missing, wait a moment and refresh Payments.', 'success')
+        return redirect(url_for('payments'))
+    settings = _stripe_settings()
+    secret, _, _ = stripe_payments.keys_from(settings)
+    kind = 'custom'
+    record_id = 0
+    amount = 0
+    intent = ''
+    if secret and stripe_payments.stripe_available():
+        try:
+            import stripe
+            stripe.api_key = secret
+            sess = stripe.checkout.Session.retrieve(session_id)
+            meta = sess.get('metadata') or {}
+            kind = meta.get('kind') or 'custom'
+            try:
+                record_id = int(meta.get('record_id') or 0)
+            except ValueError:
+                record_id = 0
+            intent = sess.get('payment_intent') or ''
+            amount = stripe_payments.from_stripe_amount(sess.get('amount_total'), sess.get('currency'))
+            if (sess.get('payment_status') or '') == 'paid':
+                _fulfill_stripe_payment(current_user.id, kind, record_id, session_id, intent, amount)
+        except Exception as exc:
+            print('stripe success retrieve:', exc)
+    flash('Payment received. Thank you.', 'success')
+    if kind == 'session':
+        return redirect(url_for('services'))
+    if kind == 'book':
+        return redirect(url_for('bookkeeping'))
+    if kind == 'sale':
+        return redirect(url_for('sales'))
+    if kind == 'plan':
+        return redirect(url_for('plans'))
+    return redirect(url_for('payments'))
+
+
+@app.route('/pay/cancel')
+@login_required
+def stripe_pay_cancel():
+    flash('Payment cancelled. Nothing was charged.', 'info')
+    return redirect(url_for('payments'))
+
+
+@app.route('/webhooks/stripe', methods=['POST'])
+def stripe_webhook():
+    payload = request.get_data()
+    sig = request.headers.get('Stripe-Signature', '')
+    event, err = stripe_payments.parse_webhook(payload, sig, None)
+    if err or not event:
+        # Try with first owner settings if env secret missing
+        try:
+            conn = get_db()
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM settings WHERE stripe_webhook_secret <> '' LIMIT 1")
+            row = cur.fetchone()
+            cur.close()
+            conn.close()
+        except Exception:
+            row = None
+        event, err = stripe_payments.parse_webhook(payload, sig, row)
+    if err or not event:
+        return ('invalid webhook', 400)
+    if event.get('type') == 'checkout.session.completed':
+        sess = event['data']['object']
+        meta = sess.get('metadata') or {}
+        try:
+            uid = int(meta.get('user_id') or 0)
+        except ValueError:
+            uid = 0
+        try:
+            record_id = int(meta.get('record_id') or 0)
+        except ValueError:
+            record_id = 0
+        kind = meta.get('kind') or 'custom'
+        intent = sess.get('payment_intent') or ''
+        amount = stripe_payments.from_stripe_amount(sess.get('amount_total'), sess.get('currency'))
+        if uid:
+            _fulfill_stripe_payment(uid, kind, record_id, sess.get('id'), intent, amount)
+    return ('', 200)
+
+
+
+
+@app.route('/plans')
+@login_required
+def plans():
+    settings = _stripe_settings()
+    current = plan_info(settings)
+    counts = {}
+    conn = get_db()
+    cur = conn.cursor()
+    for kind in ('stock', 'customers', 'services', 'sales_month', 'team'):
+        counts[kind] = _plan_count(cur, current_user.id, kind)
+    cur.close()
+    conn.close()
+    return render_template(
+        'plans.html',
+        tiers=[PLAN_TIERS[k] for k in PLAN_ORDER],
+        current=current,
+        counts=counts,
+        stripe_ready=stripe_payments.stripe_ready(settings),
+        is_owner=(getattr(current_user, 'role', 'owner') == 'owner'),
+    )
+
+
+@app.route('/plans/set', methods=['POST'])
+@login_required
+def set_plan():
+    if getattr(current_user, 'role', 'owner') != 'owner':
+        flash('Only the owner can change the plan.', 'danger')
+        return redirect(url_for('plans'))
+    wanted = normalize_plan(request.form.get('plan_tier'))
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('UPDATE settings SET plan_tier=%s WHERE user_id=%s', (wanted, current_user.id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Plan set to {}.'.format(PLAN_TIERS[wanted]['label']), 'success')
+    return redirect(url_for('plans'))
+
+
+@app.route('/plans/upgrade/<tier>')
+@login_required
+def pay_plan(tier):
+    wanted = normalize_plan(tier)
+    if wanted == 'starter':
+        flash('New user is the free starting plan.', 'info')
+        return redirect(url_for('plans'))
+    settings = _stripe_settings()
+    current = plan_info(settings)
+    if PLAN_RANK[wanted] <= PLAN_RANK[current['key']]:
+        flash('You already have this plan or a higher one.', 'info')
+        return redirect(url_for('plans'))
+    info = PLAN_TIERS[wanted]
+    title = 'KAZE {} plan'.format(info['label'])
+    return _start_checkout('plan', PLAN_RANK[wanted], info['price'], title, 'plans')
+
 
 
 if __name__ == '__main__':
