@@ -1791,7 +1791,7 @@ def live_nav_groups(live=None):
                 'active': active,
             })
         if visible:
-            groups.append({'title': title, 'items': visible})
+            groups.append({'title': title, 'links': visible})
     return groups
 
 

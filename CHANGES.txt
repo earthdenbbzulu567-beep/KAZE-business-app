@@ -1,3 +1,5 @@
+v3.0.7 — Fix homepage 500: sidebar groups no longer use the dict key name items (Jinja treated it as dict.items).
+
 v3.0.6 — Payments: Stripe (Visa/Mastercard), PayPal, Flutterwave, and current-account transfers share one checkout path.
 
 v3.0.5 — Faster requests: one settings load per request, cached unread badge, session cookie not rewritten every hit, extra indexes, gunicorn preload + 8 threads.

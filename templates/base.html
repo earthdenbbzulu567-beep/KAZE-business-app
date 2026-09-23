@@ -1694,7 +1694,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
             {% for group in nav_groups or [] %}
             <div class="nav-section">
                 <div class="nav-section-title">{{ group.title }}</div>
-                {% for item in group.items %}
+                {% for item in group.links %}
                 <a href="{{ url_for(item.endpoint) }}" {% if request.endpoint in item.active %}class="active"{% endif %}>
                     <i data-lucide="{{ item.icon }}" class="icon"></i> {{ item.label }}
                 </a>
@@ -1916,7 +1916,7 @@ function kazeConfirmBulk(form) {
     });
     const pages = [
         {% for group in nav_groups or [] %}
-        {% for item in group.items %}
+        {% for item in group.links %}
         ['{{ item.label }}', '{{ url_for(item.endpoint) }}'],
         {% endfor %}
         {% endfor %}
