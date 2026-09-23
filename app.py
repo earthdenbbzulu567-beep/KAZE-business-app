@@ -354,6 +354,7 @@ def init_db():
     cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS stripe_publishable_key TEXT DEFAULT ''")
     cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS stripe_webhook_secret TEXT DEFAULT ''")
     cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS plan_tier TEXT DEFAULT 'ceo'")
+    cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS package_prices TEXT DEFAULT ''")
 
     cur.execute('''
         CREATE TABLE IF NOT EXISTS stripe_payments (
@@ -598,6 +599,108 @@ def init_db():
             created_date TEXT NOT NULL
         )
     ''')
+
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS bank_accounts (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            name TEXT NOT NULL,
+            bank_name TEXT DEFAULT '',
+            account_no TEXT DEFAULT '',
+            account_type TEXT DEFAULT 'Current',
+            opening_balance REAL DEFAULT 0,
+            notes TEXT DEFAULT '',
+            created_date TEXT NOT NULL
+        )
+    ''')
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS bank_transactions (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            account_id INTEGER REFERENCES bank_accounts(id),
+            tx_date TEXT NOT NULL,
+            kind TEXT NOT NULL DEFAULT 'in',
+            amount REAL NOT NULL DEFAULT 0,
+            counterparty TEXT DEFAULT '',
+            reference TEXT DEFAULT '',
+            category TEXT DEFAULT '',
+            notes TEXT DEFAULT '',
+            linked_cashbook_id INTEGER
+        )
+    ''')
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS investments (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            name TEXT NOT NULL,
+            asset_type TEXT DEFAULT 'Other',
+            quantity REAL DEFAULT 1,
+            unit_cost REAL DEFAULT 0,
+            current_price REAL DEFAULT 0,
+            bought_date TEXT DEFAULT '',
+            notes TEXT DEFAULT '',
+            created_date TEXT NOT NULL
+        )
+    ''')
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS shop_listings (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            title TEXT NOT NULL,
+            kind TEXT DEFAULT 'Custom',
+            source_id INTEGER DEFAULT 0,
+            price REAL DEFAULT 0,
+            published INTEGER DEFAULT 1,
+            description TEXT DEFAULT '',
+            created_date TEXT NOT NULL
+        )
+    ''')
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS shop_orders (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            listing_id INTEGER REFERENCES shop_listings(id),
+            buyer TEXT DEFAULT '',
+            qty REAL DEFAULT 1,
+            amount REAL DEFAULT 0,
+            status TEXT DEFAULT 'pending',
+            order_date TEXT NOT NULL,
+            notes TEXT DEFAULT '',
+            created_date TEXT NOT NULL
+        )
+    ''')
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS market_channels (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            name TEXT NOT NULL,
+            kind TEXT DEFAULT 'Other',
+            monthly_revenue REAL DEFAULT 0,
+            notes TEXT DEFAULT '',
+            created_date TEXT NOT NULL
+        )
+    ''')
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS market_valuations (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            as_of TEXT NOT NULL,
+            method TEXT DEFAULT 'blended',
+            multiple REAL DEFAULT 0,
+            revenue_base REAL DEFAULT 0,
+            asset_base REAL DEFAULT 0,
+            estimated_value REAL DEFAULT 0,
+            notes TEXT DEFAULT '',
+            created_date TEXT NOT NULL
+        )
+    ''')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_bank_acct_user ON bank_accounts (user_id)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_bank_tx_user ON bank_transactions (user_id, tx_date)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_invest_user ON investments (user_id)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_shop_list_user ON shop_listings (user_id)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_shop_ord_user ON shop_orders (user_id)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_market_ch_user ON market_channels (user_id)')
+
     cur.execute('CREATE INDEX IF NOT EXISTS idx_services_user ON services (user_id)')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_sessions_user_date ON service_sessions (user_id, session_date)')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_sales_user_date ON sales (user_id, sale_date)')
@@ -1304,70 +1407,209 @@ SERVICE_CATEGORIES = (
 
 
 PLAN_TIERS = {
-    'starter': {
-        'key': 'starter',
+    'new_user': {
+        'key': 'new_user',
         'label': 'New user',
-        'tagline': 'Learn the desk and record the first sales.',
+        'tagline': 'Open the desk and record the first tickets.',
         'price': 0,
+        'highlights': [
+            'Stock, sales, till, and customers',
+            'Tasks, notes, and calendar',
+            'Starter desk limits',
+        ],
+        'modules': [
+            'stock', 'sales', 'counter', 'customers', 'workspace',
+        ],
+        'limits': {'stock': 20, 'customers': 20, 'services': 0, 'sales_month': 40, 'team': 1},
+    },
+    'new_user_plus': {
+        'key': 'new_user_plus',
+        'label': 'New user +',
+        'tagline': 'Add services and a few extra tools.',
+        'price': 25,
+        'highlights': [
+            'Everything in New user',
+            'Services, calculator, and reminders',
+            'More stock and customer room',
+        ],
         'modules': [
             'stock', 'sales', 'counter', 'customers', 'services',
             'calculator', 'reminders', 'workspace',
         ],
-        'limits': {
-            'stock': 40,
-            'customers': 40,
-            'services': 8,
-            'sales_month': 80,
-            'team': 1,
-        },
+        'limits': {'stock': 60, 'customers': 60, 'services': 8, 'sales_month': 120, 'team': 1},
+    },
+    'entrepreneur': {
+        'key': 'entrepreneur',
+        'label': 'Entrepreneur',
+        'tagline': 'Till plus a cash ledger for a growing stall.',
+        'price': 50,
+        'highlights': [
+            'Everything in New user +',
+            'Book keeping papers and cash ledger',
+            'Day close for the drawer',
+        ],
+        'modules': [
+            'stock', 'sales', 'counter', 'customers', 'services',
+            'calculator', 'reminders', 'workspace',
+            'bookkeeping', 'day_close',
+        ],
+        'limits': {'stock': 150, 'customers': 150, 'services': 20, 'sales_month': 400, 'team': 2},
+    },
+    'entrepreneur_plus': {
+        'key': 'entrepreneur_plus',
+        'label': 'Entrepreneur +',
+        'tagline': 'Suppliers, purchase orders, and extra papers.',
+        'price': 75,
+        'highlights': [
+            'Everything in Entrepreneur',
+            'Suppliers, budgets, and recurring items',
+            'Business documents',
+        ],
+        'modules': [
+            'stock', 'sales', 'counter', 'customers', 'services',
+            'calculator', 'reminders', 'workspace',
+            'bookkeeping', 'day_close', 'operations', 'documents',
+        ],
+        'limits': {'stock': 250, 'customers': 250, 'services': 40, 'sales_month': 800, 'team': 3},
     },
     'businessman': {
         'key': 'businessman',
         'label': 'Businessman',
-        'tagline': 'Shop floor plus books, suppliers, and reports.',
-        'price': 29,
+        'tagline': 'Shop floor, books, reports, and tax estimate.',
+        'price': 100,
+        'highlights': [
+            'Everything in Entrepreneur +',
+            'Reports, tax summary, SWOT and plan',
+            'Room for a small team',
+        ],
         'modules': [
             'stock', 'sales', 'counter', 'customers', 'services',
             'calculator', 'reminders', 'workspace',
-            'bookkeeping', 'operations', 'reports', 'tax',
-            'documents', 'day_close', 'planning',
+            'bookkeeping', 'day_close', 'operations', 'documents',
+            'reports', 'tax', 'planning',
         ],
-        'limits': {
-            'stock': 400,
-            'customers': 400,
-            'services': 80,
-            'sales_month': 2000,
-            'team': 5,
-        },
+        'limits': {'stock': 400, 'customers': 400, 'services': 80, 'sales_month': 2000, 'team': 5},
+    },
+    'businessman_pro': {
+        'key': 'businessman_pro',
+        'label': 'Businessman pro',
+        'tagline': 'Statistics and higher desk limits for a busy shop.',
+        'price': 150,
+        'highlights': [
+            'Everything in Businessman',
+            'Statistics tables and Excel export',
+            'Higher stock, sales, and team limits',
+        ],
+        'modules': [
+            'stock', 'sales', 'counter', 'customers', 'services',
+            'calculator', 'reminders', 'workspace',
+            'bookkeeping', 'day_close', 'operations', 'documents',
+            'reports', 'tax', 'planning', 'stats',
+        ],
+        'limits': {'stock': 1500, 'customers': 1500, 'services': 200, 'sales_month': 8000, 'team': 10},
     },
     'ceo': {
         'key': 'ceo',
         'label': 'CEO',
-        'tagline': 'Every module. No practical desk limits.',
-        'price': 79,
+        'tagline': 'Every module, including account tracking.',
+        'price': 300,
+        'highlights': [
+            'Every module in KAZE',
+            'Banking, investments, shop, and market value',
+            'Journals, ledgers, and statements',
+        ],
         'modules': None,
-        'limits': {
-            'stock': 0,
-            'customers': 0,
-            'services': 0,
-            'sales_month': 0,
-            'team': 0,
-        },
+        'limits': {'stock': 8000, 'customers': 8000, 'services': 800, 'sales_month': 40000, 'team': 25},
+    },
+    'founder': {
+        'key': 'founder',
+        'label': "Founder's premium",
+        'tagline': 'The full house with no practical desk limits.',
+        'price': 500,
+        'highlights': [
+            'Everything in CEO including supreme desks',
+            'No practical stock, sales, or team caps',
+            'Banking, investments, shop, and market value',
+        ],
+        'modules': None,
+        'limits': {'stock': 0, 'customers': 0, 'services': 0, 'sales_month': 0, 'team': 0},
     },
 }
-PLAN_ORDER = ('starter', 'businessman', 'ceo')
+PLAN_ORDER = (
+    'new_user', 'new_user_plus', 'entrepreneur', 'entrepreneur_plus',
+    'businessman', 'businessman_pro', 'ceo', 'founder',
+)
 PLAN_RANK = {k: i for i, k in enumerate(PLAN_ORDER)}
 
 
+def default_package_prices():
+    return {k: float(PLAN_TIERS[k].get('price') or 0) for k in PLAN_ORDER}
+
+
+def parse_package_prices(raw):
+    prices = default_package_prices()
+    data = None
+    if raw:
+        try:
+            data = json.loads(raw) if isinstance(raw, str) else raw
+        except (TypeError, ValueError):
+            data = None
+    if isinstance(data, dict):
+        for key in PLAN_ORDER:
+            if key not in data:
+                continue
+            try:
+                val = float(data[key])
+            except (TypeError, ValueError):
+                continue
+            if val < 0:
+                val = 0.0
+            if val > 1e9:
+                val = 1e9
+            prices[key] = val
+    prices['new_user'] = 0.0
+    return prices
+
+
+def package_prices_for(settings=None):
+    # Prices are hardcoded in PLAN_TIERS. Settings cannot override them.
+    return default_package_prices()
+
+
+def priced_tiers(settings=None):
+    prices = package_prices_for(settings)
+    rows = []
+    for key in PLAN_ORDER:
+        row = dict(PLAN_TIERS[key])
+        row['key'] = key
+        row['price'] = prices.get(key, row.get('price') or 0)
+        rows.append(row)
+    return rows
+
+
+
+
 def normalize_plan(raw):
-    key = str(raw or '').strip().lower()
-    if key in ('new', 'new user', 'new_user', 'starter', 'free'):
-        return 'starter'
-    if key in ('business', 'businessman', 'trader', 'pro'):
-        return 'businessman'
-    if key in ('ceo', 'enterprise', 'full'):
-        return 'ceo'
-    return 'ceo' if not raw else 'starter'
+    key = str(raw or '').strip().lower().replace('+', ' plus').replace("'", '')
+    key = ' '.join(key.replace('-', ' ').replace('_', ' ').split())
+    aliases = {
+        'new': 'new_user', 'new user': 'new_user', 'starter': 'new_user', 'free': 'new_user',
+        'new user plus': 'new_user_plus', 'new user +': 'new_user_plus', 'starter plus': 'new_user_plus',
+        'entrepreneur': 'entrepreneur',
+        'entrepreneur plus': 'entrepreneur_plus', 'entrepreneur +': 'entrepreneur_plus',
+        'business': 'businessman', 'businessman': 'businessman', 'trader': 'businessman',
+        'businessman pro': 'businessman_pro', 'pro': 'businessman_pro',
+        'ceo': 'ceo', 'enterprise': 'ceo', 'full': 'ceo',
+        'founder': 'founder', 'founders': 'founder', 'founders premium': 'founder',
+        'founder premium': 'founder', 'premium': 'founder',
+    }
+    if key in PLAN_TIERS:
+        return key
+    mapped = aliases.get(key)
+    if mapped:
+        return mapped
+    return 'ceo' if not raw else 'new_user'
+
 
 
 def plan_info(settings=None):
@@ -1377,6 +1619,7 @@ def plan_info(settings=None):
     key = normalize_plan(raw if raw not in (None, '') else 'ceo')
     info = dict(PLAN_TIERS[key])
     info['key'] = key
+    info['price'] = package_prices_for(settings).get(key, info.get('price') or 0)
     return info
 
 
@@ -1434,7 +1677,7 @@ def _plan_block(kind, extra=1):
     conn.close()
     if n + extra > cap:
         info = plan_info(settings)
-        return 'The {} plan allows {} {}. Upgrade on the Plans page to add more.'.format(
+        return 'The {} package allows {} {}. Upgrade on the Packages page to add more.'.format(
             info['label'], cap, kind.replace('_', ' ')
         )
     return None
@@ -1464,6 +1707,10 @@ MODULE_CATALOG = [
     ('day_close', 'Day close'),
     ('reminders', 'Reminders'),
     ('services', 'Services (teaching, coaching, jobs)'),
+    ('banking', 'Banking books and transfers'),
+    ('investments', 'Investment holdings'),
+    ('shop', 'Online banking and shop'),
+    ('market', 'Monetization and market value'),
 ]
 ALL_OPTIONAL = [m[0] for m in MODULE_CATALOG]
 
@@ -1476,17 +1723,17 @@ APP_MODES = {
     'till': {
         'label': 'Till / shop floor',
         'hint': 'Sell and count stock. Books and planning stay dormant.',
-        'modules': ['stock', 'sales', 'counter', 'customers', 'day_close', 'calculator', 'reminders', 'services'],
+        'modules': ['stock', 'sales', 'counter', 'customers', 'day_close', 'calculator', 'reminders', 'services', 'shop'],
     },
     'books': {
         'label': 'Books and reports',
         'hint': 'Ledgers, cash, papers, reports, tax. The till stays dormant.',
-        'modules': ['bookkeeping', 'accounts', 'documents', 'reports', 'stats', 'tax', 'customers'],
+        'modules': ['bookkeeping', 'accounts', 'documents', 'reports', 'stats', 'tax', 'customers', 'banking'],
     },
     'office': {
         'label': 'Office / planning',
         'hint': 'Tasks, notes, SWOT, plan, reports. Shop-floor selling stays dormant.',
-        'modules': ['workspace', 'planning', 'reports', 'stats', 'documents', 'reminders', 'calculator', 'services'],
+        'modules': ['workspace', 'planning', 'reports', 'stats', 'documents', 'reminders', 'calculator', 'services', 'investments', 'market'],
     },
     'quiet': {
         'label': 'Quiet / dashboard only',
@@ -1585,6 +1832,23 @@ _bind_module(
     'services', 'add_service', 'update_service', 'toggle_service', 'delete_service',
     'add_service_session', 'set_session_status', 'delete_service_session', 'export_services_csv',
     'services_bulk', 'sessions_bulk',
+)
+_bind_module(
+    'banking',
+    'banking', 'add_bank_account', 'delete_bank_account', 'add_bank_tx', 'delete_bank_tx', 'bank_transfer',
+)
+_bind_module(
+    'investments',
+    'investments', 'add_investment', 'update_investment', 'delete_investment',
+)
+_bind_module(
+    'shop',
+    'shop', 'add_shop_listing', 'toggle_shop_listing', 'delete_shop_listing',
+    'add_shop_order', 'set_shop_order', 'delete_shop_order', 'shop_pay',
+)
+_bind_module(
+    'market',
+    'market', 'add_market_channel', 'delete_market_channel', 'add_valuation', 'delete_valuation',
 )
 _bind_module(
     'dashboard',
@@ -1839,7 +2103,7 @@ def inject_settings():
         accent=_accent_palette('#2ecc71'),
         theme_pref='dark',
         stripe_ready=False,
-        plan=plan_info({'plan_tier': 'starter'}),
+        plan=plan_info({'plan_tier': 'new_user'}),
     )
 
 
@@ -1911,7 +2175,7 @@ def login():
                 cur = conn.cursor()
                 cur.execute('INSERT INTO user_activity (user_id, username, login_time, ip_address) VALUES (%s, %s, %s, %s)',
                             (business_id, user['username'], now, ip))
-                cur.execute("INSERT INTO settings (user_id, notify_email, plan_tier) VALUES (%s, %s, 'starter') ON CONFLICT (user_id) DO NOTHING",
+                cur.execute("INSERT INTO settings (user_id, notify_email, plan_tier) VALUES (%s, %s, 'new_user') ON CONFLICT (user_id) DO NOTHING",
                             (business_id, user.get('email') or ''))
                 conn.commit()
                 cur.close()
@@ -2843,6 +3107,8 @@ def settings():
         if getattr(current_user, 'role', 'owner') != 'owner':
             plan_tier = normalize_plan((prior_keys.get('plan_tier') if prior_keys else None) or 'ceo')
 
+        package_prices = ''
+
         if font_size not in ('xsmall', 'small', 'medium', 'large', 'xlarge'):
             font_size = 'medium'
         if items_per_page not in (10, 25, 50, 100):
@@ -2863,7 +3129,8 @@ def settings():
                 invoice_prefix=%s, business_phone=%s, business_address=%s,
                 fiscal_year_start=%s, number_decimals=%s, sidebar_collapsed=%s,
                 app_mode=%s, enabled_modules=%s, ui_device=%s,
-                stripe_publishable_key=%s, stripe_secret_key=%s, stripe_webhook_secret=%s, plan_tier=%s
+                stripe_publishable_key=%s, stripe_secret_key=%s, stripe_webhook_secret=%s, plan_tier=%s,
+                package_prices=%s
             WHERE user_id=%s
         ''', (low_stock_threshold, email_notifications, notify_email,
               theme, font_family, font_size, default_chart_type,
@@ -2875,6 +3142,7 @@ def settings():
               fiscal_year_start, number_decimals, sidebar_collapsed,
               app_mode, enabled_modules, ui_device,
               stripe_publishable_key, stripe_secret_key, stripe_webhook_secret, plan_tier,
+              package_prices,
               current_user.id))
         conn.commit()
         cur.close()
@@ -4571,7 +4839,27 @@ def search():
     except Exception:
         pass
 
-    results = customers + products + docs + note_hits + task_hits + book_hits + sku_hits + service_hits + session_hits
+    bank_hits = invest_hits = shop_hits = []
+    try:
+        cur.execute(
+            "SELECT id, name, 'bank' as type FROM bank_accounts WHERE user_id = %s AND (name ILIKE %s OR bank_name ILIKE %s) LIMIT 8",
+            (current_user.id, '%'+q+'%', '%'+q+'%')
+        )
+        bank_hits = cur.fetchall()
+        cur.execute(
+            "SELECT id, name, 'investment' as type FROM investments WHERE user_id = %s AND name ILIKE %s LIMIT 8",
+            (current_user.id, '%'+q+'%')
+        )
+        invest_hits = cur.fetchall()
+        cur.execute(
+            "SELECT id, title as name, 'listing' as type FROM shop_listings WHERE user_id = %s AND (title ILIKE %s OR description ILIKE %s) LIMIT 8",
+            (current_user.id, '%'+q+'%', '%'+q+'%')
+        )
+        shop_hits = cur.fetchall()
+    except Exception:
+        pass
+
+    results = customers + products + docs + note_hits + task_hits + book_hits + sku_hits + service_hits + session_hits + bank_hits + invest_hits + shop_hits
     return render_template('search_results.html', results=results, q=q)
 
 # ======================== Services ========================
@@ -6139,6 +6427,13 @@ def clear_data():
         # Children first so foreign keys do not block the wipe.
         for sql in (
             'DELETE FROM stripe_payments WHERE user_id = %s',
+            'DELETE FROM shop_orders WHERE user_id = %s',
+            'DELETE FROM shop_listings WHERE user_id = %s',
+            'DELETE FROM bank_transactions WHERE user_id = %s',
+            'DELETE FROM bank_accounts WHERE user_id = %s',
+            'DELETE FROM investments WHERE user_id = %s',
+            'DELETE FROM market_valuations WHERE user_id = %s',
+            'DELETE FROM market_channels WHERE user_id = %s',
             'DELETE FROM service_sessions WHERE user_id = %s',
             'DELETE FROM services WHERE user_id = %s',
             'DELETE FROM sales WHERE user_id = %s',
@@ -7156,17 +7451,17 @@ def _fulfill_stripe_payment(uid, kind, record_id, checkout_id, payment_intent, a
             (checkout_id or '', record_id, uid)
         )
     elif kind == 'plan':
-        cur.execute('SELECT title FROM stripe_payments WHERE user_id=%s AND checkout_id=%s', (uid, checkout_id or ''))
-        pay = cur.fetchone() or {}
-        title = (pay.get('title') or '').lower()
-        wanted = 'businessman'
-        if 'ceo' in title:
-            wanted = 'ceo'
-        elif 'business' in title:
-            wanted = 'businessman'
+        wanted = None
+        if record_id is not None and 0 <= int(record_id or -1) < len(PLAN_ORDER):
+            wanted = PLAN_ORDER[int(record_id)]
+        if not wanted:
+            cur.execute('SELECT title FROM stripe_payments WHERE user_id=%s AND checkout_id=%s', (uid, checkout_id or ''))
+            pay = cur.fetchone() or {}
+            title = (pay.get('title') or '')
+            wanted = normalize_plan(title.replace('KAZE package:', '').strip() or 'new_user')
         cur.execute('SELECT plan_tier FROM settings WHERE user_id=%s', (uid,))
         row = cur.fetchone() or {}
-        current = normalize_plan(row.get('plan_tier') or 'starter')
+        current = normalize_plan(row.get('plan_tier') or 'new_user')
         if PLAN_RANK.get(wanted, 0) >= PLAN_RANK.get(current, 0):
             cur.execute('UPDATE settings SET plan_tier=%s WHERE user_id=%s', (wanted, uid))
     elif kind == 'custom':
@@ -7391,6 +7686,7 @@ def stripe_webhook():
 
 
 
+@app.route('/packages')
 @app.route('/plans')
 @login_required
 def plans():
@@ -7405,7 +7701,7 @@ def plans():
     conn.close()
     return render_template(
         'plans.html',
-        tiers=[PLAN_TIERS[k] for k in PLAN_ORDER],
+        tiers=priced_tiers(settings),
         current=current,
         counts=counts,
         stripe_ready=stripe_payments.stripe_ready(settings),
@@ -7426,7 +7722,7 @@ def set_plan():
     conn.commit()
     cur.close()
     conn.close()
-    flash('Plan set to {}.'.format(PLAN_TIERS[wanted]['label']), 'success')
+    flash('Package set to {}.'.format(PLAN_TIERS[wanted]['label']), 'success')
     return redirect(url_for('plans'))
 
 
@@ -7434,8 +7730,8 @@ def set_plan():
 @login_required
 def pay_plan(tier):
     wanted = normalize_plan(tier)
-    if wanted == 'starter':
-        flash('New user is the free starting plan.', 'info')
+    if wanted == 'new_user':
+        flash('New user is the free starting package.', 'info')
         return redirect(url_for('plans'))
     settings = _stripe_settings()
     current = plan_info(settings)
@@ -7443,9 +7739,687 @@ def pay_plan(tier):
         flash('You already have this plan or a higher one.', 'info')
         return redirect(url_for('plans'))
     info = PLAN_TIERS[wanted]
-    title = 'KAZE {} plan'.format(info['label'])
-    return _start_checkout('plan', PLAN_RANK[wanted], info['price'], title, 'plans')
+    amount = package_prices_for(settings).get(wanted, info.get('price') or 0)
+    if not amount:
+        flash('That package is free. Use Set package instead of card checkout.', 'info')
+        return redirect(url_for('plans'))
+    title = 'KAZE package: {}'.format(wanted)
+    return _start_checkout('plan', PLAN_RANK[wanted], amount, title, 'plans')
 
+
+
+
+
+BANK_ACCOUNT_TYPES = ('Current', 'Savings', 'Mobile money', 'Credit', 'Cash till', 'Other')
+INVEST_TYPES = ('Equity', 'Bond', 'Property', 'Fund', 'Cash instrument', 'Other')
+SHOP_ORDER_STATUSES = ('pending', 'paid', 'packed', 'delivered', 'cancelled')
+MARKET_CHANNEL_KINDS = (
+    'Product sales', 'Services', 'Subscriptions', 'Ads',
+    'Affiliates', 'Licensing', 'Other',
+)
+
+
+def _bank_balance(cur, uid, account_id, opening):
+    cur.execute(
+        "SELECT COALESCE(SUM(CASE WHEN kind='in' THEN amount WHEN kind='out' THEN -amount ELSE 0 END),0) AS n "
+        "FROM bank_transactions WHERE user_id=%s AND account_id=%s",
+        (uid, account_id),
+    )
+    row = cur.fetchone() or {}
+    try:
+        moved = float(row.get('n') or 0)
+    except (TypeError, ValueError):
+        moved = 0.0
+    try:
+        return float(opening or 0) + moved
+    except (TypeError, ValueError):
+        return moved
+
+
+@app.route('/banking')
+@login_required
+def banking():
+    uid = current_user.id
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM bank_accounts WHERE user_id=%s ORDER BY name', (uid,))
+    accounts = list(cur.fetchall() or [])
+    total_in = total_out = 0.0
+    total_balance = 0.0
+    for a in accounts:
+        bal = _bank_balance(cur, uid, a['id'], a.get('opening_balance'))
+        a['balance'] = bal
+        total_balance += bal
+    cur.execute(
+        "SELECT COALESCE(SUM(amount),0) AS n FROM bank_transactions WHERE user_id=%s AND kind='in'",
+        (uid,),
+    )
+    total_in = float((cur.fetchone() or {}).get('n') or 0)
+    cur.execute(
+        "SELECT COALESCE(SUM(amount),0) AS n FROM bank_transactions WHERE user_id=%s AND kind='out'",
+        (uid,),
+    )
+    total_out = float((cur.fetchone() or {}).get('n') or 0)
+    cur.execute(
+        '''SELECT t.*, a.name AS account_name
+           FROM bank_transactions t
+           LEFT JOIN bank_accounts a ON a.id = t.account_id
+           WHERE t.user_id=%s ORDER BY t.tx_date DESC, t.id DESC LIMIT 80''',
+        (uid,),
+    )
+    txs = cur.fetchall() or []
+    cur.close()
+    conn.close()
+    return render_template(
+        'banking.html',
+        accounts=accounts,
+        txs=txs,
+        total_balance=total_balance,
+        total_in=total_in,
+        total_out=total_out,
+        account_types=BANK_ACCOUNT_TYPES,
+        today=datetime.today().strftime('%Y-%m-%d'),
+    )
+
+
+@app.route('/banking/account/add', methods=['POST'])
+@login_required
+def add_bank_account():
+    name, e1 = _clean_text('name', max_len=80, label='name')
+    bank_name, e2 = _clean_text('bank_name', required=False, max_len=80, label='bank')
+    account_no, e3 = _clean_text('account_no', required=False, max_len=32, label='account no')
+    notes, e4 = _clean_text('notes', required=False, max_len=200, label='notes')
+    opening, e5 = _clean_float('opening_balance', required=False, min_v=0, max_v=1e12, label='opening', default=0)
+    if _reject((name, e1), (bank_name, e2), (account_no, e3), (notes, e4), (opening, e5)):
+        return redirect(url_for('banking'))
+    atype = request.form.get('account_type') or 'Current'
+    if atype not in BANK_ACCOUNT_TYPES:
+        atype = 'Other'
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        '''INSERT INTO bank_accounts (user_id, name, bank_name, account_no, account_type, opening_balance, notes, created_date)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s)''',
+        (current_user.id, name, bank_name or '', account_no or '', atype, opening or 0,
+         notes or '', datetime.today().strftime('%Y-%m-%d')),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    log_activity(current_user.id, current_user.username, 'Added bank account', name)
+    flash('Bank account saved.', 'success')
+    return redirect(url_for('banking'))
+
+
+@app.route('/banking/account/<int:id>/delete', methods=['POST'])
+@login_required
+def delete_bank_account(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('DELETE FROM bank_transactions WHERE user_id=%s AND account_id=%s', (current_user.id, id))
+    cur.execute('DELETE FROM bank_accounts WHERE id=%s AND user_id=%s', (id, current_user.id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Account removed.', 'success')
+    return redirect(url_for('banking'))
+
+
+@app.route('/banking/tx/add', methods=['POST'])
+@login_required
+def add_bank_tx():
+    amount, e1 = _clean_float('amount', min_v=0.01, max_v=1e12, label='amount')
+    date, e2 = _clean_date('tx_date')
+    party, e3 = _clean_text('counterparty', required=False, max_len=80, label='party')
+    ref, e4 = _clean_text('reference', required=False, max_len=80, label='reference')
+    cat, e5 = _clean_text('category', required=False, max_len=80, label='category')
+    if _reject((amount, e1), (date, e2), (party, e3), (ref, e4), (cat, e5)):
+        return redirect(url_for('banking'))
+    kind = 'in' if request.form.get('kind') == 'in' else 'out'
+    try:
+        account_id = int(request.form.get('account_id') or 0)
+    except ValueError:
+        account_id = 0
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT id FROM bank_accounts WHERE id=%s AND user_id=%s', (account_id, current_user.id))
+    if not cur.fetchone():
+        cur.close()
+        conn.close()
+        flash('Choose a valid account.', 'danger')
+        return redirect(url_for('banking'))
+    cash_id = None
+    if request.form.get('post_cashbook'):
+        cur.execute(
+            '''INSERT INTO cash_books (user_id, entry_type, category, description, amount, date)
+               VALUES (%s,%s,%s,%s,%s,%s) RETURNING id''',
+            (current_user.id, kind, cat or 'Bank', party or ref or 'Bank movement', amount, date),
+        )
+        row = cur.fetchone() or {}
+        cash_id = row.get('id')
+    cur.execute(
+        '''INSERT INTO bank_transactions
+           (user_id, account_id, tx_date, kind, amount, counterparty, reference, category, notes, linked_cashbook_id)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''',
+        (current_user.id, account_id, date, kind, amount, party or '', ref or '', cat or '', '', cash_id),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Movement posted.', 'success')
+    return redirect(url_for('banking'))
+
+
+@app.route('/banking/tx/<int:id>/delete', methods=['POST'])
+@login_required
+def delete_bank_tx(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('DELETE FROM bank_transactions WHERE id=%s AND user_id=%s', (id, current_user.id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Movement deleted.', 'success')
+    return redirect(url_for('banking'))
+
+
+@app.route('/banking/transfer', methods=['POST'])
+@login_required
+def bank_transfer():
+    amount, e1 = _clean_float('amount', min_v=0.01, max_v=1e12, label='amount')
+    date, e2 = _clean_date('tx_date')
+    ref, e3 = _clean_text('reference', required=False, max_len=80, label='memo')
+    if _reject((amount, e1), (date, e2), (ref, e3)):
+        return redirect(url_for('banking'))
+    try:
+        from_id = int(request.form.get('from_id') or 0)
+        to_id = int(request.form.get('to_id') or 0)
+    except ValueError:
+        from_id = to_id = 0
+    if from_id == to_id or not from_id or not to_id:
+        flash('Pick two different accounts.', 'danger')
+        return redirect(url_for('banking'))
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT id, name FROM bank_accounts WHERE user_id=%s AND id IN (%s,%s)', (current_user.id, from_id, to_id))
+    found = {row['id']: row['name'] for row in (cur.fetchall() or [])}
+    if from_id not in found or to_id not in found:
+        cur.close()
+        conn.close()
+        flash('Accounts not found.', 'danger')
+        return redirect(url_for('banking'))
+    memo = ref or 'Transfer'
+    cur.execute(
+        '''INSERT INTO bank_transactions
+           (user_id, account_id, tx_date, kind, amount, counterparty, reference, category, notes, linked_cashbook_id)
+           VALUES (%s,%s,%s,'out',%s,%s,%s,'Transfer','',NULL)''',
+        (current_user.id, from_id, date, amount, found[to_id], memo),
+    )
+    cur.execute(
+        '''INSERT INTO bank_transactions
+           (user_id, account_id, tx_date, kind, amount, counterparty, reference, category, notes, linked_cashbook_id)
+           VALUES (%s,%s,%s,'in',%s,%s,%s,'Transfer','',NULL)''',
+        (current_user.id, to_id, date, amount, found[from_id], memo),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Transfer posted.', 'success')
+    return redirect(url_for('banking'))
+
+
+@app.route('/investments')
+@login_required
+def investments():
+    uid = current_user.id
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM investments WHERE user_id=%s ORDER BY name', (uid,))
+    rows = list(cur.fetchall() or [])
+    cur.close()
+    conn.close()
+    total_cost = total_value = 0.0
+    holdings = []
+    for h in rows:
+        qty = float(h.get('quantity') or 0)
+        cost_u = float(h.get('unit_cost') or 0)
+        price = float(h.get('current_price') or 0)
+        cost = qty * cost_u
+        value = qty * price
+        h = dict(h)
+        h['cost'] = cost
+        h['value'] = value
+        h['gain'] = value - cost
+        holdings.append(h)
+        total_cost += cost
+        total_value += value
+    return render_template(
+        'investments.html',
+        holdings=holdings,
+        total_cost=total_cost,
+        total_value=total_value,
+        total_gain=total_value - total_cost,
+        asset_types=INVEST_TYPES,
+        today=datetime.today().strftime('%Y-%m-%d'),
+    )
+
+
+@app.route('/investments/add', methods=['POST'])
+@login_required
+def add_investment():
+    name, e1 = _clean_text('name', max_len=80, label='name')
+    qty, e2 = _clean_float('quantity', min_v=0, max_v=1e12, label='quantity')
+    cost, e3 = _clean_float('unit_cost', min_v=0, max_v=1e12, label='unit cost')
+    price, e4 = _clean_float('current_price', min_v=0, max_v=1e12, label='current price')
+    notes, e5 = _clean_text('notes', required=False, max_len=200, label='notes')
+    bought, e6 = _clean_date('bought_date')
+    if _reject((name, e1), (qty, e2), (cost, e3), (price, e4), (notes, e5), (bought, e6)):
+        return redirect(url_for('investments'))
+    atype = request.form.get('asset_type') or 'Other'
+    if atype not in INVEST_TYPES:
+        atype = 'Other'
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        '''INSERT INTO investments (user_id, name, asset_type, quantity, unit_cost, current_price, bought_date, notes, created_date)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)''',
+        (current_user.id, name, atype, qty, cost, price, bought or datetime.today().strftime('%Y-%m-%d'),
+         notes or '', datetime.today().strftime('%Y-%m-%d')),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    log_activity(current_user.id, current_user.username, 'Added investment', name)
+    flash('Holding saved.', 'success')
+    return redirect(url_for('investments'))
+
+
+@app.route('/investments/<int:id>/update', methods=['POST'])
+@login_required
+def update_investment(id):
+    price, e1 = _clean_float('current_price', min_v=0, max_v=1e12, label='current price')
+    if _reject((price, e1)):
+        return redirect(url_for('investments'))
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        'UPDATE investments SET current_price=%s WHERE id=%s AND user_id=%s',
+        (price, id, current_user.id),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Price updated.', 'success')
+    return redirect(url_for('investments'))
+
+
+@app.route('/investments/<int:id>/delete', methods=['POST'])
+@login_required
+def delete_investment(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('DELETE FROM investments WHERE id=%s AND user_id=%s', (id, current_user.id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Holding removed.', 'success')
+    return redirect(url_for('investments'))
+
+
+@app.route('/shop')
+@login_required
+def shop():
+    uid = current_user.id
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM shop_listings WHERE user_id=%s ORDER BY published DESC, title', (uid,))
+    listings = list(cur.fetchall() or [])
+    cur.execute(
+        '''SELECT o.*, l.title FROM shop_orders o
+           LEFT JOIN shop_listings l ON l.id = o.listing_id
+           WHERE o.user_id=%s ORDER BY o.order_date DESC, o.id DESC LIMIT 80''',
+        (uid,),
+    )
+    orders = list(cur.fetchall() or [])
+    cur.execute('SELECT * FROM bank_accounts WHERE user_id=%s ORDER BY name', (uid,))
+    accounts = list(cur.fetchall() or [])
+    live_count = sum(1 for l in listings if l.get('published'))
+    open_orders = sum(1 for o in orders if o.get('status') in ('pending', 'paid', 'packed'))
+    order_total = 0.0
+    for o in orders:
+        try:
+            order_total += float(o.get('amount') or 0)
+        except (TypeError, ValueError):
+            pass
+    bank_total = 0.0
+    for a in accounts:
+        bank_total += _bank_balance(cur, uid, a['id'], a.get('opening_balance'))
+    cur.close()
+    conn.close()
+    return render_template(
+        'shop.html',
+        listings=listings,
+        orders=orders,
+        accounts=accounts,
+        live_count=live_count,
+        open_orders=open_orders,
+        order_total=order_total,
+        bank_total=bank_total,
+        order_statuses=SHOP_ORDER_STATUSES,
+        today=datetime.today().strftime('%Y-%m-%d'),
+    )
+
+
+@app.route('/shop/listing/add', methods=['POST'])
+@login_required
+def add_shop_listing():
+    title, e1 = _clean_text('title', max_len=80, label='title')
+    price, e2 = _clean_float('price', min_v=0, max_v=1e12, label='price')
+    desc, e3 = _clean_text('description', required=False, max_len=200, label='description')
+    if _reject((title, e1), (price, e2), (desc, e3)):
+        return redirect(url_for('shop'))
+    kind = request.form.get('kind') or 'Custom'
+    if kind not in ('Product', 'Service', 'Custom'):
+        kind = 'Custom'
+    published = 1 if request.form.get('published') else 0
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        '''INSERT INTO shop_listings (user_id, title, kind, source_id, price, published, description, created_date)
+           VALUES (%s,%s,%s,0,%s,%s,%s,%s)''',
+        (current_user.id, title, kind, price, published, desc or '', datetime.today().strftime('%Y-%m-%d')),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Listing saved.', 'success')
+    return redirect(url_for('shop'))
+
+
+@app.route('/shop/listing/<int:id>/toggle', methods=['POST'])
+@login_required
+def toggle_shop_listing(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT published FROM shop_listings WHERE id=%s AND user_id=%s', (id, current_user.id))
+    row = cur.fetchone()
+    if row:
+        cur.execute(
+            'UPDATE shop_listings SET published=%s WHERE id=%s AND user_id=%s',
+            (0 if row.get('published') else 1, id, current_user.id),
+        )
+        conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for('shop'))
+
+
+@app.route('/shop/listing/<int:id>/delete', methods=['POST'])
+@login_required
+def delete_shop_listing(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('UPDATE shop_orders SET listing_id=NULL WHERE listing_id=%s AND user_id=%s', (id, current_user.id))
+    cur.execute('DELETE FROM shop_listings WHERE id=%s AND user_id=%s', (id, current_user.id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Listing removed.', 'success')
+    return redirect(url_for('shop'))
+
+
+@app.route('/shop/order/add', methods=['POST'])
+@login_required
+def add_shop_order():
+    buyer, e1 = _clean_text('buyer', max_len=80, label='buyer')
+    qty, e2 = _clean_float('qty', min_v=1, max_v=1e6, label='qty')
+    date, e3 = _clean_date('order_date')
+    notes, e4 = _clean_text('notes', required=False, max_len=200, label='notes')
+    if _reject((buyer, e1), (qty, e2), (date, e3), (notes, e4)):
+        return redirect(url_for('shop'))
+    try:
+        listing_id = int(request.form.get('listing_id') or 0)
+    except ValueError:
+        listing_id = 0
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT id, price FROM shop_listings WHERE id=%s AND user_id=%s', (listing_id, current_user.id))
+    listing = cur.fetchone()
+    if not listing:
+        cur.close()
+        conn.close()
+        flash('Choose a listing.', 'danger')
+        return redirect(url_for('shop'))
+    amount = float(listing.get('price') or 0) * float(qty)
+    cur.execute(
+        '''INSERT INTO shop_orders (user_id, listing_id, buyer, qty, amount, status, order_date, notes, created_date)
+           VALUES (%s,%s,%s,%s,%s,'pending',%s,%s,%s)''',
+        (current_user.id, listing_id, buyer, int(qty), amount, date or datetime.today().strftime('%Y-%m-%d'),
+         notes or '', datetime.today().strftime('%Y-%m-%d')),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Order saved.', 'success')
+    return redirect(url_for('shop'))
+
+
+@app.route('/shop/order/<int:id>/status', methods=['POST'])
+@login_required
+def set_shop_order(id):
+    status = request.form.get('status') or 'pending'
+    if status not in SHOP_ORDER_STATUSES:
+        status = 'pending'
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('UPDATE shop_orders SET status=%s WHERE id=%s AND user_id=%s', (status, id, current_user.id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for('shop'))
+
+
+@app.route('/shop/order/<int:id>/delete', methods=['POST'])
+@login_required
+def delete_shop_order(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('DELETE FROM shop_orders WHERE id=%s AND user_id=%s', (id, current_user.id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for('shop'))
+
+
+@app.route('/shop/pay', methods=['POST'])
+@login_required
+def shop_pay():
+    amount, e1 = _clean_float('amount', min_v=0.01, max_v=1e12, label='amount')
+    date, e2 = _clean_date('tx_date')
+    party, e3 = _clean_text('counterparty', max_len=80, label='pay to')
+    ref, e4 = _clean_text('reference', required=False, max_len=80, label='reference')
+    if _reject((amount, e1), (date, e2), (party, e3), (ref, e4)):
+        return redirect(url_for('shop'))
+    try:
+        account_id = int(request.form.get('account_id') or 0)
+    except ValueError:
+        account_id = 0
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT id FROM bank_accounts WHERE id=%s AND user_id=%s', (account_id, current_user.id))
+    if not cur.fetchone():
+        cur.close()
+        conn.close()
+        flash('Choose a bank book first.', 'danger')
+        return redirect(url_for('shop'))
+    cur.execute(
+        '''INSERT INTO bank_transactions
+           (user_id, account_id, tx_date, kind, amount, counterparty, reference, category, notes, linked_cashbook_id)
+           VALUES (%s,%s,%s,'out',%s,%s,%s,'Shop pay','',NULL)''',
+        (current_user.id, account_id, date, amount, party, ref or ''),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Payment posted from the bank book.', 'success')
+    return redirect(url_for('shop'))
+
+
+def _market_bases(cur, uid):
+    month = datetime.today().strftime('%Y-%m')
+    cur.execute(
+        "SELECT COALESCE(SUM(total_amount),0) AS n FROM sales WHERE user_id=%s AND sale_date LIKE %s",
+        (uid, month + '%'),
+    )
+    month_sales = float((cur.fetchone() or {}).get('n') or 0)
+    cur.execute(
+        "SELECT COALESCE(SUM(monthly_revenue),0) AS n FROM market_channels WHERE user_id=%s",
+        (uid,),
+    )
+    channel_month = float((cur.fetchone() or {}).get('n') or 0)
+    cur.execute(
+        "SELECT COALESCE(SUM(quantity * selling_price),0) AS n FROM stock WHERE user_id=%s",
+        (uid,),
+    )
+    stock_value = float((cur.fetchone() or {}).get('n') or 0)
+    cur.execute('SELECT id, opening_balance FROM bank_accounts WHERE user_id=%s', (uid,))
+    bank_total = 0.0
+    for a in cur.fetchall() or []:
+        bank_total += _bank_balance(cur, uid, a['id'], a.get('opening_balance'))
+    cur.execute(
+        "SELECT COALESCE(SUM(quantity * current_price),0) AS n FROM investments WHERE user_id=%s",
+        (uid,),
+    )
+    invest_value = float((cur.fetchone() or {}).get('n') or 0)
+    yearly = (channel_month or month_sales) * 12
+    if channel_month:
+        yearly = channel_month * 12
+    elif month_sales:
+        yearly = month_sales * 12
+    liquid = bank_total + invest_value
+    asset_base = stock_value + liquid
+    return {
+        'month_sales': month_sales,
+        'channel_month': channel_month,
+        'stock_value': stock_value,
+        'liquid': liquid,
+        'yearly_base': yearly,
+        'asset_base': asset_base,
+    }
+
+
+@app.route('/market')
+@login_required
+def market():
+    uid = current_user.id
+    conn = get_db()
+    cur = conn.cursor()
+    bases = _market_bases(cur, uid)
+    cur.execute('SELECT * FROM market_channels WHERE user_id=%s ORDER BY name', (uid,))
+    channels = cur.fetchall() or []
+    cur.execute('SELECT * FROM market_valuations WHERE user_id=%s ORDER BY as_of DESC, id DESC LIMIT 40', (uid,))
+    valuations = cur.fetchall() or []
+    cur.close()
+    conn.close()
+    live_multiple = 2.0
+    rev_value = bases['yearly_base'] * live_multiple
+    blended = (rev_value + bases['asset_base']) / 2.0
+    return render_template(
+        'market.html',
+        channels=channels,
+        valuations=valuations,
+        channel_kinds=MARKET_CHANNEL_KINDS,
+        live_multiple=live_multiple,
+        rev_value=rev_value,
+        blended=blended,
+        **bases
+    )
+
+
+@app.route('/market/channel/add', methods=['POST'])
+@login_required
+def add_market_channel():
+    name, e1 = _clean_text('name', max_len=80, label='name')
+    rev, e2 = _clean_float('monthly_revenue', required=False, min_v=0, max_v=1e12, label='monthly revenue', default=0)
+    notes, e3 = _clean_text('notes', required=False, max_len=200, label='notes')
+    if _reject((name, e1), (rev, e2), (notes, e3)):
+        return redirect(url_for('market'))
+    kind = request.form.get('kind') or 'Other'
+    if kind not in MARKET_CHANNEL_KINDS:
+        kind = 'Other'
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        '''INSERT INTO market_channels (user_id, name, kind, monthly_revenue, notes, created_date)
+           VALUES (%s,%s,%s,%s,%s,%s)''',
+        (current_user.id, name, kind, rev or 0, notes or '', datetime.today().strftime('%Y-%m-%d')),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Channel saved.', 'success')
+    return redirect(url_for('market'))
+
+
+@app.route('/market/channel/<int:id>/delete', methods=['POST'])
+@login_required
+def delete_market_channel(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('DELETE FROM market_channels WHERE id=%s AND user_id=%s', (id, current_user.id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for('market'))
+
+
+@app.route('/market/valuation/add', methods=['POST'])
+@login_required
+def add_valuation():
+    method = request.form.get('method') or 'blended'
+    if method not in ('revenue_multiple', 'asset_based', 'blended', 'owner'):
+        method = 'blended'
+    rev, e1 = _clean_float('revenue_base', required=False, min_v=0, max_v=1e12, label='revenue', default=0)
+    mult, e2 = _clean_float('multiple', required=False, min_v=0, max_v=100, label='multiple', default=2)
+    assets, e3 = _clean_float('asset_base', required=False, min_v=0, max_v=1e12, label='assets', default=0)
+    own, e4 = _clean_float('estimated_value', required=False, min_v=0, max_v=1e12, label='value', default=None)
+    notes, e5 = _clean_text('notes', required=False, max_len=200, label='notes')
+    if _reject((rev, e1), (mult, e2), (assets, e3), (own, e4), (notes, e5)):
+        return redirect(url_for('market'))
+    if own not in (None, ''):
+        value = float(own)
+    elif method == 'revenue_multiple':
+        value = float(rev or 0) * float(mult or 0)
+    elif method == 'asset_based':
+        value = float(assets or 0)
+    else:
+        value = (float(rev or 0) * float(mult or 0) + float(assets or 0)) / 2.0
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        '''INSERT INTO market_valuations
+           (user_id, as_of, method, multiple, revenue_base, asset_base, estimated_value, notes, created_date)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)''',
+        (current_user.id, datetime.today().strftime('%Y-%m-%d'), method, mult or 0, rev or 0, assets or 0,
+         value, notes or '', datetime.today().strftime('%Y-%m-%d')),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Valuation saved.', 'success')
+    return redirect(url_for('market'))
+
+
+@app.route('/market/valuation/<int:id>/delete', methods=['POST'])
+@login_required
+def delete_valuation(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('DELETE FROM market_valuations WHERE id=%s AND user_id=%s', (id, current_user.id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for('market'))
 
 
 if __name__ == '__main__':

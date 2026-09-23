@@ -1,3 +1,12 @@
+v2.9.9 — Supreme desks: banking books + transfers, investment holdings, online shop/orders/pay, monetization channels and market-value snapshots. CEO/Founder and Full mode. Books mode gets banking, Till gets shop, Office gets investments and market.
+
+v2.9.8 — Hardcoded package prices (K): New user free, + 25, Entrepreneur 50, Entrepreneur + 75, Businessman 100, Businessman pro 150, CEO 300, Founder's premium 500.
+
+v2.9.7 — Package prices are hardcoded in app.py (PLAN_TIERS). Settings cannot change them.
+
+v2.9.5 — Packages: eight tiers (New user through Founder's premium).
+Old Plans URL still works. Existing CEO accounts keep CEO.
+
 v2.9.4 — Fix Render boot: create service_sessions before Stripe ALTER.
 
 v2.9.3 — Bulk actions: integer IDs, FK-safe deletes, export without fake confirm,

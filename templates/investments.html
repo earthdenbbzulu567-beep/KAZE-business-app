@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Investments</h1>
+        <p>Track holdings, cost, and the market value you last recorded.</p>
+    </div>
+</div>
+
+<div class="stat-grid">
+    <div class="stat-chip"><span>Holdings</span><strong>{{ holdings|length }}</strong></div>
+    <div class="stat-chip"><span>Cost</span><strong>{{ money(total_cost) }}</strong></div>
+    <div class="stat-chip"><span>Market value</span><strong>{{ money(total_value) }}</strong></div>
+    <div class="stat-chip"><span>Gain / loss</span><strong>{{ money(total_gain) }}</strong></div>
+</div>
+
+<form method="POST" action="{{ url_for('add_investment') }}" class="elev-card" style="margin:1rem 0 1.3rem;max-width:52rem;">
+    <h2>Add holding</h2>
+    <div class="form-row">
+        <div class="form-group"><label>Name</label><input name="name" required maxlength="80" placeholder="Shop plot, Treasury bill…"></div>
+        <div class="form-group">
+            <label>Type</label>
+            <select name="asset_type">
+                {% for t in asset_types %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+            </select>
+        </div>
+    </div>
+    <div class="form-row">
+        <div class="form-group"><label>Quantity</label><input type="number" step="0.0001" min="0" name="quantity" value="1" required></div>
+        <div class="form-group"><label>Unit cost</label><input type="number" step="0.01" min="0" name="unit_cost" required></div>
+        <div class="form-group"><label>Current price</label><input type="number" step="0.01" min="0" name="current_price" required></div>
+        <div class="form-group"><label>Bought</label><input type="date" name="bought_date" value="{{ today }}"></div>
+    </div>
+    <div class="form-group"><label>Notes</label><input name="notes" maxlength="200"></div>
+    <button type="submit">Add holding</button>
+</form>
+
+{% if holdings %}
+<table class="data">
+    <thead>
+        <tr><th>Name</th><th>Type</th><th>Qty</th><th>Cost</th><th>Price now</th><th>Value</th><th>Gain</th><th></th></tr>
+    </thead>
+    <tbody>
+    {% for h in holdings %}
+        <tr>
+            <td>{{ h.name }}</td>
+            <td>{{ h.asset_type }}</td>
+            <td>{{ h.quantity }}</td>
+            <td>{{ money(h.cost) }}</td>
+            <td>
+                <form method="POST" action="{{ url_for('update_investment', id=h.id) }}" class="inline-form">
+                    <input type="number" step="0.01" min="0" name="current_price" value="{{ h.current_price }}" style="width:7rem;">
+                    <button type="submit" class="btn-secondary">Save</button>
+                </form>
+            </td>
+            <td>{{ money(h.value) }}</td>
+            <td>{{ money(h.gain) }}</td>
+            <td>
+                <form method="POST" action="{{ url_for('delete_investment', id=h.id) }}" onsubmit="return confirm('Remove this holding?');">
+                    <button type="submit" class="btn-secondary">Delete</button>
+                </form>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No holdings yet. Add land, bills, shares, or any asset you want valued beside the shop.</p>
+{% endif %}
+
+<style>
+.elev-card { padding:1rem 1.1rem; border:1px solid var(--border); border-radius:16px; background:var(--surface); }
+.form-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:.7rem; }
+table.data { width:100%; border-collapse:collapse; }
+table.data th, table.data td { text-align:left; padding:.55rem .4rem; border-bottom:1px solid var(--border); vertical-align:middle; }
+.inline-form { display:flex; gap:.35rem; align-items:center; }
+</style>
+{% endblock %}

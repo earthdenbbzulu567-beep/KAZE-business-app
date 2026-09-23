@@ -4,7 +4,7 @@ END USER LICENCE AGREEMENT AND TERMS OF USE
 ==============================================================================
 
 Product:     KAZE Traders Business Manager ("KAZE", "the App", "the Software")
-Version:     v2.9.0 and later updates supplied with this document
+Version:     v2.9.5 and later updates supplied with this document
 Operator:    KAZE Traders ("we", "us", "our")
 Year:        2026
 Document:    LICENCE (this file)
@@ -197,6 +197,12 @@ these rules have been broken.
 
 9.2  You are responsible for your own hosting, domain, database,
      email, and internet costs.
+
+9.3  Optional paid packages (New user +, Entrepreneur, Entrepreneur +,
+     Businessman, Businessman pro, CEO, and Founder's premium) may be
+     unlocked inside the App. Package prices shown in the App are one-time
+     unlock amounts unless a hosted site says otherwise. Card charges are
+     processed by Stripe under Stripe's terms.
 
 ------------------------------------------------------------------------------
 10. WARRANTY DISCLAIMER

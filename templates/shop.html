@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Online banking &amp; shop</h1>
+        <p>Publish a simple storefront from stock and services, take orders, and pay from your KAZE bank books.</p>
+    </div>
+</div>
+
+<div class="stat-grid">
+    <div class="stat-chip"><span>Live listings</span><strong>{{ live_count }}</strong></div>
+    <div class="stat-chip"><span>Open orders</span><strong>{{ open_orders }}</strong></div>
+    <div class="stat-chip"><span>Order book</span><strong>{{ money(order_total) }}</strong></div>
+    <div class="stat-chip"><span>Bank cash</span><strong>{{ money(bank_total) }}</strong></div>
+</div>
+
+<div class="card-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;margin:1rem 0;">
+    <form method="POST" action="{{ url_for('add_shop_listing') }}" class="elev-card">
+        <h2>New listing</h2>
+        <div class="form-group"><label>Title</label><input name="title" required maxlength="80"></div>
+        <div class="form-group">
+            <label>Kind</label>
+            <select name="kind">
+                <option value="Product">Product</option>
+                <option value="Service">Service</option>
+                <option value="Custom">Custom</option>
+            </select>
+        </div>
+        <div class="form-group"><label>Price</label><input type="number" step="0.01" min="0" name="price" required></div>
+        <div class="form-group"><label>Description</label><input name="description" maxlength="200"></div>
+        <label class="inline"><input type="checkbox" name="published" checked> Published on the shop</label>
+        <button type="submit">Add listing</button>
+    </form>
+
+    <form method="POST" action="{{ url_for('add_shop_order') }}" class="elev-card">
+        <h2>Record an order</h2>
+        <div class="form-group">
+            <label>Listing</label>
+            <select name="listing_id" required>
+                <option value="">Choose…</option>
+                {% for l in listings %}<option value="{{ l.id }}">{{ l.title }} — {{ money(l.price) }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="form-group"><label>Buyer</label><input name="buyer" required maxlength="80"></div>
+        <div class="form-group"><label>Qty</label><input type="number" step="1" min="1" name="qty" value="1" required></div>
+        <div class="form-group"><label>Date</label><input type="date" name="order_date" value="{{ today }}"></div>
+        <div class="form-group"><label>Notes</label><input name="notes" maxlength="200"></div>
+        <button type="submit">Save order</button>
+    </form>
+
+    <form method="POST" action="{{ url_for('shop_pay') }}" class="elev-card">
+        <h2>Pay from a bank book</h2>
+        <p style="color:var(--text3);font-size:0.85rem;">Online banking payout to a supplier or bill.</p>
+        <div class="form-group">
+            <label>From account</label>
+            <select name="account_id" required>
+                <option value="">Choose…</option>
+                {% for a in accounts %}<option value="{{ a.id }}">{{ a.name }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="form-group"><label>Pay to</label><input name="counterparty" required maxlength="80"></div>
+        <div class="form-group"><label>Amount</label><input type="number" step="0.01" min="0.01" name="amount" required></div>
+        <div class="form-group"><label>Date</label><input type="date" name="tx_date" value="{{ today }}"></div>
+        <div class="form-group"><label>Reference</label><input name="reference" maxlength="80"></div>
+        <button type="submit">Send payment</button>
+    </form>
+</div>
+
+<h2>Storefront</h2>
+{% if listings %}
+<div class="shop-grid">
+{% for l in listings %}
+<article class="shop-card {% if not l.published %}is-off{% endif %}">
+    <span class="pkg-rank">{{ l.kind }}</span>
+    <h3>{{ l.title }}</h3>
+    <p>{{ l.description }}</p>
+    <p class="pkg-price">{{ money(l.price) }}</p>
+    <form method="POST" action="{{ url_for('toggle_shop_listing', id=l.id) }}">
+        <button type="submit" class="btn-secondary">{% if l.published %}Unpublish{% else %}Publish{% endif %}</button>
+    </form>
+    <form method="POST" action="{{ url_for('delete_shop_listing', id=l.id) }}" onsubmit="return confirm('Remove listing?');">
+        <button type="submit" class="btn-secondary">Delete</button>
+    </form>
+</article>
+{% endfor %}
+</div>
+{% else %}
+<p>No listings yet.</p>
+{% endif %}
+
+<h2>Orders</h2>
+{% if orders %}
+<table class="data">
+    <thead><tr><th>Date</th><th>Buyer</th><th>Item</th><th>Qty</th><th>Amount</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    {% for o in orders %}
+        <tr>
+            <td>{{ o.order_date }}</td>
+            <td>{{ o.buyer }}</td>
+            <td>{{ o.title }}</td>
+            <td>{{ o.qty }}</td>
+            <td>{{ money(o.amount) }}</td>
+            <td>
+                <form method="POST" action="{{ url_for('set_shop_order', id=o.id) }}" class="inline-form">
+                    <select name="status">
+                        {% for s in order_statuses %}
+                        <option value="{{ s }}" {% if o.status == s %}selected{% endif %}>{{ s }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn-secondary">Update</button>
+                </form>
+            </td>
+            <td>
+                <form method="POST" action="{{ url_for('delete_shop_order', id=o.id) }}" onsubmit="return confirm('Delete order?');">
+                    <button type="submit" class="btn-secondary">Delete</button>
+                </form>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No orders yet.</p>
+{% endif %}
+
+<style>
+.elev-card { padding:1rem 1.1rem; border:1px solid var(--border); border-radius:16px; background:var(--surface); }
+.elev-card h2 { margin:0 0 .55rem; font-size:1.05rem; }
+.inline { display:flex; gap:.4rem; align-items:center; margin:.35rem 0 .7rem; }
+.shop-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:.8rem; margin:0 0 1.3rem; }
+.shop-card { padding:1rem; border:1px solid var(--border); border-radius:16px; background:var(--surface); display:flex; flex-direction:column; gap:.35rem; }
+.shop-card h3 { margin:0; }
+.shop-card.is-off { opacity:.55; }
+.pkg-rank { font-size:.68rem; letter-spacing:.12em; text-transform:uppercase; color:var(--text3); font-weight:800; }
+.pkg-price { font-family:var(--mono); font-size:1.2rem; margin:.2rem 0; }
+table.data { width:100%; border-collapse:collapse; }
+table.data th, table.data td { text-align:left; padding:.55rem .4rem; border-bottom:1px solid var(--border); }
+.inline-form { display:flex; gap:.35rem; align-items:center; }
+</style>
+{% endblock %}

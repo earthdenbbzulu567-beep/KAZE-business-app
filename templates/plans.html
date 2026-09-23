@@ -2,7 +2,7 @@
 {% block content %}
 <div class="page-header">
     <div>
-        <h1>Plans</h1>
+        <h1>Packages</h1>
         <p>You are on <strong>{{ current.label }}</strong> — {{ current.tagline }}</p>
     </div>
 </div>
@@ -15,45 +15,68 @@
     <div class="stat-chip"><span>Team seats</span><strong>{{ counts.team }}{% if current.limits.team %}/{{ current.limits.team }}{% endif %}</strong></div>
 </div>
 
-<div class="stat-grid" style="align-items:stretch;">
+<div class="pkg-grid">
 {% for t in tiers %}
-<div class="widget" style="min-width:16rem;{% if t.key == current.key %}border-color:var(--accent, var(--red-bright));{% endif %}">
+<article class="pkg-card {% if t.key == current.key %}is-current{% endif %} {% if t.key == 'founder' %}is-founder{% endif %}">
+    <span class="pkg-rank">{{ loop.index }} / {{ tiers|length }}</span>
     <h2>{{ t.label }}</h2>
-    <p style="color:var(--text2);">{{ t.tagline }}</p>
-    <p style="font-size:1.4rem;font-family:var(--mono);margin:0.4rem 0 0.8rem;">
-        {% if t.price %}{{ money(t.price) }} <span style="font-size:0.8rem;color:var(--text3);">one-time unlock</span>
+    <p class="pkg-tag">{{ t.tagline }}</p>
+    <p class="pkg-price">
+        {% if t.price %}{{ money(t.price) }} <span>one-time unlock</span>
         {% else %}Free{% endif %}
     </p>
-    <ul style="color:var(--text2);font-size:0.9rem;line-height:1.55;padding-left:1.1rem;">
-        {% if t.key == 'starter' %}
-        <li>Stock, sales, till, customers, services</li>
-        <li>Tasks, notes, calendar</li>
-        <li>Desk limits as shown above</li>
-        {% elif t.key == 'businessman' %}
-        <li>Everything in New user</li>
-        <li>Book keeping, cash, suppliers, budgets</li>
-        <li>Reports, tax, documents, SWOT</li>
-        <li>Higher desk limits</li>
-        {% else %}
-        <li>Every module, including accounts and statistics</li>
-        <li>No practical desk limits</li>
-        <li>Team seats as you need them</li>
-        {% endif %}
+    <ul>
+        {% for line in t.highlights %}
+        <li>{{ line }}</li>
+        {% endfor %}
     </ul>
     {% if t.key == current.key %}
-        <p><span class="status-pill status-ok">Current plan</span></p>
+        <p><span class="status-pill status-ok">Current package</span></p>
     {% elif is_owner %}
         {% if stripe_ready and t.price %}
-            <p><a href="{{ url_for('pay_plan', tier=t.key) }}">Upgrade with card</a></p>
+            <p><a href="{{ url_for('pay_plan', tier=t.key) }}">Unlock with card</a></p>
         {% endif %}
-        <form method="POST" action="{{ url_for('set_plan') }}" style="margin-top:0.4rem;">
+        <form method="POST" action="{{ url_for('set_plan') }}">
             <input type="hidden" name="plan_tier" value="{{ t.key }}">
             <button type="submit" class="btn-secondary">{% if t.price %}Set {{ t.label }}{% else %}Switch to New user{% endif %}</button>
         </form>
     {% endif %}
-</div>
+</article>
 {% endfor %}
 </div>
 
-<p style="color:var(--text3);font-size:0.85rem;max-width:40rem;">Existing businesses keep CEO until you change it. New signups start as New user. Modes still hide modules inside a plan. Card upgrades need Stripe keys in Settings.</p>
+<p class="pkg-note">Existing shops stay on CEO until you change them. New signups start as New user. Modes can still hide modules inside a package. Card unlocks need Stripe keys in Settings. <code>/plans</code> still works as an old link.</p>
+
+<style>
+.pkg-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 0.85rem;
+    align-items: stretch;
+}
+.pkg-card {
+    padding: 1.05rem 1.1rem 1.15rem;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+.pkg-card h2 { margin: 0; font-size: 1.15rem; }
+.pkg-rank {
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text3);
+    font-weight: 800;
+}
+.pkg-tag { color: var(--text2); font-size: 0.88rem; margin: 0; min-height: 2.6em; }
+.pkg-price { font-family: var(--mono); font-size: 1.35rem; margin: 0.2rem 0 0.4rem; }
+.pkg-price span { font-size: 0.72rem; color: var(--text3); font-family: var(--font); }
+.pkg-card ul { margin: 0 0 0.7rem; padding-left: 1.1rem; color: var(--text2); font-size: 0.88rem; line-height: 1.5; flex: 1; }
+.pkg-card.is-current { border-color: var(--red-bright); box-shadow: 0 0 0 1px var(--red-bright), 0 12px 28px rgba(0,0,0,0.2); }
+.pkg-card.is-founder { background: linear-gradient(180deg, var(--accent-wash), var(--surface)); }
+.pkg-note { color: var(--text3); font-size: 0.85rem; max-width: 44rem; margin-top: 1.1rem; }
+</style>
 {% endblock %}

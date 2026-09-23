@@ -1842,7 +1842,27 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
                     <i data-lucide="compass" class="icon"></i> SWOT
                 </a>
                 <a href="{{ url_for('business_plan') }}" {% if request.endpoint == 'business_plan' %}class="active"{% endif %}>
-                    <i data-lucide="trending-up" class="icon"></i> Business Plan
+                    <i data-lucide="map" class="icon"></i> Business Plan
+                </a>
+                {% endif %}
+                {% if mode_on('banking') %}
+                <a href="{{ url_for('banking') }}" {% if request.endpoint == 'banking' %}class="active"{% endif %}>
+                    <i data-lucide="landmark" class="icon"></i> Banking
+                </a>
+                {% endif %}
+                {% if mode_on('investments') %}
+                <a href="{{ url_for('investments') }}" {% if request.endpoint == 'investments' %}class="active"{% endif %}>
+                    <i data-lucide="line-chart" class="icon"></i> Investments
+                </a>
+                {% endif %}
+                {% if mode_on('shop') %}
+                <a href="{{ url_for('shop') }}" {% if request.endpoint == 'shop' %}class="active"{% endif %}>
+                    <i data-lucide="store" class="icon"></i> Shop
+                </a>
+                {% endif %}
+                {% if mode_on('market') %}
+                <a href="{{ url_for('market') }}" {% if request.endpoint == 'market' %}class="active"{% endif %}>
+                    <i data-lucide="trending-up" class="icon"></i> Market value
                 </a>
                 {% endif %}
             </div>
@@ -1856,7 +1876,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
                     <i data-lucide="log-in" class="icon"></i> Login activity
                 </a>
                 <a href="{{ url_for('plans') }}" {% if request.endpoint == 'plans' %}class="active"{% endif %}>
-                    <i data-lucide="layers" class="icon"></i> Plans
+                    <i data-lucide="layers" class="icon"></i> Packages
                 </a>
                 <a href="{{ url_for('payments') }}" {% if request.endpoint == 'payments' %}class="active"{% endif %}>
                     <i data-lucide="credit-card" class="icon"></i> Payments
@@ -1911,7 +1931,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         </nav>
 
         <div class="sidebar-footer">
-            <span>KAZE v2.9.4 · {{ plan.label if plan else 'New user' }} · {{ app_modes[app_mode].label if app_mode in app_modes else 'Full suite' }}</span>
+            <span>KAZE v2.9.5 · {{ plan.label if plan else 'New user' }} · {{ app_modes[app_mode].label if app_mode in app_modes else 'Full suite' }}</span>
             <span class="version">⚡</span>
         </div>
     </div>
@@ -2127,6 +2147,10 @@ function kazeConfirmBulk(form) {
         {% if mode_on('counter') %}['Counter', '{{ url_for("counter") }}'],{% endif %}
         {% if mode_on('customers') %}['Customers', '{{ url_for("customers") }}'],{% endif %}
         {% if mode_on('services') %}['Services', '{{ url_for("services") }}'],{% endif %}
+        {% if mode_on('banking') %}['Banking', '{{ url_for("banking") }}'],{% endif %}
+        {% if mode_on('investments') %}['Investments', '{{ url_for("investments") }}'],{% endif %}
+        {% if mode_on('shop') %}['Shop', '{{ url_for("shop") }}'],{% endif %}
+        {% if mode_on('market') %}['Market value', '{{ url_for("market") }}'],{% endif %}
         ['Practical guide', '{{ url_for("tutorial") }}'],
         {% if mode_on('bookkeeping') %}['Book keeping', '{{ url_for("bookkeeping") }}'],{% endif %}
         {% if mode_on('accounts') %}['Account tracking', '{{ url_for("accounts") }}'],{% endif %}
@@ -2135,7 +2159,7 @@ function kazeConfirmBulk(form) {
         {% if mode_on('reminders') %}['Reminders', '{{ url_for("reminders") }}'],{% endif %}
         {% if mode_on('tax') %}['Tax summary', '{{ url_for("tax_summary") }}'],{% endif %}
         {% if mode_on('workspace') %}['Tasks', '{{ url_for("tasks") }}'],['Notes', '{{ url_for("notes") }}'],['Calendar', '{{ url_for("calendar") }}'],{% endif %}
-        ['Plans', '{{ url_for("plans") }}'],
+        ['Packages', '{{ url_for("plans") }}'],
         ['Payments', '{{ url_for("payments") }}'],
         ['Settings', '{{ url_for("settings") }}'],
         {% if mode_on('day_close') %}['Day close', '{{ url_for("day_close") }}'],{% endif %}

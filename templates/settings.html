@@ -222,17 +222,22 @@
 
     
     
-    <h2>Plan / tier</h2>
-    <p style="color:var(--text2);max-width:40rem;">New user, Businessman, or CEO. This limits modules and desk size. Staff cannot change it. You can also manage this on the Plans page.</p>
+    <h2>Package</h2>
+    <p style="color:var(--text2);max-width:40rem;">Eight packages from New user to Founder's premium. This limits modules and desk size. Staff cannot change it.</p>
     <div class="form-group">
-        <label>Current plan</label>
+        <label>Current package</label>
         <select name="plan_tier">
-            <option value="starter" {% if settings.plan_tier in ['starter','new','new_user'] %}selected{% endif %}>New user</option>
-            <option value="businessman" {% if settings.plan_tier in ['businessman','business','pro'] %}selected{% endif %}>Businessman</option>
+            <option value="new_user" {% if settings.plan_tier in ['new_user','starter','new','new user'] %}selected{% endif %}>New user</option>
+            <option value="new_user_plus" {% if settings.plan_tier in ['new_user_plus','starter_plus'] %}selected{% endif %}>New user +</option>
+            <option value="entrepreneur" {% if settings.plan_tier == 'entrepreneur' %}selected{% endif %}>Entrepreneur</option>
+            <option value="entrepreneur_plus" {% if settings.plan_tier == 'entrepreneur_plus' %}selected{% endif %}>Entrepreneur +</option>
+            <option value="businessman" {% if settings.plan_tier in ['businessman','business'] %}selected{% endif %}>Businessman</option>
+            <option value="businessman_pro" {% if settings.plan_tier in ['businessman_pro','pro'] %}selected{% endif %}>Businessman pro</option>
             <option value="ceo" {% if not settings.plan_tier or settings.plan_tier in ['ceo','enterprise','full'] %}selected{% endif %}>CEO</option>
+            <option value="founder" {% if settings.plan_tier in ['founder','premium'] %}selected{% endif %}>Founder's premium</option>
         </select>
     </div>
-    <p style="font-size:0.85rem;"><a href="{{ url_for('plans') }}">Compare plans</a></p>
+    <p style="font-size:0.85rem;"><a href="{{ url_for('plans') }}">Compare packages</a></p>
 
     <h2>Stripe payments</h2>
     <p style="color:var(--text2);max-width:40rem;margin-bottom:1rem;">Used for service sessions, invoices, sales, and custom payment links. Prefer test keys until you are ready to take live money. Environment variables override these fields if set on the host.</p>

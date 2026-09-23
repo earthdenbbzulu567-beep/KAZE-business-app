@@ -26,6 +26,12 @@
                 <a href="{{ url_for('services') }}">Open services</a>
             {% elif result.type == 'session' %}
                 <a href="{{ url_for('services') }}">Open sessions</a>
+            {% elif result.type == 'bank' %}
+                <a href="{{ url_for('banking') }}">Open banking</a>
+            {% elif result.type == 'investment' %}
+                <a href="{{ url_for('investments') }}">Open investments</a>
+            {% elif result.type == 'listing' %}
+                <a href="{{ url_for('shop') }}">Open shop</a>
             {% endif %}
         </li>
     {% endfor %}
