@@ -3,8 +3,13 @@
 <div class="page-header">
     <div>
         <h1>Investments</h1>
-        <p>Track holdings, cost, and the market value you last recorded.</p>
+        <p>Track holdings, cost, and the market value you last recorded. Listed tickers can refresh from Alpha Vantage.</p>
     </div>
+    {% if alpha_ready %}
+    <form method="POST" action="{{ url_for('refresh_investments') }}">
+        <button type="submit">Refresh listed prices</button>
+    </form>
+    {% endif %}
 </div>
 
 <div class="stat-grid">
@@ -30,6 +35,7 @@
         <div class="form-group"><label>Unit cost</label><input type="number" step="0.01" min="0" name="unit_cost" required></div>
         <div class="form-group"><label>Current price</label><input type="number" step="0.01" min="0" name="current_price" required></div>
         <div class="form-group"><label>Bought</label><input type="date" name="bought_date" value="{{ today }}"></div>
+        <div class="form-group"><label>Ticker (optional)</label><input name="ticker" maxlength="20" placeholder="AAPL or MSFT"></div>
     </div>
     <div class="form-group"><label>Notes</label><input name="notes" maxlength="200"></div>
     <button type="submit">Add holding</button>
@@ -38,12 +44,13 @@
 {% if holdings %}
 <table class="data">
     <thead>
-        <tr><th>Name</th><th>Type</th><th>Qty</th><th>Cost</th><th>Price now</th><th>Value</th><th>Gain</th><th></th></tr>
+        <tr><th>Name</th><th>Ticker</th><th>Type</th><th>Qty</th><th>Cost</th><th>Price now</th><th>Value</th><th>Gain</th><th></th></tr>
     </thead>
     <tbody>
     {% for h in holdings %}
         <tr>
             <td>{{ h.name }}</td>
+            <td>{{ h.ticker or '—' }}</td>
             <td>{{ h.asset_type }}</td>
             <td>{{ h.quantity }}</td>
             <td>{{ money(h.cost) }}</td>
@@ -52,6 +59,11 @@
                     <input type="number" step="0.01" min="0" name="current_price" value="{{ h.current_price }}" style="width:7rem;">
                     <button type="submit" class="btn-secondary">Save</button>
                 </form>
+                {% if h.ticker and alpha_ready %}
+                <form method="POST" action="{{ url_for('refresh_investment', id=h.id) }}" class="inline-form">
+                    <button type="submit" class="btn-secondary">Quote</button>
+                </form>
+                {% endif %}
             </td>
             <td>{{ money(h.value) }}</td>
             <td>{{ money(h.gain) }}</td>

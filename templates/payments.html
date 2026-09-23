@@ -12,27 +12,32 @@
     <div class="stat-chip"><span>Records</span><strong>{{ rows|length }}</strong></div>
 </div>
 
-{% if not stripe_ready %}
 <div class="widget">
-    <h2>Set up Stripe</h2>
-    <ol style="color:var(--text2);line-height:1.6;max-width:40rem;">
-        <li>Create a Stripe account and open Developers → API keys.</li>
-        <li>Paste the publishable key and secret key in Settings (or set STRIPE_SECRET_KEY and STRIPE_PUBLISHABLE_KEY on the host).</li>
-        <li>Optional: add a webhook to <code>/webhooks/stripe</code> for checkout.session.completed.</li>
-        <li>Use test keys first. Test card: 4242 4242 4242 4242, any future date, any CVC.</li>
-    </ol>
-    <p><a href="{{ url_for('settings') }}">Open Settings</a></p>
+    <h2>Accepted methods</h2>
+    <p style="color:var(--text2);max-width:40rem;">Visa and Mastercard run through Stripe or Flutterwave. PayPal is its own checkout. Current-account transfers use the bank details in Settings. Card numbers never touch KAZE.</p>
+    <ul class="pay-ready">
+        {% for m in pay_methods %}
+        <li>{% if m.ready %}<span class="status-pill status-ok">On</span>{% else %}<span class="status-pill status-warn">Off</span>{% endif %} {{ m.label }} — {{ m.hint }}</li>
+        {% endfor %}
+    </ul>
+    <p><a href="{{ url_for('settings') }}">Open payment settings</a></p>
 </div>
-{% else %}
+
 <div class="widget">
     <h2>Take a custom payment</h2>
     <form method="POST" action="{{ url_for('pay_custom') }}">
         <div class="form-group"><label>Title</label><input type="text" name="title" placeholder="Coaching package"></div>
         <div class="form-group"><label>Amount</label><input type="number" name="amount" step="0.01" min="0.01" required></div>
-        <button type="submit">Open Stripe Checkout</button>
+        <div class="form-group"><label>Method</label>
+            <select name="method">
+                {% for m in pay_methods if m.ready %}
+                <option value="{{ m.key }}">{{ m.label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit">Start checkout</button>
     </form>
 </div>
-{% endif %}
 
 <h2>Payment log</h2>
 <div class="table-wrapper">
@@ -51,7 +56,7 @@
     <td style="font-size:0.78rem;color:var(--text3);">{{ (r.checkout_id or '')[:18] }}</td>
 </tr>
 {% else %}
-<tr><td colspan="5">No Stripe payments yet.</td></tr>
+<tr><td colspan="5">No payments yet.</td></tr>
 {% endfor %}
 </tbody>
 </table>

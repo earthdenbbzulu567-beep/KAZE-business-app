@@ -635,18 +635,5 @@ function dismissOnboarding() {
             document.getElementById('panel-' + btn.dataset.tab).classList.add('is-on');
         });
     });
-    document.querySelectorAll('[data-count-to]').forEach(el => {
-        const target = parseFloat(el.dataset.countTo);
-        const duration = 900;
-        const start = performance.now();
-        function tick(now) {
-            const progress = Math.min((now - start) / duration, 1);
-            const eased = 1 - Math.pow(1 - progress, 3);
-            el.textContent = window.kazeMoney(target * eased);
-            if (progress < 1) requestAnimationFrame(tick);
-            else el.textContent = window.kazeMoney(target);
-        }
-        requestAnimationFrame(tick);
-    });
 </script>
 {% endblock %}

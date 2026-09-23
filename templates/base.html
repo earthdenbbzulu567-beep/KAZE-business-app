@@ -272,25 +272,8 @@
             color: var(--red-bright);
         }
         .sidebar-nav .nav-section a {
-            animation: navSlide 0.2s var(--ease-out) both;
+            animation: navSlide 0.18s var(--ease-out) both;
         }
-        .sidebar-nav .nav-section:nth-child(1) a:nth-of-type(1) { animation-delay: .03s; }
-        .sidebar-nav .nav-section:nth-child(1) a:nth-of-type(2) { animation-delay: .06s; }
-        .sidebar-nav .nav-section:nth-child(1) a:nth-of-type(3) { animation-delay: .09s; }
-        .sidebar-nav .nav-section:nth-child(1) a:nth-of-type(4) { animation-delay: .12s; }
-        .sidebar-nav .nav-section:nth-child(1) a:nth-of-type(5) { animation-delay: .15s; }
-        .sidebar-nav .nav-section:nth-child(2) a:nth-of-type(1) { animation-delay: .18s; }
-        .sidebar-nav .nav-section:nth-child(2) a:nth-of-type(2) { animation-delay: .21s; }
-        .sidebar-nav .nav-section:nth-child(2) a:nth-of-type(3) { animation-delay: .24s; }
-        .sidebar-nav .nav-section:nth-child(2) a:nth-of-type(4) { animation-delay: .27s; }
-        .sidebar-nav .nav-section:nth-child(3) a:nth-of-type(1) { animation-delay: .30s; }
-        .sidebar-nav .nav-section:nth-child(3) a:nth-of-type(2) { animation-delay: .33s; }
-        .sidebar-nav .nav-section:nth-child(3) a:nth-of-type(3) { animation-delay: .36s; }
-        .sidebar-nav .nav-section:nth-child(4) a:nth-of-type(1) { animation-delay: .39s; }
-        .sidebar-nav .nav-section:nth-child(4) a:nth-of-type(2) { animation-delay: .42s; }
-        .sidebar-nav .nav-section:nth-child(4) a:nth-of-type(3) { animation-delay: .45s; }
-        .sidebar-nav .nav-section:nth-child(4) a:nth-of-type(4) { animation-delay: .48s; }
-        .sidebar-nav .nav-section:nth-child(5) a:nth-of-type(1) { animation-delay: .51s; }
         @keyframes navSlide {
             from { opacity: 0; transform: translateX(-12px); }
             to { opacity: 1; transform: translateX(0); }
@@ -967,7 +950,7 @@
             transition: transform 0.25s var(--ease-spring);
         }
         details[open] summary::after { transform: rotate(180deg); }
-        details > div, details form { padding-bottom: 1rem; animation: cardEntrance 0.35s ease both; }
+        details > div, details form { padding-bottom: 1rem; }
 
         .pagination a {
             display: inline-flex;
@@ -1016,21 +999,6 @@
         a { color: var(--red-bright); transition: color 0.15s ease, opacity 0.15s ease; }
         a:hover { opacity: 0.85; }
 
-        tbody tr {
-            animation: rowIn 0.35s var(--ease-out) both;
-        }
-        tbody tr:nth-child(1) { animation-delay: 0.02s; }
-        tbody tr:nth-child(2) { animation-delay: 0.05s; }
-        tbody tr:nth-child(3) { animation-delay: 0.08s; }
-        tbody tr:nth-child(4) { animation-delay: 0.11s; }
-        tbody tr:nth-child(5) { animation-delay: 0.14s; }
-        tbody tr:nth-child(6) { animation-delay: 0.17s; }
-        tbody tr:nth-child(7) { animation-delay: 0.2s; }
-        tbody tr:nth-child(8) { animation-delay: 0.23s; }
-        @keyframes rowIn {
-            from { opacity: 0; transform: translateX(-8px); }
-            to { opacity: 1; transform: translateX(0); }
-        }
 
         .low-stock-row { background: var(--danger-dim) !important; }
 
@@ -1310,27 +1278,6 @@
     </style>
     <style>
 
-        .page-content {
-            animation: pageIn 0.22s var(--ease-out) both;
-        }
-        @keyframes pageIn {
-            from { opacity: 0; transform: translateY(6px); }
-            to { opacity: 1; transform: none; }
-        }
-        .flash {
-            animation: flashIn 0.22s var(--ease-out) both;
-        }
-        @keyframes flashIn {
-            from { opacity: 0; transform: translateY(-6px); }
-            to { opacity: 1; transform: none; }
-        }
-        .widget, .summary-card, .stat-chip, .feature-card, .table-wrapper, .auth-card {
-            animation: cardIn 0.28s var(--ease-out) both;
-        }
-        @keyframes cardIn {
-            from { opacity: 0; transform: translateY(8px); }
-            to { opacity: 1; transform: none; }
-        }
         button, .btn-secondary, .ring-up {
             transition: transform 0.14s var(--ease-out), box-shadow 0.14s ease, background 0.14s ease, border-color 0.14s ease;
         }
@@ -1621,9 +1568,10 @@
             }
         });
 
-        // Ripple effect for buttons
         function createRipple(e) {
-            const button = e.currentTarget;
+            const button = e.target.closest('button, .sidebar-nav a');
+            if (!button || button.classList.contains('modal-close')) return;
+            if (button.tagName === 'BUTTON' && button.type === 'submit' && button.closest('form') && false) return;
             const rect = button.getBoundingClientRect();
             const ripple = document.createElement('span');
             const size = Math.max(rect.width, rect.height);
@@ -1636,13 +1584,8 @@
             button.appendChild(ripple);
             setTimeout(() => ripple.remove(), 600);
         }
+        document.addEventListener('click', createRipple);
         document.addEventListener('DOMContentLoaded', () => {
-            document.querySelectorAll('button:not(.modal-close)').forEach(btn => {
-                btn.addEventListener('click', createRipple);
-            });
-            document.querySelectorAll('.sidebar-nav a').forEach(link => {
-                link.addEventListener('click', createRipple);
-            });
             if (window.lucide) lucide.createIcons({ attrs: { fill: 'none', stroke: 'currentColor', 'stroke-width': '1.75', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', width: 18, height: 18 } });
         });
     </script>
@@ -1720,7 +1663,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 0.9rem 1rem;
-    animation: pageFadeUp 0.45s var(--ease-out) both;
+
 }
 .stat-chip span { display: block; color: var(--text3); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.35rem; }
 .stat-chip strong { font-size: 1.2rem; font-family: var(--mono); }
@@ -1732,8 +1675,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     }
     body::before { animation: none !important; }
 }
-.shimmer-line { height: 2px; background: linear-gradient(90deg, transparent, var(--red-bright), transparent); background-size: 200% 100%; animation: shimmer-sweep 2.4s linear infinite; }
-@keyframes shimmer-sweep { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 </style>
 
 </head>
@@ -1750,184 +1691,16 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         </div>
 
         <nav class="sidebar-nav">
-            <!-- Core -->
+            {% for group in nav_groups or [] %}
             <div class="nav-section">
-                <div class="nav-section-title">Core</div>
-                <a href="{{ url_for('dashboard') }}" {% if request.endpoint == 'dashboard' %}class="active"{% endif %}>
-                    <i data-lucide="layout-dashboard" class="icon"></i> Dashboard
+                <div class="nav-section-title">{{ group.title }}</div>
+                {% for item in group.items %}
+                <a href="{{ url_for(item.endpoint) }}" {% if request.endpoint in item.active %}class="active"{% endif %}>
+                    <i data-lucide="{{ item.icon }}" class="icon"></i> {{ item.label }}
                 </a>
-                {% if mode_on('stock') %}
-                <a href="{{ url_for('stock') }}" {% if request.endpoint == 'stock' %}class="active"{% endif %}>
-                    <i data-lucide="package" class="icon"></i> Stock
-                </a>
-                {% endif %}
-                {% if mode_on('sales') %}
-                <a href="{{ url_for('sales') }}" {% if request.endpoint == 'sales' %}class="active"{% endif %}>
-                    <i data-lucide="receipt" class="icon"></i> Sales
-                </a>
-                {% endif %}
-                {% if mode_on('counter') %}
-                <a href="{{ url_for('counter') }}" {% if request.endpoint == 'counter' %}class="active"{% endif %}>
-                    <i data-lucide="monitor-smartphone" class="icon"></i> Counter
-                </a>
-                {% endif %}
-                {% if mode_on('customers') %}
-                <a href="{{ url_for('customers') }}" {% if request.endpoint == 'customers' %}class="active"{% endif %}>
-                    <i data-lucide="users" class="icon"></i> Customers
-                </a>
-                {% endif %}
-                {% if mode_on('services') %}
-                <a href="{{ url_for('services') }}" {% if request.endpoint == 'services' %}class="active"{% endif %}>
-                    <i data-lucide="graduation-cap" class="icon"></i> Services
-                </a>
-                {% endif %}
-                {% if mode_on('bookkeeping') %}
-                <a href="{{ url_for('bookkeeping') }}" {% if request.endpoint in ['bookkeeping','bookkeeping_type','cashbook','edit_cash_entry'] %}class="active"{% endif %}>
-                    <i data-lucide="book-open" class="icon"></i> Book keeping
-                </a>
-                {% endif %}
+                {% endfor %}
             </div>
-
-            {% if mode_on('operations') %}
-            <div class="nav-section">
-                <div class="nav-section-title">Operations</div>
-                <a href="{{ url_for('recurring') }}" {% if request.endpoint == 'recurring' %}class="active"{% endif %}>
-                    <i data-lucide="refresh-cw" class="icon"></i> Recurring
-                </a>
-                <a href="{{ url_for('purchase_orders') }}" {% if request.endpoint == 'purchase_orders' %}class="active"{% endif %}>
-                    <i data-lucide="shopping-cart" class="icon"></i> Purchase Orders
-                </a>
-                <a href="{{ url_for('suppliers') }}" {% if request.endpoint == 'suppliers' %}class="active"{% endif %}>
-                    <i data-lucide="warehouse" class="icon"></i> Suppliers
-                </a>
-                <a href="{{ url_for('budgets') }}" {% if request.endpoint == 'budgets' %}class="active"{% endif %}>
-                    <i data-lucide="target" class="icon"></i> Budgets
-                </a>
-            </div>
-            {% endif %}
-
-            {% if mode_on('accounts') %}
-            <div class="nav-section">
-                <div class="nav-section-title">Accounts</div>
-                <a href="{{ url_for('accounts') }}" {% if request.endpoint in ['accounts','account_book'] %}class="active"{% endif %}>
-                    <i data-lucide="book-marked" class="icon"></i> Account tracking
-                </a>
-            </div>
-            {% endif %}
-
-            <div class="nav-section">
-                <div class="nav-section-title">Planning</div>
-                {% if mode_on('reports') %}
-                <a href="{{ url_for('reports') }}" {% if request.endpoint == 'reports' %}class="active"{% endif %}>
-                    <i data-lucide="bar-chart-3" class="icon"></i> Reports
-                </a>
-                {% endif %}
-                {% if mode_on('stats') %}
-                <a href="{{ url_for('stats') }}" {% if request.endpoint == 'stats' %}class="active"{% endif %}>
-                    <i data-lucide="table-2" class="icon"></i> Statistics
-                </a>
-                {% endif %}
-                {% if mode_on('tax') %}
-                <a href="{{ url_for('tax_summary') }}" {% if request.endpoint == 'tax_summary' %}class="active"{% endif %}>
-                    <i data-lucide="percent" class="icon"></i> Tax summary
-                </a>
-                {% endif %}
-                {% if mode_on('reminders') %}
-                <a href="{{ url_for('reminders') }}" {% if request.endpoint == 'reminders' %}class="active"{% endif %}>
-                    <i data-lucide="bell" class="icon"></i> Reminders
-                </a>
-                {% endif %}
-                {% if mode_on('planning') %}
-                <a href="{{ url_for('swot') }}" {% if request.endpoint == 'swot' %}class="active"{% endif %}>
-                    <i data-lucide="compass" class="icon"></i> SWOT
-                </a>
-                <a href="{{ url_for('business_plan') }}" {% if request.endpoint == 'business_plan' %}class="active"{% endif %}>
-                    <i data-lucide="map" class="icon"></i> Business Plan
-                </a>
-                {% endif %}
-                {% if mode_on('banking') %}
-                <a href="{{ url_for('banking') }}" {% if request.endpoint == 'banking' %}class="active"{% endif %}>
-                    <i data-lucide="landmark" class="icon"></i> Banking
-                </a>
-                {% endif %}
-                {% if mode_on('investments') %}
-                <a href="{{ url_for('investments') }}" {% if request.endpoint == 'investments' %}class="active"{% endif %}>
-                    <i data-lucide="line-chart" class="icon"></i> Investments
-                </a>
-                {% endif %}
-                {% if mode_on('shop') %}
-                <a href="{{ url_for('shop') }}" {% if request.endpoint == 'shop' %}class="active"{% endif %}>
-                    <i data-lucide="store" class="icon"></i> Shop
-                </a>
-                {% endif %}
-                {% if mode_on('market') %}
-                <a href="{{ url_for('market') }}" {% if request.endpoint == 'market' %}class="active"{% endif %}>
-                    <i data-lucide="trending-up" class="icon"></i> Market value
-                </a>
-                {% endif %}
-            </div>
-
-            <div class="nav-section">
-                <div class="nav-section-title">Account</div>
-                <a href="{{ url_for('team') }}" {% if request.endpoint == 'team' %}class="active"{% endif %}>
-                    <i data-lucide="users-round" class="icon"></i> Team
-                </a>
-                <a href="{{ url_for('activity') }}" {% if request.endpoint == 'activity' %}class="active"{% endif %}>
-                    <i data-lucide="log-in" class="icon"></i> Login activity
-                </a>
-                <a href="{{ url_for('plans') }}" {% if request.endpoint == 'plans' %}class="active"{% endif %}>
-                    <i data-lucide="layers" class="icon"></i> Packages
-                </a>
-                <a href="{{ url_for('payments') }}" {% if request.endpoint == 'payments' %}class="active"{% endif %}>
-                    <i data-lucide="credit-card" class="icon"></i> Payments
-                </a>
-                <a href="{{ url_for('settings') }}" {% if request.endpoint == 'settings' %}class="active"{% endif %}>
-                    <i data-lucide="settings" class="icon"></i> Settings
-                </a>
-                <a href="{{ url_for('backup_export') }}">
-                    <i data-lucide="download" class="icon"></i> Backup
-                </a>
-            </div>
-
-            <!-- Documents -->
-            <div class="nav-section">
-                <div class="nav-section-title">Workspace</div>
-                {% if mode_on('workspace') %}
-                <a href="{{ url_for('tasks') }}" {% if request.endpoint == 'tasks' %}class="active"{% endif %}>
-                    <i data-lucide="check-square" class="icon"></i> Tasks
-                </a>
-                <a href="{{ url_for('notes') }}" {% if request.endpoint in ['notes','edit_note'] %}class="active"{% endif %}>
-                    <i data-lucide="sticky-note" class="icon"></i> Notes
-                </a>
-                <a href="{{ url_for('calendar') }}" {% if request.endpoint == 'calendar' %}class="active"{% endif %}>
-                    <i data-lucide="calendar" class="icon"></i> Calendar
-                </a>
-                {% endif %}
-                {% if mode_on('calculator') %}
-                <a href="{{ url_for('calculator') }}" {% if request.endpoint == 'calculator' %}class="active"{% endif %}>
-                    <i data-lucide="calculator" class="icon"></i> Calculator
-                </a>
-                {% endif %}
-                {% if mode_on('day_close') %}
-                <a href="{{ url_for('day_close') }}" {% if request.endpoint == 'day_close' %}class="active"{% endif %}>
-                    <i data-lucide="sunset" class="icon"></i> Day close
-                </a>
-                {% endif %}
-                <a href="{{ url_for('shortcuts') }}" {% if request.endpoint == 'shortcuts' %}class="active"{% endif %}>
-                    <i data-lucide="keyboard" class="icon"></i> Shortcuts
-                </a>
-                <a href="{{ url_for('tutorial') }}" {% if request.endpoint == 'tutorial' %}class="active"{% endif %}>
-                    <i data-lucide="book-open-check" class="icon"></i> Practical guide
-                </a>
-            </div>
-            {% if mode_on('documents') %}
-            <div class="nav-section">
-                <div class="nav-section-title">Documents</div>
-                <a href="{{ url_for('docs') }}" {% if request.endpoint == 'docs' %}class="active"{% endif %}>
-                    <i data-lucide="file-text" class="icon"></i> Documents
-                </a>
-            </div>
-            {% endif %}
+            {% endfor %}
         </nav>
 
         <div class="sidebar-footer">
@@ -2076,10 +1849,12 @@ function kazeConfirmBulk(form) {
 
         // Animated number counter for summary cards (existing, enhanced)
         function animateCount(el) {
-            const raw = el.textContent.trim();
-            const num = parseFloat(raw.replace(/[^0-9.-]/g, ''));
+            if (!el || el.dataset.counting === '1') return;
+            const raw = el.dataset.countTo || el.textContent.trim();
+            const num = parseFloat(String(raw).replace(/[^0-9.-]/g, ''));
             if (isNaN(num)) return;
-            const duration = 1000;
+            el.dataset.counting = '1';
+            const duration = 700;
             const start = performance.now();
             function update(now) {
                 const progress = Math.min((now - start) / duration, 1);
@@ -2092,11 +1867,11 @@ function kazeConfirmBulk(form) {
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            document.querySelectorAll('.summary-card .amount').forEach(el => {
-                const card = el.closest('.summary-card');
-                if (!card || !card.parentElement) return;
-                const idx = [...card.parentElement.children].indexOf(card);
-                setTimeout(() => animateCount(el), 100 + idx * 100);
+            document.querySelectorAll('[data-count-to], .summary-card .amount').forEach(el => {
+                const card = el.closest('.summary-card') || el;
+                const parent = card.parentElement;
+                const idx = parent ? [...parent.children].indexOf(card) : 0;
+                setTimeout(() => animateCount(el), 80 + Math.max(idx, 0) * 70);
             });
 
             const clock = document.getElementById('liveClock');
@@ -2113,7 +1888,6 @@ function kazeConfirmBulk(form) {
         });
     </script>
 
-<div class="shimmer-line" style="position:fixed;top:0;left:0;right:0;z-index:400;"></div>
 <button type="button" class="fab" id="fabBtn" title="Quick add">+</button>
 <div class="fab-menu" id="fabMenu">
     {% if mode_on('counter') %}<a href="{{ url_for('counter') }}">Counter sale</a>{% endif %}
@@ -2141,28 +1915,11 @@ function kazeConfirmBulk(form) {
         if (menu && !menu.contains(e.target) && e.target !== fab) menu.classList.remove('open');
     });
     const pages = [
-        ['Dashboard', '{{ url_for("dashboard") }}'],
-        {% if mode_on('stock') %}['Stock', '{{ url_for("stock") }}'],{% endif %}
-        {% if mode_on('sales') %}['Sales', '{{ url_for("sales") }}'],{% endif %}
-        {% if mode_on('counter') %}['Counter', '{{ url_for("counter") }}'],{% endif %}
-        {% if mode_on('customers') %}['Customers', '{{ url_for("customers") }}'],{% endif %}
-        {% if mode_on('services') %}['Services', '{{ url_for("services") }}'],{% endif %}
-        {% if mode_on('banking') %}['Banking', '{{ url_for("banking") }}'],{% endif %}
-        {% if mode_on('investments') %}['Investments', '{{ url_for("investments") }}'],{% endif %}
-        {% if mode_on('shop') %}['Shop', '{{ url_for("shop") }}'],{% endif %}
-        {% if mode_on('market') %}['Market value', '{{ url_for("market") }}'],{% endif %}
-        ['Practical guide', '{{ url_for("tutorial") }}'],
-        {% if mode_on('bookkeeping') %}['Book keeping', '{{ url_for("bookkeeping") }}'],{% endif %}
-        {% if mode_on('accounts') %}['Account tracking', '{{ url_for("accounts") }}'],{% endif %}
-        {% if mode_on('reports') %}['Reports', '{{ url_for("reports") }}'],{% endif %}
-        {% if mode_on('stats') %}['Statistics', '{{ url_for("stats") }}'],{% endif %}
-        {% if mode_on('reminders') %}['Reminders', '{{ url_for("reminders") }}'],{% endif %}
-        {% if mode_on('tax') %}['Tax summary', '{{ url_for("tax_summary") }}'],{% endif %}
-        {% if mode_on('workspace') %}['Tasks', '{{ url_for("tasks") }}'],['Notes', '{{ url_for("notes") }}'],['Calendar', '{{ url_for("calendar") }}'],{% endif %}
-        ['Packages', '{{ url_for("plans") }}'],
-        ['Payments', '{{ url_for("payments") }}'],
-        ['Settings', '{{ url_for("settings") }}'],
-        {% if mode_on('day_close') %}['Day close', '{{ url_for("day_close") }}'],{% endif %}
+        {% for group in nav_groups or [] %}
+        {% for item in group.items %}
+        ['{{ item.label }}', '{{ url_for(item.endpoint) }}'],
+        {% endfor %}
+        {% endfor %}
         {% if mode_on('sales') %}['Aged sales', '{{ url_for("aged_sales") }}'],{% endif %}
     ];
     const overlay = document.getElementById('cmdOverlay');

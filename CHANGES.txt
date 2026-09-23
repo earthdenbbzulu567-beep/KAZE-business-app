@@ -1,3 +1,17 @@
+v3.0.6 — Payments: Stripe (Visa/Mastercard), PayPal, Flutterwave, and current-account transfers share one checkout path.
+
+v3.0.5 — Faster requests: one settings load per request, cached unread badge, session cookie not rewritten every hit, extra indexes, gunicorn preload + 8 threads.
+
+v3.0.4 — UI motion cleanup: one page/card entrance, no fake loading bar, no table-row stagger, one money count-up, ripple uses event delegation.
+
+v3.0.3 — Sidebar grouping is data-driven: one NAV_GROUPS catalog, empty groups hidden, Ctrl+K uses the same list.
+
+v3.0.2 — Sidebar tabs ordered: Core, Money, Trade, Growth, Workspace, Account.
+
+v3.0.1 — Cleanup: fix nested document forms, remove dead price-parser and unused AI box, restore static logos, drop unused PythonAnywhere notes and sample JSON.
+
+v3.0.0 — Flutterwave checkout on shop orders, Alpha Vantage price/FX refresh with 15-minute cache and 4s timeouts. Keys in Settings or env. Pages do not call APIs on load.
+
 v2.9.9 — Supreme desks: banking books + transfers, investment holdings, online shop/orders/pay, monetization channels and market-value snapshots. CEO/Founder and Full mode. Books mode gets banking, Till gets shop, Office gets investments and market.
 
 v2.9.8 — Hardcoded package prices (K): New user free, + 25, Entrepreneur 50, Entrepreneur + 75, Businessman 100, Businessman pro 150, CEO 300, Founder's premium 500.

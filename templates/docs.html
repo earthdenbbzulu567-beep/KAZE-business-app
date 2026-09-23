@@ -43,12 +43,12 @@ new Chart(document.getElementById('docsMixChart'), {
 <!-- Add Document Form -->
 <details style="margin-bottom:1.5rem;">
     <summary style="cursor:pointer; padding:10px 20px; background:linear-gradient(135deg,#667eea,#764ba2); color:white; border-radius:10px; display:inline-block; font-weight:500;">
-        ➕ Create New Document
+        Create new document
     </summary>
     <div style="margin-top:1rem; background:var(--surface); padding:1.5rem; border-radius:15px; box-shadow:0 8px 24px rgba(0,0,0,0.25);">
         <form method="POST" action="{{ url_for('add_doc') }}">
             <div class="form-group">
-                <label style="display:block; color:var(--text2); font-size:0.85rem; margin-bottom:4px;">Document Type</label>
+                <label>Document type</label>
                 <select name="doc_type" required>
                     <option value="invoice">Invoice</option>
                     <option value="contract">Contract</option>
@@ -56,70 +56,59 @@ new Chart(document.getElementById('docsMixChart'), {
                 </select>
             </div>
             <div class="form-group">
-                <label style="display:block; color:var(--text2); font-size:0.85rem; margin-bottom:4px;">Title</label>
-                <input type="text" name="title" placeholder="e.g. Invoice #1042 – Acme Corp" required>
+                <label>Title</label>
+                <input type="text" name="title" placeholder="e.g. Invoice 1042" required>
             </div>
             <div class="form-group">
-                <label style="display:block; color:var(--text2); font-size:0.85rem; margin-bottom:4px;">Client / Party</label>
-                <input type="text" name="client" placeholder="e.g. Acme Corp" required>
+                <label>Client / party</label>
+                <input type="text" name="client" placeholder="Client name" required>
             </div>
             <div class="form-group">
-                <label style="display:block; color:var(--text2); font-size:0.85rem; margin-bottom:4px;">Amount (optional)</label>
+                <label>Amount (optional)</label>
                 <input type="number" step="0.01" name="amount" placeholder="0.00">
             </div>
             <div class="form-group">
-                <label style="display:block; color:var(--text2); font-size:0.85rem; margin-bottom:4px;">Date</label>
+                <label>Date</label>
                 <input type="date" name="date">
             </div>
-            <div class="form-group" style="display:block; width:100%;">
-                <label style="display:block; color:var(--text2); font-size:0.85rem; margin-bottom:4px;">Notes / Description</label>
-                <textarea name="notes" placeholder="Describe the scope, terms, or details..." rows="3"
-                    style="padding:10px 15px; border:1px solid var(--border); border-radius:10px; font-size:1rem; font-family:inherit; width:100%; max-width:600px; resize:vertical;"></textarea>
-            </div>
-            <div style="margin-top:0.5rem; display:flex; gap:1rem; align-items:center; flex-wrap:wrap;">
-                <button type="submit">💾 Save Document</button>
-
-<details class="multi-wrap">
-    <summary>Add several documents</summary>
-    <div>
-        <form method="POST" action="{{ url_for('multi_add', kind='docs') }}">
-            <div class="table-wrapper">
-            <table class="multi-table" id="multiDocs">
-                <thead><tr><th>Type</th><th>Title</th><th>Client</th><th>Amount</th><th>Date</th><th>Notes</th><th></th></tr></thead>
-                <tbody>
-                {% for _ in range(3) %}
-                <tr class="multi-row">
-                    <td><select name="doc_type"><option value="invoice">Invoice</option><option value="contract">Contract</option><option value="report">Report</option></select></td>
-                    <td><input type="text" name="title" placeholder="Title"></td>
-                    <td><input type="text" name="client" placeholder="Client"></td>
-                    <td><input type="number" step="0.01" min="0" name="amount"></td>
-                    <td><input type="date" name="date"></td>
-                    <td><input type="text" name="notes"></td>
-                    <td><button type="button" class="btn-secondary multi-row-del" onclick="kazeDelRow(this)">×</button></td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
+            <div class="form-group">
+                <label>Notes</label>
+                <textarea name="notes" placeholder="Scope, terms, extra detail..." rows="3"></textarea>
             </div>
             <div class="multi-actions">
-                <button type="button" class="btn-secondary" onclick="kazeAddRow('multiDocs')">+ Row</button>
-                <button type="submit">Save all documents</button>
+                <button type="submit">Save document</button>
+                <button type="button" class="btn-secondary" onclick="draftNotes()">Draft notes</button>
             </div>
         </form>
-    </div>
-</details>
-
-
-                <button type="button" onclick="draftNotes()" style="background:linear-gradient(135deg,#764ba2,#667eea);">✨ Generate with AI</button>
+        <details class="multi-wrap" style="margin-top:1rem;">
+            <summary>Add several documents</summary>
+            <div>
+                <form method="POST" action="{{ url_for('multi_add', kind='docs') }}">
+                    <div class="table-wrapper">
+                    <table class="multi-table" id="multiDocs">
+                        <thead><tr><th>Type</th><th>Title</th><th>Client</th><th>Amount</th><th>Date</th><th>Notes</th><th></th></tr></thead>
+                        <tbody>
+                        {% for _ in range(3) %}
+                        <tr class="multi-row">
+                            <td><select name="doc_type"><option value="invoice">Invoice</option><option value="contract">Contract</option><option value="report">Report</option></select></td>
+                            <td><input type="text" name="title" placeholder="Title"></td>
+                            <td><input type="text" name="client" placeholder="Client"></td>
+                            <td><input type="number" step="0.01" min="0" name="amount"></td>
+                            <td><input type="date" name="date"></td>
+                            <td><input type="text" name="notes"></td>
+                            <td><button type="button" class="btn-secondary multi-row-del" onclick="kazeDelRow(this)">×</button></td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                    </div>
+                    <div class="multi-actions">
+                        <button type="button" class="btn-secondary" onclick="kazeAddRow('multiDocs')">+ Row</button>
+                        <button type="submit">Save all documents</button>
+                    </div>
+                </form>
             </div>
-        </form>
-
-        <!-- AI Output Box -->
-        <div id="ai-output-box" style="display:none; margin-top:1rem; padding:1rem; background:var(--surface2); border:2px solid #667eea; border-radius:10px;">
-            <div style="font-size:0.85rem; color:#667eea; font-weight:600; margin-bottom:0.5rem;">✨ AI Generated Content</div>
-            <div id="ai-output-text" style="font-size:0.9rem; color:var(--text); line-height:1.7; white-space:pre-wrap;"></div>
-            <button onclick="copyAI()" style="margin-top:0.75rem; background:#28a745; padding:6px 14px; font-size:0.85rem;">📋 Copy to clipboard</button>
-        </div>
+        </details>
     </div>
 </details>
 
@@ -201,9 +190,5 @@ function draftNotes() {
     notes.value = 'This ' + type + ' (“' + title + '”) is between our business and ' + client + '.' + moneyBit + '\n\nScope: describe the goods or work.\nTerms: payment due as agreed.\nNotes: add delivery or extra conditions here.';
 }
 
-function copyAI() {
-    const text = document.getElementById('ai-output-text') ? document.getElementById('ai-output-text').textContent : '';
-    if (text) navigator.clipboard.writeText(text);
-}
 </script>
 {% endblock %}

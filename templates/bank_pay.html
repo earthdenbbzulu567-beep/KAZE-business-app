@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Current account transfer{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <p class="kicker">Payments</p>
+        <h1>Pay from a current account</h1>
+        <p>Use these details, then mark the payment paid when the deposit shows on the statement.</p>
+    </div>
+</div>
+<div class="widget">
+    <h2>Transfer details</h2>
+    <p><strong>Amount:</strong> {{ money(row.amount) }} {{ row.currency }}</p>
+    <p><strong>Reference:</strong> <code>{{ row.checkout_id }}</code></p>
+    <p><strong>For:</strong> {{ row.title or row.kind }}</p>
+    <hr>
+    <p><strong>Bank:</strong> {{ bank.bank_name or '—' }}</p>
+    <p><strong>Account name:</strong> {{ bank.account_name or '—' }}</p>
+    <p><strong>Account number:</strong> {{ bank.account_number or '—' }}</p>
+    <p><strong>Branch:</strong> {{ bank.branch or '—' }}</p>
+    {% if row.status != 'paid' %}
+    <form method="POST" action="{{ url_for('bank_pay_confirm', ref=row.checkout_id) }}">
+        <button type="submit">Mark as paid</button>
+    </form>
+    {% else %}
+    <p><span class="status-pill status-ok">Paid</span></p>
+    {% endif %}
+    <p><a href="{{ url_for('payments') }}">Back to payments</a></p>
+</div>
+{% endblock %}

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
+<style>.pay-methods{display:flex;flex-wrap:wrap;gap:.45rem;margin-top:.55rem}.pay-methods a{display:inline-block}</style>
 <div class="page-header">
     <div>
         <h1>Packages</h1>
@@ -33,8 +34,13 @@
     {% if t.key == current.key %}
         <p><span class="status-pill status-ok">Current package</span></p>
     {% elif is_owner %}
-        {% if stripe_ready and t.price %}
-            <p><a href="{{ url_for('pay_plan', tier=t.key) }}">Unlock with card</a></p>
+        {% if t.price %}
+            <div class="pay-methods">
+                {% if stripe_ready %}<a class="btn-secondary" href="{{ url_for('pay_plan', tier=t.key) }}?method=stripe">Visa / Mastercard</a>{% endif %}
+                {% if paypal_ready %}<a class="btn-secondary" href="{{ url_for('pay_plan', tier=t.key) }}?method=paypal">PayPal</a>{% endif %}
+                {% if flutterwave_ready %}<a class="btn-secondary" href="{{ url_for('pay_plan', tier=t.key) }}?method=flutterwave">Card / MoMo</a>{% endif %}
+                {% if bank_ready %}<a class="btn-secondary" href="{{ url_for('pay_plan', tier=t.key) }}?method=bank">Current account</a>{% endif %}
+            </div>
         {% endif %}
         <form method="POST" action="{{ url_for('set_plan') }}">
             <input type="hidden" name="plan_tier" value="{{ t.key }}">
@@ -45,7 +51,7 @@
 {% endfor %}
 </div>
 
-<p class="pkg-note">Existing shops stay on CEO until you change them. New signups start as New user. Modes can still hide modules inside a package. Card unlocks need Stripe keys in Settings. <code>/plans</code> still works as an old link.</p>
+<p class="pkg-note">Existing shops stay on CEO until you change them. New signups start as New user. Modes can still hide modules inside a package. Unlocks use Stripe (Visa/Mastercard), PayPal, Flutterwave, or a current-account transfer — whichever you switched on in Settings. <code>/plans</code> still works as an old link.</p>
 
 <style>
 .pkg-grid {

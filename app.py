@@ -22,6 +22,8 @@ import json
 import re
 import mode_runtime
 import stripe_payments
+import integrations
+import gateways
 
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
 _TPL_DIR = os.path.join(_APP_DIR, 'templates') if os.path.isdir(os.path.join(_APP_DIR, 'templates')) else _APP_DIR
@@ -29,6 +31,8 @@ app = Flask(__name__, template_folder=_TPL_DIR)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 86400
 app.config['TEMPLATES_AUTO_RELOAD'] = False
+app.config['SESSION_REFRESH_EACH_REQUEST'] = False
+app.config['JSONIFY_PRETTYPRINT_REGULAR'] = False
 
 # --------------------- Helper: time since (for activity feed) ---------------------
 @app.template_filter('timesince')
@@ -68,6 +72,16 @@ login_manager.login_view = 'login'
 @app.route('/healthz')
 def healthz():
     return {'ok': True}, 200
+
+
+@app.after_request
+def _fast_headers(resp):
+    path = request.path or ''
+    if path.startswith('/static/'):
+        resp.cache_control.public = True
+        resp.cache_control.max_age = 86400
+        resp.headers.setdefault('Vary', 'Accept-Encoding')
+    return resp
 
 # --------------------- Database ---------------------
 _pool = None
@@ -355,6 +369,18 @@ def init_db():
     cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS stripe_webhook_secret TEXT DEFAULT ''")
     cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS plan_tier TEXT DEFAULT 'ceo'")
     cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS package_prices TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS flutterwave_public_key TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS flutterwave_secret_key TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS flutterwave_webhook_hash TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS paypal_client_id TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS paypal_secret TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS paypal_mode TEXT DEFAULT 'sandbox'")
+    cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS bank_name TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS bank_account_name TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS bank_account_number TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS bank_branch TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE stripe_payments ADD COLUMN IF NOT EXISTS provider TEXT DEFAULT 'stripe'")
+    cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS alpha_vantage_key TEXT DEFAULT ''")
 
     cur.execute('''
         CREATE TABLE IF NOT EXISTS stripe_payments (
@@ -700,6 +726,9 @@ def init_db():
     cur.execute('CREATE INDEX IF NOT EXISTS idx_shop_list_user ON shop_listings (user_id)')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_shop_ord_user ON shop_orders (user_id)')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_market_ch_user ON market_channels (user_id)')
+    cur.execute("ALTER TABLE investments ADD COLUMN IF NOT EXISTS ticker TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE shop_orders ADD COLUMN IF NOT EXISTS flutterwave_tx_ref TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE shop_orders ADD COLUMN IF NOT EXISTS flutterwave_tx_id TEXT DEFAULT ''")
 
     cur.execute('CREATE INDEX IF NOT EXISTS idx_services_user ON services (user_id)')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_sessions_user_date ON service_sessions (user_id, session_date)')
@@ -714,6 +743,8 @@ def init_db():
     cur.execute('CREATE INDEX IF NOT EXISTS idx_journal_user_book ON journal_entries (user_id, book)')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_bookdocs_user ON bookkeeping_docs (user_id)')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_settings_user ON settings (user_id)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_recurring_due ON recurring_items (user_id, active, next_run_date)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_users_id ON users (id)')
     cur.execute("ALTER TABLE service_sessions ADD COLUMN IF NOT EXISTS stripe_checkout_id TEXT DEFAULT ''")
     cur.execute("ALTER TABLE bookkeeping_docs ADD COLUMN IF NOT EXISTS stripe_checkout_id TEXT DEFAULT ''")
     cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS stripe_checkout_id TEXT DEFAULT ''")
@@ -1546,31 +1577,6 @@ def default_package_prices():
     return {k: float(PLAN_TIERS[k].get('price') or 0) for k in PLAN_ORDER}
 
 
-def parse_package_prices(raw):
-    prices = default_package_prices()
-    data = None
-    if raw:
-        try:
-            data = json.loads(raw) if isinstance(raw, str) else raw
-        except (TypeError, ValueError):
-            data = None
-    if isinstance(data, dict):
-        for key in PLAN_ORDER:
-            if key not in data:
-                continue
-            try:
-                val = float(data[key])
-            except (TypeError, ValueError):
-                continue
-            if val < 0:
-                val = 0.0
-            if val > 1e9:
-                val = 1e9
-            prices[key] = val
-    prices['new_user'] = 0.0
-    return prices
-
-
 def package_prices_for(settings=None):
     # Prices are hardcoded in PLAN_TIERS. Settings cannot override them.
     return default_package_prices()
@@ -1714,6 +1720,82 @@ MODULE_CATALOG = [
 ]
 ALL_OPTIONAL = [m[0] for m in MODULE_CATALOG]
 
+NAV_GROUPS = (
+    ('Core', (
+        ('Dashboard', 'dashboard', 'layout-dashboard', None, ('dashboard',)),
+        ('Counter', 'counter', 'monitor-smartphone', 'counter', ('counter', 'counter_sale')),
+        ('Sales', 'sales', 'receipt', 'sales', ('sales', 'aged_sales')),
+        ('Stock', 'stock', 'package', 'stock', ('stock', 'edit_stock')),
+        ('Customers', 'customers', 'users', 'customers', ('customers', 'edit_customer')),
+        ('Services', 'services', 'graduation-cap', 'services', ('services',)),
+    )),
+    ('Money', (
+        ('Book keeping', 'bookkeeping', 'book-open', 'bookkeeping',
+         ('bookkeeping', 'bookkeeping_type', 'cashbook', 'edit_cash_entry')),
+        ('Account tracking', 'accounts', 'book-marked', 'accounts', ('accounts', 'account_book')),
+        ('Banking', 'banking', 'landmark', 'banking', ('banking',)),
+        ('Payments', 'payments', 'credit-card', None, ('payments',)),
+    )),
+    ('Trade', (
+        ('Shop', 'shop', 'store', 'shop', ('shop',)),
+        ('Purchase orders', 'purchase_orders', 'shopping-cart', 'operations', ('purchase_orders',)),
+        ('Suppliers', 'suppliers', 'warehouse', 'operations', ('suppliers',)),
+        ('Recurring', 'recurring', 'refresh-cw', 'operations', ('recurring',)),
+        ('Budgets', 'budgets', 'target', 'operations', ('budgets',)),
+    )),
+    ('Growth', (
+        ('Investments', 'investments', 'line-chart', 'investments', ('investments',)),
+        ('Market value', 'market', 'trending-up', 'market', ('market',)),
+        ('Reports', 'reports', 'bar-chart-3', 'reports', ('reports',)),
+        ('Statistics', 'stats', 'table-2', 'stats', ('stats',)),
+        ('Tax summary', 'tax_summary', 'percent', 'tax', ('tax_summary',)),
+        ('SWOT', 'swot', 'compass', 'planning', ('swot',)),
+        ('Business plan', 'business_plan', 'map', 'planning', ('business_plan',)),
+    )),
+    ('Workspace', (
+        ('Tasks', 'tasks', 'check-square', 'workspace', ('tasks',)),
+        ('Notes', 'notes', 'sticky-note', 'workspace', ('notes', 'edit_note')),
+        ('Calendar', 'calendar', 'calendar', 'workspace', ('calendar',)),
+        ('Reminders', 'reminders', 'bell', 'reminders', ('reminders',)),
+        ('Day close', 'day_close', 'sunset', 'day_close', ('day_close',)),
+        ('Calculator', 'calculator', 'calculator', 'calculator', ('calculator',)),
+        ('Documents', 'docs', 'file-text', 'documents', ('docs',)),
+        ('Shortcuts', 'shortcuts', 'keyboard', None, ('shortcuts',)),
+        ('Practical guide', 'tutorial', 'book-open-check', None, ('tutorial',)),
+    )),
+    ('Account', (
+        ('Packages', 'plans', 'layers', None, ('plans',)),
+        ('Team', 'team', 'users-round', None, ('team',)),
+        ('Settings', 'settings', 'settings', None, ('settings',)),
+        ('Backup', 'backup_export', 'download', None, ('backup_export',)),
+        ('Login activity', 'activity', 'log-in', None, ('activity',)),
+    )),
+)
+
+
+def live_nav_groups(live=None):
+    if live is None:
+        live = getattr(g, 'live_modules', None)
+    if live is None:
+        live = set(ALL_OPTIONAL)
+    groups = []
+    for title, items in NAV_GROUPS:
+        visible = []
+        for label, endpoint, icon, module, active in items:
+            if module and module not in live:
+                continue
+            visible.append({
+                'label': label,
+                'endpoint': endpoint,
+                'icon': icon,
+                'active': active,
+            })
+        if visible:
+            groups.append({'title': title, 'items': visible})
+    return groups
+
+
+
 APP_MODES = {
     'full': {
         'label': 'Full suite',
@@ -1840,15 +1922,18 @@ _bind_module(
 _bind_module(
     'investments',
     'investments', 'add_investment', 'update_investment', 'delete_investment',
+    'refresh_investments', 'refresh_investment',
 )
 _bind_module(
     'shop',
     'shop', 'add_shop_listing', 'toggle_shop_listing', 'delete_shop_listing',
     'add_shop_order', 'set_shop_order', 'delete_shop_order', 'shop_pay',
+    'pay_shop_order',
 )
 _bind_module(
     'market',
     'market', 'add_market_channel', 'delete_market_channel', 'add_valuation', 'delete_valuation',
+    'refresh_market_fx',
 )
 _bind_module(
     'dashboard',
@@ -1900,7 +1985,7 @@ def _apply_app_mode():
     g.app_mode = 'full'
     g.live_modules = set(ALL_OPTIONAL)
     path = request.path or ''
-    if path.startswith('/static/') or path in ('/healthz', '/favicon.ico'):
+    if path.startswith('/static/') or path in ('/healthz', '/favicon.ico', '/webhooks/stripe', '/webhooks/flutterwave'):
         return
     if not getattr(current_user, 'is_authenticated', False):
         return
@@ -1912,6 +1997,7 @@ def _apply_app_mode():
         cur.close()
         g._settings_row = row
         g._settings_uid = current_user.id
+        g._settings_loaded = True
     except Exception:
         return
     g.app_mode = ((row.get('app_mode') if row else None) or 'full')
@@ -2044,16 +2130,16 @@ def money_filter(amount):
 @app.context_processor
 def inject_settings():
     if current_user.is_authenticated:
-        settings = getattr(g, '_settings_row', None)
-        conn = get_db()
-        cur = conn.cursor()
-        if settings is None:
-            cur.execute('SELECT * FROM settings WHERE user_id = %s', (current_user.id,))
-            settings = cur.fetchone()
-            g._settings_row = settings
-        cur.execute('SELECT COUNT(*) as unread_count FROM notifications WHERE user_id = %s AND is_read = 0', (current_user.id,))
-        unread_row = cur.fetchone()
-        cur.close()
+        settings = _get_settings_row(current_user.id)
+        unread = getattr(g, '_unread_count', None)
+        if unread is None:
+            conn = get_db()
+            cur = conn.cursor()
+            cur.execute('SELECT COUNT(*) as unread_count FROM notifications WHERE user_id = %s AND is_read = 0', (current_user.id,))
+            unread_row = cur.fetchone()
+            cur.close()
+            unread = unread_row['unread_count'] if unread_row else 0
+            g._unread_count = unread
         if settings:
             try:
                 g._money_fmt = (settings.get('currency_symbol') or '$', int(settings.get('number_decimals') if settings.get('number_decimals') is not None else 2))
@@ -2077,7 +2163,7 @@ def inject_settings():
         accent = _accent_palette((settings.get('accent_color') if settings else None) or '#2ecc71')
         return dict(
             user_settings=settings,
-            unread_notifications=unread_row['unread_count'] if unread_row else 0,
+            unread_notifications=unread,
             money=_format_money,
             currency_symbol=symbol,
             currency_decimals=decimals,
@@ -2092,7 +2178,13 @@ def inject_settings():
             accent=accent,
             theme_pref=(settings.get('theme') if settings else None) or 'dark',
             stripe_ready=stripe_payments.stripe_ready(settings),
+            flutterwave_ready=integrations.flutterwave_ready(settings),
+            paypal_ready=gateways.paypal_ready(settings),
+            bank_ready=gateways.bank_ready(settings),
+            pay_methods=gateways.ready_methods(settings),
+            alpha_ready=integrations.alpha_ready(settings),
             plan=plan_info(settings),
+            nav_groups=live_nav_groups(live),
         )
     return dict(
         user_settings=None, unread_notifications=0, money=_format_money,
@@ -2102,8 +2194,9 @@ def inject_settings():
         ui_device='auto', ui_devices=UI_DEVICES, pl_bar=None,
         accent=_accent_palette('#2ecc71'),
         theme_pref='dark',
-        stripe_ready=False,
+        stripe_ready=False, flutterwave_ready=False, paypal_ready=False, bank_ready=False, pay_methods=[], alpha_ready=False,
         plan=plan_info({'plan_tier': 'new_user'}),
+        nav_groups=live_nav_groups(set(ALL_OPTIONAL)),
     )
 
 
@@ -3093,7 +3186,12 @@ def settings():
         ui_device = (request.form.get('ui_device') or 'auto').strip()
         if ui_device not in UI_DEVICES:
             ui_device = 'auto'
-        cur.execute('SELECT stripe_secret_key, stripe_webhook_secret, plan_tier FROM settings WHERE user_id=%s', (current_user.id,))
+        cur.execute(
+            'SELECT stripe_secret_key, stripe_webhook_secret, plan_tier, '
+            'flutterwave_secret_key, flutterwave_webhook_hash, alpha_vantage_key '
+            'FROM settings WHERE user_id=%s',
+            (current_user.id,),
+        )
         prior_keys = cur.fetchone() or {}
         stripe_publishable_key = (request.form.get('stripe_publishable_key') or '').strip()
         stripe_secret_key = (request.form.get('stripe_secret_key') or '').strip()
@@ -3102,6 +3200,27 @@ def settings():
             stripe_secret_key = (prior_keys.get('stripe_secret_key') if prior_keys else '') or ''
         if (not stripe_webhook_secret) or stripe_webhook_secret.startswith('••••'):
             stripe_webhook_secret = (prior_keys.get('stripe_webhook_secret') if prior_keys else '') or ''
+        flutterwave_public_key = (request.form.get('flutterwave_public_key') or '').strip()
+        flutterwave_secret_key = (request.form.get('flutterwave_secret_key') or '').strip()
+        flutterwave_webhook_hash = (request.form.get('flutterwave_webhook_hash') or '').strip()
+        alpha_vantage_key = (request.form.get('alpha_vantage_key') or '').strip()
+        if (not flutterwave_secret_key) or flutterwave_secret_key.startswith('••••'):
+            flutterwave_secret_key = (prior_keys.get('flutterwave_secret_key') if prior_keys else '') or ''
+        if (not flutterwave_webhook_hash) or flutterwave_webhook_hash.startswith('••••'):
+            flutterwave_webhook_hash = (prior_keys.get('flutterwave_webhook_hash') if prior_keys else '') or ''
+        if (not alpha_vantage_key) or alpha_vantage_key.startswith('••••'):
+            alpha_vantage_key = (prior_keys.get('alpha_vantage_key') if prior_keys else '') or ''
+        paypal_client_id = (request.form.get('paypal_client_id') or '').strip()
+        paypal_secret = (request.form.get('paypal_secret') or '').strip()
+        paypal_mode = (request.form.get('paypal_mode') or 'sandbox').strip().lower()
+        if paypal_mode not in ('sandbox', 'live'):
+            paypal_mode = 'sandbox'
+        if (not paypal_secret) or paypal_secret.startswith('••••'):
+            paypal_secret = (prior_keys.get('paypal_secret') if prior_keys else '') or ''
+        bank_name = (request.form.get('bank_name') or '').strip()[:80]
+        bank_account_name = (request.form.get('bank_account_name') or '').strip()[:80]
+        bank_account_number = (request.form.get('bank_account_number') or '').strip()[:40]
+        bank_branch = (request.form.get('bank_branch') or '').strip()[:80]
 
         plan_tier = normalize_plan(request.form.get('plan_tier') or 'ceo')
         if getattr(current_user, 'role', 'owner') != 'owner':
@@ -3130,7 +3249,11 @@ def settings():
                 fiscal_year_start=%s, number_decimals=%s, sidebar_collapsed=%s,
                 app_mode=%s, enabled_modules=%s, ui_device=%s,
                 stripe_publishable_key=%s, stripe_secret_key=%s, stripe_webhook_secret=%s, plan_tier=%s,
-                package_prices=%s
+                package_prices=%s,
+                flutterwave_public_key=%s, flutterwave_secret_key=%s, flutterwave_webhook_hash=%s,
+                alpha_vantage_key=%s,
+                paypal_client_id=%s, paypal_secret=%s, paypal_mode=%s,
+                bank_name=%s, bank_account_name=%s, bank_account_number=%s, bank_branch=%s
             WHERE user_id=%s
         ''', (low_stock_threshold, email_notifications, notify_email,
               theme, font_family, font_size, default_chart_type,
@@ -3143,6 +3266,10 @@ def settings():
               app_mode, enabled_modules, ui_device,
               stripe_publishable_key, stripe_secret_key, stripe_webhook_secret, plan_tier,
               package_prices,
+              flutterwave_public_key, flutterwave_secret_key, flutterwave_webhook_hash,
+              alpha_vantage_key,
+              paypal_client_id, paypal_secret, paypal_mode,
+              bank_name, bank_account_name, bank_account_number, bank_branch,
               current_user.id))
         conn.commit()
         cur.close()
@@ -3687,9 +3814,8 @@ def import_cashbook_csv():
 # ======================== PDF Generation ========================
 
 def _get_settings_row(user_id):
-    cached = getattr(g, '_settings_row', None)
-    if cached is not None and getattr(g, '_settings_uid', None) == user_id:
-        return cached
+    if getattr(g, '_settings_loaded', False) and getattr(g, '_settings_uid', None) == user_id:
+        return getattr(g, '_settings_row', None)
     conn = get_db()
     cur = conn.cursor()
     cur.execute('SELECT * FROM settings WHERE user_id = %s', (user_id,))
@@ -3697,6 +3823,7 @@ def _get_settings_row(user_id):
     cur.close()
     g._settings_row = row
     g._settings_uid = user_id
+    g._settings_loaded = True
     return row
 
 def _drawn_k_badge_png(pixel_size=128):
@@ -7479,31 +7606,101 @@ def _fulfill_stripe_payment(uid, kind, record_id, checkout_id, payment_intent, a
         pass
 
 
-def _start_checkout(kind, record_id, amount, title, cancel_endpoint='dashboard'):
+def _record_payment(uid, kind, record_id, amount, title, checkout_id, provider='stripe'):
+    class _Sess:
+        def __init__(self, cid):
+            self.id = cid
+    _record_stripe_checkout(uid, kind, record_id, amount, title, _Sess(checkout_id))
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE stripe_payments SET provider=%s WHERE user_id=%s AND checkout_id=%s",
+            (provider, uid, checkout_id),
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception:
+        pass
+
+
+def _start_checkout(kind, record_id, amount, title, cancel_endpoint='dashboard', method=None):
     settings = _stripe_settings()
-    if not stripe_payments.stripe_ready(settings):
-        flash('Stripe is not set up yet. Add your keys in Settings.', 'danger')
+    method = (method or request.values.get('method') or gateways.default_method(settings) or 'stripe').lower()
+    if method not in ('stripe', 'paypal', 'flutterwave', 'bank'):
+        method = 'stripe'
+    uid = current_user.id
+    currency = stripe_payments.currency_code(settings)
+
+    if method == 'stripe':
+        if not stripe_payments.stripe_ready(settings):
+            flash('Stripe is not set up yet. Add Visa/Mastercard keys in Settings.', 'danger')
+            return redirect(url_for('settings'))
+        success = url_for('stripe_pay_success', _external=True) + '?session_id={CHECKOUT_SESSION_ID}'
+        cancel = url_for('stripe_pay_cancel', _external=True)
+        session, err = stripe_payments.create_checkout(
+            settings,
+            amount=amount,
+            title=title,
+            success_url=success,
+            cancel_url=cancel,
+            metadata={'user_id': uid, 'kind': kind, 'record_id': record_id or 0, 'title': title},
+        )
+        if err:
+            flash(err, 'danger')
+            return redirect(url_for(cancel_endpoint))
+        _record_payment(uid, kind, record_id, amount, title, session.id, 'stripe')
+        return redirect(session.url, code=303)
+
+    if method == 'paypal':
+        if not gateways.paypal_ready(settings):
+            flash('PayPal is not set up yet. Add the client id and secret in Settings.', 'danger')
+            return redirect(url_for('settings'))
+        custom = 'kaze-%s-%s-%s' % (kind, record_id or 0, uid)
+        order, err = gateways.paypal_create_order(
+            settings,
+            amount=amount,
+            currency=currency,
+            title=title,
+            return_url=url_for('paypal_return', _external=True),
+            cancel_url=url_for('stripe_pay_cancel', _external=True),
+            custom_id=custom,
+        )
+        if err:
+            flash(err, 'danger')
+            return redirect(url_for(cancel_endpoint))
+        _record_payment(uid, kind, record_id, amount, title, order['id'], 'paypal')
+        return redirect(order['url'], code=303)
+
+    if method == 'flutterwave':
+        if not integrations.flutterwave_ready(settings):
+            flash('Flutterwave is not set up yet. Add keys in Settings.', 'danger')
+            return redirect(url_for('settings'))
+        tx_ref = 'kaze-%s-%s-%s' % (kind, record_id or 0, int(datetime.now().timestamp()))
+        pay, err = integrations.create_flutterwave_payment(
+            settings,
+            tx_ref=tx_ref,
+            amount=amount,
+            currency=currency,
+            redirect_url=url_for('flutterwave_return', _external=True),
+            title=title,
+            customer_name=getattr(current_user, 'username', '') or '',
+            customer_email=getattr(current_user, 'email', '') or '',
+            meta={'user_id': uid, 'kind': kind, 'record_id': record_id or 0},
+        )
+        if err:
+            flash(err, 'danger')
+            return redirect(url_for(cancel_endpoint))
+        _record_payment(uid, kind, record_id, amount, title, tx_ref, 'flutterwave')
+        return redirect(pay['link'], code=303)
+
+    if not gateways.bank_ready(settings):
+        flash('Add current-account details in Settings to take bank transfers.', 'danger')
         return redirect(url_for('settings'))
-    success = url_for('stripe_pay_success', _external=True) + '?session_id={CHECKOUT_SESSION_ID}'
-    cancel = url_for('stripe_pay_cancel', _external=True)
-    session, err = stripe_payments.create_checkout(
-        settings,
-        amount=amount,
-        title=title,
-        success_url=success,
-        cancel_url=cancel,
-        metadata={
-            'user_id': current_user.id,
-            'kind': kind,
-            'record_id': record_id or 0,
-            'title': title,
-        },
-    )
-    if err:
-        flash(err, 'danger')
-        return redirect(url_for(cancel_endpoint))
-    _record_stripe_checkout(current_user.id, kind, record_id, amount, title, session)
-    return redirect(session.url, code=303)
+    ref = 'KAZE-%s-%s-%s' % (kind.upper()[:8], uid, int(datetime.now().timestamp()))
+    _record_payment(uid, kind, record_id, amount, title, ref, 'bank')
+    return redirect(url_for('bank_pay_notice', ref=ref))
 
 
 @app.route('/pay/session/<int:id>')
@@ -7707,6 +7904,97 @@ def plans():
         stripe_ready=stripe_payments.stripe_ready(settings),
         is_owner=(getattr(current_user, 'role', 'owner') == 'owner'),
     )
+
+
+
+@app.route('/pay/paypal/return')
+@login_required
+def paypal_return():
+    settings = _stripe_settings()
+    token = (request.args.get('token') or request.args.get('orderID') or '').strip()
+    if not token:
+        flash('PayPal did not return an order.', 'danger')
+        return redirect(url_for('payments'))
+    payload, err = gateways.paypal_capture(settings, token)
+    if err:
+        flash(err, 'danger')
+        return redirect(url_for('payments'))
+    status = str((payload or {}).get('status') or '').upper()
+    if status not in ('COMPLETED', 'APPROVED'):
+        flash('PayPal payment is %s.' % (status or 'pending'), 'info')
+        return redirect(url_for('payments'))
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT * FROM stripe_payments WHERE user_id=%s AND checkout_id=%s ORDER BY id DESC LIMIT 1",
+        (current_user.id, token),
+    )
+    row = cur.fetchone() or {}
+    cur.close()
+    conn.close()
+    _fulfill_stripe_payment(
+        current_user.id,
+        row.get('kind') or 'custom',
+        row.get('record_id') or 0,
+        token,
+        token,
+        row.get('amount'),
+    )
+    flash('PayPal payment received.', 'success')
+    return redirect(url_for('payments'))
+
+
+@app.route('/pay/bank/<ref>')
+@login_required
+def bank_pay_notice(ref):
+    settings = _stripe_settings()
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT * FROM stripe_payments WHERE user_id=%s AND checkout_id=%s",
+        (current_user.id, ref),
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not row:
+        flash('Transfer reference not found.', 'danger')
+        return redirect(url_for('payments'))
+    return render_template(
+        'bank_pay.html',
+        row=row,
+        bank=gateways.bank_details(settings),
+    )
+
+
+@app.route('/pay/bank/<ref>/confirm', methods=['POST'])
+@login_required
+def bank_pay_confirm(ref):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT * FROM stripe_payments WHERE user_id=%s AND checkout_id=%s",
+        (current_user.id, ref),
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not row:
+        flash('Transfer reference not found.', 'danger')
+        return redirect(url_for('payments'))
+    if (row.get('status') or '') == 'paid':
+        flash('Already marked paid.', 'info')
+        return redirect(url_for('payments'))
+    _fulfill_stripe_payment(
+        current_user.id,
+        row.get('kind') or 'custom',
+        row.get('record_id') or 0,
+        ref,
+        ref,
+        row.get('amount'),
+    )
+    flash('Current-account payment marked paid.', 'success')
+    return redirect(url_for('payments'))
 
 
 @app.route('/plans/set', methods=['POST'])
@@ -8018,13 +8306,14 @@ def add_investment():
     atype = request.form.get('asset_type') or 'Other'
     if atype not in INVEST_TYPES:
         atype = 'Other'
+    ticker = (request.form.get('ticker') or '').strip().upper()[:20]
     conn = get_db()
     cur = conn.cursor()
     cur.execute(
-        '''INSERT INTO investments (user_id, name, asset_type, quantity, unit_cost, current_price, bought_date, notes, created_date)
-           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)''',
+        '''INSERT INTO investments (user_id, name, asset_type, quantity, unit_cost, current_price, bought_date, notes, ticker, created_date)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''',
         (current_user.id, name, atype, qty, cost, price, bought or datetime.today().strftime('%Y-%m-%d'),
-         notes or '', datetime.today().strftime('%Y-%m-%d')),
+         notes or '', ticker, datetime.today().strftime('%Y-%m-%d')),
     )
     conn.commit()
     cur.close()
@@ -8419,6 +8708,254 @@ def delete_valuation(id):
     conn.commit()
     cur.close()
     conn.close()
+    return redirect(url_for('market'))
+
+
+
+def _mark_shop_paid(uid, order_id, tx_ref='', tx_id=''):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        "UPDATE shop_orders SET status='paid', flutterwave_tx_ref=%s, flutterwave_tx_id=%s "
+        "WHERE id=%s AND user_id=%s",
+        (tx_ref or '', str(tx_id or ''), order_id, uid),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+@app.route('/shop/order/<int:id>/pay')
+@login_required
+def pay_shop_order(id):
+    settings = _stripe_settings()
+    if not integrations.flutterwave_ready(settings):
+        flash('Add Flutterwave keys in Settings to collect card or mobile money.', 'danger')
+        return redirect(url_for('settings'))
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT o.*, l.title FROM shop_orders o LEFT JOIN shop_listings l ON l.id = o.listing_id WHERE o.id=%s AND o.user_id=%s",
+        (id, current_user.id),
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not row:
+        flash('Order not found.', 'danger')
+        return redirect(url_for('shop'))
+    if (row.get('status') or '') == 'paid':
+        flash('That order is already paid.', 'info')
+        return redirect(url_for('shop'))
+    tx_ref = 'kaze-shop-%s-%s' % (id, int(datetime.now().timestamp()))
+    title = row.get('title') or 'Shop order'
+    pay, err = integrations.create_flutterwave_payment(
+        settings,
+        tx_ref=tx_ref,
+        amount=row.get('amount') or 0,
+        currency=stripe_payments.currency_code(settings),
+        redirect_url=url_for('flutterwave_return', _external=True),
+        title=title,
+        customer_name=row.get('buyer') or '',
+        customer_email=getattr(current_user, 'email', '') or '',
+        meta={'user_id': current_user.id, 'order_id': id, 'kind': 'shop'},
+    )
+    if err:
+        flash(err, 'danger')
+        return redirect(url_for('shop'))
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        'UPDATE shop_orders SET flutterwave_tx_ref=%s WHERE id=%s AND user_id=%s',
+        (tx_ref, id, current_user.id),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(pay['link'], code=303)
+
+
+@app.route('/shop/flutterwave/return')
+@login_required
+def flutterwave_return():
+    settings = _stripe_settings()
+    tx_ref = (request.args.get('tx_ref') or request.args.get('txRef') or '').strip()
+    tx_id = (request.args.get('transaction_id') or '').strip()
+    status = (request.args.get('status') or '').lower()
+    if status in ('cancelled', 'canceled'):
+        flash('Payment cancelled.', 'info')
+        return redirect(url_for('shop'))
+    data, err = integrations.verify_flutterwave(settings, tx_ref=tx_ref or None, transaction_id=tx_id or None)
+    if err:
+        flash(err, 'danger')
+        return redirect(url_for('shop'))
+    meta = data.get('meta') or {}
+    try:
+        order_id = int(meta.get('order_id') or 0)
+    except (TypeError, ValueError):
+        order_id = 0
+    if not order_id and tx_ref.startswith('kaze-shop-'):
+        try:
+            order_id = int(tx_ref.split('-')[2])
+        except (IndexError, ValueError):
+            order_id = 0
+    kind = str(meta.get('kind') or '')
+    try:
+        record_id = int(meta.get('record_id') or 0)
+    except (TypeError, ValueError):
+        record_id = 0
+    if order_id:
+        _mark_shop_paid(current_user.id, order_id, tx_ref or data.get('tx_ref'), data.get('id') or tx_id)
+        flash('Order marked paid.', 'success')
+        return redirect(url_for('shop'))
+    if kind:
+        _fulfill_stripe_payment(
+            current_user.id, kind, record_id,
+            tx_ref or data.get('tx_ref') or '',
+            str(data.get('id') or tx_id or ''),
+            data.get('amount'),
+        )
+        flash('Payment received.', 'success')
+        return redirect(url_for('payments'))
+    flash('Payment confirmed. Refresh the order list if status is still pending.', 'success')
+    return redirect(url_for('shop'))
+
+
+@app.route('/webhooks/flutterwave', methods=['POST'])
+def flutterwave_webhook():
+    raw = request.get_data(cache=False)
+    header_hash = request.headers.get('verif-hash') or request.headers.get('Verif-Hash') or ''
+    try:
+        payload = json.loads(raw.decode('utf-8') or '{}')
+    except Exception:
+        return ('', 400)
+    data = payload.get('data') or {}
+    meta = data.get('meta') or {}
+    try:
+        uid = int(meta.get('user_id') or 0)
+    except (TypeError, ValueError):
+        uid = 0
+    settings = _stripe_settings(uid) if uid else None
+    if settings and not integrations.flutterwave_hash_ok(settings, header_hash):
+        return ('', 401)
+    status = str(data.get('status') or payload.get('event') or '').lower()
+    if 'success' not in status and payload.get('event') != 'charge.completed':
+        return ('', 200)
+    if not uid:
+        return ('', 200)
+    try:
+        order_id = int(meta.get('order_id') or 0)
+    except (TypeError, ValueError):
+        order_id = 0
+    tx_ref = data.get('tx_ref') or ''
+    if not order_id and str(tx_ref).startswith('kaze-shop-'):
+        try:
+            order_id = int(str(tx_ref).split('-')[2])
+        except (IndexError, ValueError):
+            order_id = 0
+    kind = str(meta.get('kind') or '')
+    try:
+        record_id = int(meta.get('record_id') or 0)
+    except (TypeError, ValueError):
+        record_id = 0
+    verified, err = integrations.verify_flutterwave(settings, tx_ref=tx_ref, transaction_id=data.get('id'))
+    if err:
+        return ('', 200)
+    if order_id:
+        _mark_shop_paid(uid, order_id, tx_ref, (verified or {}).get('id') or data.get('id'))
+    elif kind:
+        _fulfill_stripe_payment(
+            uid, kind, record_id, tx_ref, str((verified or {}).get('id') or data.get('id') or ''),
+            (verified or {}).get('amount') or data.get('amount'),
+        )
+    return ('', 200)
+
+
+@app.route('/investments/refresh', methods=['POST'])
+@login_required
+def refresh_investments():
+    settings = _stripe_settings()
+    if not integrations.alpha_ready(settings):
+        flash('Add an Alpha Vantage key in Settings to refresh listed prices.', 'danger')
+        return redirect(url_for('settings'))
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id, ticker FROM investments WHERE user_id=%s AND ticker IS NOT NULL AND ticker <> ''",
+        (current_user.id,),
+    )
+    rows = list(cur.fetchall() or [])
+    updated = 0
+    seen = {}
+    errors = []
+    for row in rows[:12]:
+        ticker = (row.get('ticker') or '').upper()
+        if ticker in seen:
+            price, err = seen[ticker]
+        else:
+            price, err = integrations.quote_price(ticker, settings)
+            seen[ticker] = (price, err)
+        if err:
+            if err not in errors:
+                errors.append(err)
+            continue
+        cur.execute(
+            'UPDATE investments SET current_price=%s WHERE id=%s AND user_id=%s',
+            (price, row['id'], current_user.id),
+        )
+        updated += 1
+    conn.commit()
+    cur.close()
+    conn.close()
+    if updated:
+        flash('Updated %s holding price(s).' % updated, 'success')
+    if errors:
+        flash(errors[0], 'danger')
+    if not updated and not errors:
+        flash('Add tickers to holdings first.', 'info')
+    return redirect(url_for('investments'))
+
+
+@app.route('/investments/<int:id>/refresh', methods=['POST'])
+@login_required
+def refresh_investment(id):
+    settings = _stripe_settings()
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT ticker FROM investments WHERE id=%s AND user_id=%s', (id, current_user.id))
+    row = cur.fetchone()
+    if not row:
+        cur.close()
+        conn.close()
+        flash('Holding not found.', 'danger')
+        return redirect(url_for('investments'))
+    price, err = integrations.quote_price(row.get('ticker'), settings)
+    if err:
+        cur.close()
+        conn.close()
+        flash(err, 'danger')
+        return redirect(url_for('investments'))
+    cur.execute(
+        'UPDATE investments SET current_price=%s WHERE id=%s AND user_id=%s',
+        (price, id, current_user.id),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Price updated to %s.' % price, 'success')
+    return redirect(url_for('investments'))
+
+
+@app.route('/market/fx', methods=['POST'])
+@login_required
+def refresh_market_fx():
+    settings = _stripe_settings()
+    quote = stripe_payments.currency_code(settings)
+    rate, err = integrations.fx_rate('USD', quote, settings)
+    if err:
+        flash(err, 'danger')
+        return redirect(url_for('market'))
+    flash('USD/%s is %s (cached 15 minutes).' % (quote, rate), 'success')
     return redirect(url_for('market'))
 
 

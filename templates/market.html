@@ -55,6 +55,11 @@
         <p>Assets (stock sell + bank + investments): <strong>{{ money(asset_base) }}</strong></p>
         <p>Blended (half and half): <strong>{{ money(blended) }}</strong></p>
         <p style="color:var(--text3);font-size:0.85rem;">This is a desk estimate from your books, not a formal appraisal.</p>
+        {% if alpha_ready %}
+        <form method="POST" action="{{ url_for('refresh_market_fx') }}">
+            <button type="submit" class="btn-secondary">Refresh USD FX</button>
+        </form>
+        {% endif %}
     </div>
 </div>
 

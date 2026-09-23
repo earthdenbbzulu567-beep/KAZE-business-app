@@ -255,6 +255,56 @@
     </div>
     <p style="font-size:0.85rem;color:var(--text3);">Webhook URL: <code>/webhooks/stripe</code> · event <code>checkout.session.completed</code></p>
 
+    <h2>Flutterwave / mobile money</h2>
+    <p style="color:var(--text2);max-width:40rem;">Used for shop orders. Cards and mobile money stay on Flutterwave. Environment variables override these fields if set on the host.</p>
+    <div class="form-group">
+        <label>Public key</label>
+        <input type="text" name="flutterwave_public_key" value="{{ settings.flutterwave_public_key or '' }}" placeholder="FLWPUBK_TEST-..." autocomplete="off">
+    </div>
+    <div class="form-group">
+        <label>Secret key</label>
+        <input type="password" name="flutterwave_secret_key" value="{% if settings.flutterwave_secret_key %}••••••••{% endif %}" placeholder="FLWSECK_TEST-... leave blank to keep current" autocomplete="new-password">
+    </div>
+    <div class="form-group">
+        <label>Webhook hash (optional)</label>
+        <input type="password" name="flutterwave_webhook_hash" value="{% if settings.flutterwave_webhook_hash %}••••••••{% endif %}" placeholder="secret hash from Flutterwave dashboard" autocomplete="new-password">
+    </div>
+    <p style="font-size:0.85rem;color:var(--text3);">Webhook URL: <code>/webhooks/flutterwave</code></p>
+
+
+    <h2>PayPal</h2>
+    <p style="color:var(--text2);max-width:40rem;">PayPal Checkout for packages, invoices, and custom payments. Use sandbox keys first. Environment variables override these fields if set on the host.</p>
+    <div class="form-group">
+        <label>Client ID</label>
+        <input type="text" name="paypal_client_id" value="{{ settings.paypal_client_id or '' }}" placeholder="PayPal client id" autocomplete="off">
+    </div>
+    <div class="form-group">
+        <label>Secret</label>
+        <input type="password" name="paypal_secret" value="{% if settings.paypal_secret %}••••••••{% endif %}" placeholder="leave blank to keep current" autocomplete="new-password">
+    </div>
+    <div class="form-group">
+        <label>Mode</label>
+        <select name="paypal_mode">
+            <option value="sandbox" {% if (settings.paypal_mode or 'sandbox') == 'sandbox' %}selected{% endif %}>Sandbox</option>
+            <option value="live" {% if settings.paypal_mode == 'live' %}selected{% endif %}>Live</option>
+        </select>
+    </div>
+    <p style="font-size:0.85rem;color:var(--text3);">Return URL: <code>/pay/paypal/return</code></p>
+
+    <h2>Current account / bank transfer</h2>
+    <p style="color:var(--text2);max-width:40rem;">Shown when a customer pays from a current or savings account. KAZE does not log into the bank. You mark the payment paid after the deposit lands.</p>
+    <div class="form-group"><label>Bank name</label><input type="text" name="bank_name" value="{{ settings.bank_name or '' }}" placeholder="e.g. Zanaco"></div>
+    <div class="form-group"><label>Account name</label><input type="text" name="bank_account_name" value="{{ settings.bank_account_name or '' }}" placeholder="Business name on the account"></div>
+    <div class="form-group"><label>Account number</label><input type="text" name="bank_account_number" value="{{ settings.bank_account_number or '' }}" placeholder="Current account number"></div>
+    <div class="form-group"><label>Branch / sort</label><input type="text" name="bank_branch" value="{{ settings.bank_branch or '' }}" placeholder="Branch or sort code"></div>
+
+    <h2>Market prices</h2>
+    <p style="color:var(--text2);max-width:40rem;">Alpha Vantage fills listed tickers on Investments and USD FX on Market value. Quotes are cached for 15 minutes so pages stay fast.</p>
+    <div class="form-group">
+        <label>Alpha Vantage key</label>
+        <input type="password" name="alpha_vantage_key" value="{% if settings.alpha_vantage_key %}••••••••{% endif %}" placeholder="leave blank to keep current" autocomplete="new-password">
+    </div>
+
     <h2>Notifications</h2>
     <div class="form-group">
         <label>Low stock threshold (units)</label>
