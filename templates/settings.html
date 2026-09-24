@@ -391,6 +391,25 @@
         <label>Animations</label>
         <input type="checkbox" name="animations_enabled" {% if settings.animations_enabled %}checked{% endif %}>
     </div>
+    <div class="form-group">
+        <label>Sound cues</label>
+        <input type="checkbox" name="sounds_enabled" id="setSounds" checked>
+        <span style="color:var(--text3);font-size:0.82rem;">Chimes for sales, stock, notifications, reminders, and low stock. Saved on this device.</span>
+    </div>
+    <div class="form-group" id="soundPreviewRow">
+        <label>Preview a sound</label>
+        <select id="soundPreviewPick">
+            <option value="sale_complete">Sale complete</option>
+            <option value="sale_completed">Sale completed (till)</option>
+            <option value="stock_update">Stock update</option>
+            <option value="notification">Notification</option>
+            <option value="reminder">Reminder</option>
+            <option value="low_stock">Low stock warning</option>
+            <option value="success">Success</option>
+            <option value="error">Error</option>
+        </select>
+        <button type="button" class="btn-secondary" id="soundPreviewBtn">Play</button>
+    </div>
 
     <div class="widget" id="typePreview" style="margin:1rem 0 1.5rem;">
         <h2 style="margin-top:0;">Live type preview</h2>
@@ -486,6 +505,21 @@
     [fam, size, accent, symbolEl, decEl].forEach(el => el && el.addEventListener('change', applyPreview));
     if (symbolEl) symbolEl.addEventListener('input', applyPreview);
     applyPreview();
+    const soundBox = document.getElementById('setSounds');
+    try {
+        const stored = localStorage.getItem('kaze-sounds');
+        if (soundBox && stored !== null) soundBox.checked = stored !== '0';
+    } catch (e) {}
+    if (soundBox) soundBox.addEventListener('change', function () {
+        try { localStorage.setItem('kaze-sounds', soundBox.checked ? '1' : '0'); } catch (e) {}
+        if (window.kazePlay) window.kazePlay(soundBox.checked ? 'success' : '');
+    });
+    const pick = document.getElementById('soundPreviewPick');
+    const btn = document.getElementById('soundPreviewBtn');
+    if (btn) btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        if (window.kazePlay) window.kazePlay(pick ? pick.value : 'success', true);
+    });
 })();
 </script>
 

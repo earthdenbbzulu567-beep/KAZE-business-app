@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
+{% set _over = (overdue_tasks|length) + (late_pos|length) + (open_docs|length) + (low|length) + (due_sessions|length if due_sessions else 0) %}
+{% if _over %}<div data-kaze-sound="reminder" data-kaze-once="1" hidden></div>{% endif %}
 <div class="page-header">
     <div>
         <h1>Reminders</h1>

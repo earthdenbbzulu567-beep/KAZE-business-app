@@ -2,8 +2,10 @@
 {% extends "base.html" %}
 {% block charts_js %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>{% endblock %}
 {% block content %}
+{% if ns is not defined %}{% endif %}
 <div class="page-header">
     <h1>Stock / Inventory</h1>
+    {% if ns is defined and ns.low %}<div data-kaze-sound="low_stock" data-kaze-once="1" hidden></div>{% endif %}
     <div style="display:flex; gap:0.75rem;">
         <a href="{{ url_for('stock_valuation_pdf') }}" class="btn-secondary popup-trigger-btn" style="text-decoration:none;">Valuation PDF</a>
         <a href="{{ url_for('price_list') }}" class="btn-secondary popup-trigger-btn" style="text-decoration:none;">Price list PDF</a>
@@ -97,6 +99,7 @@
     <div class="stat-chip"><span>Inventory cost</span><strong>{{ money(ns.value) }}</strong></div>
     <div class="stat-chip"><span>Low stock</span><strong>{{ ns.low }}</strong></div>
 </div>
+{% if ns.low %}<div data-kaze-sound="low_stock" data-kaze-once="1" hidden></div>{% endif %}
 
 <h2>Current Stock</h2>
 

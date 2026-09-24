@@ -1725,6 +1725,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
             <!-- Right group: notifications + user menu -->
             <div class="right-group">
                 <button type="button" class="theme-toggle" id="themeToggle" title="Switch dark / light mode" aria-label="Switch dark or light mode">🌙</button>
+                <button type="button" class="theme-toggle" id="soundToggle" title="Sound cues on / off" aria-label="Sound cues on or off">🔔</button>
                 <span class="live-clock" id="liveClock" title="Local time"></span>
                 <a href="{{ url_for('notifications') }}" class="bell-link" title="Notifications">
                     🔔{% if unread_notifications and unread_notifications > 0 %}<span class="bell-badge">{{ unread_notifications }}</span>{% endif %}
@@ -2033,5 +2034,106 @@ function kazeDelRow(btn) {
 }
 </script>
 
+
+<script>
+(function () {
+    const SRC = {
+        sale_complete: "{{ url_for('static', filename='sounds/sale_complete.mp3') }}",
+        sale_completed: "{{ url_for('static', filename='sounds/sale_completed.mp3') }}",
+        stock_update: "{{ url_for('static', filename='sounds/stock_update.mp3') }}",
+        notification: "{{ url_for('static', filename='sounds/notification.mp3') }}",
+        reminder: "{{ url_for('static', filename='sounds/reminder.mp3') }}",
+        low_stock: "{{ url_for('static', filename='sounds/low_stock.mp3') }}",
+        success: "{{ url_for('static', filename='sounds/success.mp3') }}",
+        error: "{{ url_for('static', filename='sounds/error.mp3') }}"
+    };
+    const FALLBACK = {
+        sale_complete: "{{ url_for('static', filename='sounds/sale_complete.ogg') }}",
+        sale_completed: "{{ url_for('static', filename='sounds/sale_completed.ogg') }}",
+        stock_update: "{{ url_for('static', filename='sounds/stock_update.ogg') }}",
+        notification: "{{ url_for('static', filename='sounds/notification.ogg') }}",
+        reminder: "{{ url_for('static', filename='sounds/reminder.ogg') }}",
+        low_stock: "{{ url_for('static', filename='sounds/low_stock.ogg') }}",
+        success: "{{ url_for('static', filename='sounds/success.ogg') }}",
+        error: "{{ url_for('static', filename='sounds/error.ogg') }}"
+    };
+    const pool = {};
+    function enabled() {
+        try { return localStorage.getItem('kaze-sounds') !== '0'; } catch (e) { return true; }
+    }
+    function setEnabled(on) {
+        try { localStorage.setItem('kaze-sounds', on ? '1' : '0'); } catch (e) {}
+        paint();
+    }
+    function paint() {
+        const btn = document.getElementById('soundToggle');
+        if (!btn) return;
+        const on = enabled();
+        btn.textContent = on ? '🔔' : '🔕';
+        btn.title = on ? 'Sound cues on. Click to mute.' : 'Sound cues muted. Click to enable.';
+    }
+    function load(name) {
+        if (pool[name]) return pool[name];
+        const a = new Audio();
+        a.preload = 'auto';
+        if (a.canPlayType('audio/mpeg')) a.src = SRC[name] || SRC.success;
+        else a.src = FALLBACK[name] || FALLBACK.success;
+        a.volume = 0.55;
+        pool[name] = a;
+        return a;
+    }
+    function play(name, force) {
+        if (!name || (!force && !enabled())) return;
+        const key = SRC[name] ? name : 'success';
+        try {
+            const a = load(key).cloneNode();
+            a.volume = 0.55;
+            const run = a.play();
+            if (run && run.catch) run.catch(function () {});
+        } catch (e) {}
+    }
+    window.kazePlay = play;
+    window.kazeSoundsOn = enabled;
+    function infer(cat, text) {
+        const t = String(text || '').toLowerCase();
+        if (t.indexOf('low stock') >= 0 || t.indexOf('below the threshold') >= 0) return 'low_stock';
+        if (t.indexOf('rung') >= 0 || t.indexOf('ticket') >= 0) return 'sale_completed';
+        if (t.indexOf('sale') >= 0 || t.indexOf('sold') >= 0) return 'sale_complete';
+        if (t.indexOf('stock') >= 0 || t.indexOf('product') >= 0 || t.indexOf('quantity') >= 0 || t.indexOf('reorder') >= 0) return 'stock_update';
+        if (t.indexOf('remind') >= 0 || t.indexOf('overdue') >= 0) return 'reminder';
+        if (t.indexOf('notification') >= 0 || t.indexOf('alert') >= 0) return 'notification';
+        if (cat === 'danger' || cat === 'error') return 'error';
+        if (cat === 'success') return 'success';
+        return '';
+    }
+    function once(key) {
+        const day = new Date().toISOString().slice(0, 10);
+        const stamp = key + ':' + day;
+        try {
+            if (sessionStorage.getItem(stamp)) return false;
+            sessionStorage.setItem(stamp, '1');
+        } catch (e) {}
+        return true;
+    }
+    document.addEventListener('DOMContentLoaded', function () {
+        paint();
+        const btn = document.getElementById('soundToggle');
+        if (btn) btn.addEventListener('click', function () { setEnabled(!enabled()); });
+        document.querySelectorAll('.flash').forEach(function (el) {
+            const cat = (el.className.match(/flash\s+(\w+)/) || [])[1] || '';
+            const name = infer(cat, el.textContent);
+            if (name) play(name);
+        });
+        document.querySelectorAll('[data-kaze-sound]').forEach(function (el) {
+            const name = el.getAttribute('data-kaze-sound');
+            const loop = el.getAttribute('data-kaze-once') === '1';
+            if (!name) return;
+            if (loop && !once('cue-' + name)) return;
+            play(name);
+        });
+    });
+})();
+</script>
 </body>
+
 </html>

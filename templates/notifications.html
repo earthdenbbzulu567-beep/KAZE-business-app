@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
+{% if notifications %}<div data-kaze-sound="notification" data-kaze-once="1" hidden></div>{% endif %}
 <div class="page-header">
     <div>
         <h1>Notifications</h1>

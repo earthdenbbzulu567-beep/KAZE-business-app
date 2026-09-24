@@ -489,6 +489,7 @@ function dismissOnboarding() {
 </section>
 
 {% if mode_on('stock') and user_settings and user_settings.show_low_stock_widget %}
+{% if low_stock_items %}<div data-kaze-sound="low_stock" data-kaze-once="1" hidden></div>{% endif %}
 <div class="widget">
     <h2>Low stock alerts</h2>
     <div class="table-wrapper">

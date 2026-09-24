@@ -1,0 +1,20 @@
+KAZE sound cues
+===============
+
+Put the files in static/sounds/ (already in this pack).
+
+Cues
+- sale_complete   recorded / auto sale
+- sale_completed  till ticket rung up
+- stock_update    stock add / edit / import / reorder
+- notification    notifications list
+- reminder        reminders with overdue work
+- low_stock       stock or dashboard when items are below the threshold
+- success         other successful saves
+- error           failed actions
+
+Bell in the top bar mutes or unmutes. Settings → Appearance → Sound cues
+does the same on this device. Preview each cue from Settings.
+
+First browser play may wait for a click (browser autoplay rules). After
+that, flashes and page cues play on their own.
