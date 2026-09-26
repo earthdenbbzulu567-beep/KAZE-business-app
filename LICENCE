@@ -1,348 +1,255 @@
 ==============================================================================
 KAZE TRADERS BUSINESS MANAGER
-END USER LICENCE AGREEMENT AND TERMS OF USE
+COPYRIGHT NOTICE, END USER LICENCE AGREEMENT, TERMS OF SERVICE,
+FEATURE CONDITIONS, BREACH PENALTIES, AND TERMINATION
 ==============================================================================
 
-Product:     KAZE Traders Business Manager ("KAZE", "the App", "the Software")
-Version:     v2.9.5 and later updates supplied with this document
-Operator:    KAZE Traders ("we", "us", "our")
-Year:        2026
-Document:    LICENCE (this file)
-
-This document is both:
-  1. an End User Licence Agreement (EULA) for the Software; and
-  2. the Terms and Conditions that govern use of the App,
-     including hosted copies and self-hosted copies.
-
-By creating an account, signing in, installing, copying, or using the App,
-you agree to this document. If you do not agree, do not use the App.
-
-This document is written for everyday use of a small-business tool. It is
-not personal legal advice. If you need advice for your country or your
-business, speak to a qualified professional.
-
-------------------------------------------------------------------------------
-1. WHO THESE TERMS APPLY TO
-------------------------------------------------------------------------------
-
-1.1  "You" means the person or business that uses the App.
-
-1.2  An "Owner" is the account that first registers the business and
-     controls settings, team members, backups, and data reset.
-
-1.3  "Staff" are additional users invited by an Owner. Staff use the same
-     business records as the Owner, within the access the App provides.
-
-1.4  If you use the App on behalf of a business, you confirm that you
-     have authority to accept these terms for that business.
-
-1.5  The App is intended for ordinary small-shop and trading records.
-     You must be allowed under the law of your country to use business
-     software and to enter into these terms.
-
-------------------------------------------------------------------------------
-2. LICENCE GRANT
-------------------------------------------------------------------------------
-
-2.1  We grant you a limited, personal, non-exclusive, non-transferable,
-     revocable licence to use the App for your own internal business
-     record-keeping, subject to these terms.
-
-2.2  You may:
-     (a) sign in and use the modules made available to your account;
-     (b) enter, edit, export, and print your own business data;
-     (c) if you self-host, run one production instance for your business
-         and keep reasonable backup copies of the code and your data.
-
-2.3  You may not:
-     (a) sell, rent, sublicence, or lease the App as a competing product
-         without a separate written agreement;
-     (b) remove copyright, licence, or attribution notices;
-     (c) attempt to break security, other users' accounts, or the
-         database of another business;
-     (d) use the App to harm people, commit fraud, or break the law;
-     (e) scrape, overload, or attack any hosted copy of the App;
-     (f) present the App as certified accounting, tax, or legal software.
-
-2.4  All rights not expressly granted to you are reserved.
-
-------------------------------------------------------------------------------
-3. OWNERSHIP
-------------------------------------------------------------------------------
-
-3.1  The App (source, templates, design, name, and documentation) remains
-     the property of KAZE Traders and its licensors, except for the
-     third-party libraries listed in section 12.
-
-3.2  Your business data remains yours. We do not claim ownership of the
-     stock lists, sales, cash records, documents, or notes you enter.
-
-3.3  Feedback you send about the App may be used to improve the product
-     without payment to you.
-
-------------------------------------------------------------------------------
-4. ACCOUNTS, ACCESS, AND SECURITY
-------------------------------------------------------------------------------
-
-4.1  You must provide accurate registration details and keep your
-     password secret.
-
-4.2  You are responsible for activity that happens under your login,
-     including activity by Staff you invite.
-
-4.3  Owners should remove Staff who no longer work for the business.
-
-4.4  Notify us promptly if you believe an account has been misused.
-
-4.5  We may suspend an account that appears compromised, abusive, or
-     in breach of these terms, in order to protect the service and
-     other users.
-
-4.6  Feature "modes" (for example Shop, Books, Office, Full, Quiet, or
-     Custom) only change which parts of the App are shown or run. They
-     do not change who owns the data or these terms.
-
-------------------------------------------------------------------------------
-5. ACCEPTABLE USE
-------------------------------------------------------------------------------
-
-You agree to use the App only for lawful business records. You must not:
-
-     (a) enter data you have no right to store;
-     (b) impersonate another person or business;
-     (c) upload malware or harmful code;
-     (d) interfere with other businesses that share a hosted platform;
-     (e) use the App for spam or unsolicited bulk messages;
-     (f) try to bypass payment, access, or mode limits if any are set;
-     (g) use automated tools in a way that harms the service.
-
-We may remove content or restrict access where we reasonably believe
-these rules have been broken.
-
-------------------------------------------------------------------------------
-6. YOUR BUSINESS DATA
-------------------------------------------------------------------------------
-
-6.1  Records are stored against the Owner's business. Staff see that
-     same business data.
-
-6.2  You are responsible for the accuracy of figures you type in
-     (prices, quantities, tax rates, names, and dates).
-
-6.3  You should keep your own backups. Settings include a JSON export.
-     Hosting providers and database providers can fail. Do not treat
-     the App as your only copy of important records.
-
-6.4  The Owner may use "clear data" to wipe business records and start
-     again. That action cannot be undone from inside the App. The Owner
-     login itself is not deleted by a data clear unless separately
-     removed.
-
-6.5  If you use a hosted copy, the host and database provider process
-     data under their own terms as well as these terms.
-
-6.6  If you self-host, you are the controller of the server, the
-     database, and any backups you take.
-
-------------------------------------------------------------------------------
-7. MONEY, TAX, AND PROFESSIONAL LIMITS
-------------------------------------------------------------------------------
-
-7.1  Currency symbols and decimal places follow the Settings you choose
-     and are used on screens, PDFs, and exports. You must choose a
-     currency that matches how you actually trade.
-
-7.2  Totals, profit and loss, cash flow, tax estimates, budgets, and
-     day-close figures are calculations from the data you entered. They
-     can be wrong if the data is wrong or incomplete.
-
-7.3  The App is a practical record keeper for small traders. It is not:
-     (a) a replacement for a qualified accountant or auditor;
-     (b) tax advice, legal advice, or financial advice;
-     (c) a guarantee that your books meet the rules of any country;
-     (d) a certified fiscal device or official tax filing system.
-
-7.4  You remain responsible for invoices, receipts, payroll, tax
-     filings, and any papers you issue to customers or authorities.
-
-------------------------------------------------------------------------------
-8. FEATURES AND AVAILABILITY
-------------------------------------------------------------------------------
-
-8.1  Modules may include dashboard, stock, sales, counter / till,
-     customers, services (teaching, coaching, and similar work), Stripe card collection, suppliers, purchase orders, book keeping documents,
-     account tracking, budgets, recurring items, reports, statistics,
-     documents, SWOT and business plan, tasks, notes, calendar,
-     reminders, tax estimate, calculator, day close, team, settings,
-     notifications, and search. Availability depends on your mode and
-     deployment.
-
-8.2  We may add, change, or remove features. Reasonable effort will be
-     made not to destroy your stored data when features change.
-
-8.3  Hosted copies may be offline for maintenance, hosting limits, or
-     events outside our control. No uptime is guaranteed unless a
-     separate written service level is agreed.
-
-8.4  Optional email (for example a daily summary) needs working mail
-     settings. If mail is not configured, those messages will not send.
-
-------------------------------------------------------------------------------
-9. FEES
-------------------------------------------------------------------------------
-
-9.1  Unless a separate paid plan is agreed in writing, use of this
-     copy of the App is provided without a licence fee from KAZE
-     Traders.
-
-9.2  You are responsible for your own hosting, domain, database,
-     email, and internet costs.
-
-9.3  Optional paid packages (New user +, Entrepreneur, Entrepreneur +,
-     Businessman, Businessman pro, CEO, and Founder's premium) may be
-     unlocked inside the App. Package prices shown in the App are one-time
-     unlock amounts unless a hosted site says otherwise. Card charges are
-     processed by Stripe under Stripe's terms.
-
-------------------------------------------------------------------------------
-10. WARRANTY DISCLAIMER
-------------------------------------------------------------------------------
-
-THE APP IS PROVIDED "AS IS" AND "AS AVAILABLE".
-
-To the fullest extent allowed by law, we disclaim all warranties,
-whether express, implied, or statutory, including merchantability,
-fitness for a particular purpose, title, quiet enjoyment, and
-non-infringement.
-
-We do not warrant that:
-     (a) the App will be uninterrupted or error-free;
-     (b) totals or reports will be complete or correct;
-     (c) defects will be fixed by a given date;
-     (d) the App will meet a regulator's filing standard.
-
-You use the App at your own risk.
-
-------------------------------------------------------------------------------
-11. LIMITATION OF LIABILITY
-------------------------------------------------------------------------------
-
-11.1  To the fullest extent allowed by law, KAZE Traders and its
-      contributors are not liable for:
-      (a) lost profits, lost sales, or lost business opportunity;
-      (b) lost, corrupted, or inaccurate data;
-      (c) wrong tax, payroll, or invoice outcomes;
-      (d) indirect, incidental, special, or consequential loss;
-      (e) cost of substitute software.
-
-11.2  If a court finds that liability cannot be fully excluded, our
-      total liability for all claims arising from the App is limited
-      to the greater of: (a) the licence fees you actually paid us
-      for the App in the three months before the claim; or (b) zero
-      if you paid us no licence fee.
-
-11.3  Some countries do not allow certain limits. In those places,
-      the limit applies only as far as the law allows. Nothing in
-      these terms excludes liability that cannot legally be excluded,
-      such as fraud or personal injury where the law forbids it.
-
-------------------------------------------------------------------------------
-12. THIRD-PARTY SOFTWARE AND SERVICES
-------------------------------------------------------------------------------
-
-The App uses other projects and services. They keep their own licences
-and terms. Using KAZE does not change those licences.
-
-Typical components include:
-
-      Flask, Flask-Login, Werkzeug
-      Gunicorn
-      psycopg2 / PostgreSQL
-      ReportLab
-      openpyxl
-      Chart.js (loaded in the browser when a page needs charts)
-      Lucide icons (loaded in the browser)
-      Optional Google Fonts
-      Stripe (Checkout / webhooks, separate Stripe terms)
-      Optional hosting (for example Render) and email providers
-
-See requirements.txt and runtime.txt for the usual technical stack.
-
-You are responsible for complying with those third-party terms.
-
-------------------------------------------------------------------------------
-13. PRIVACY (SHORT NOTICE)
-------------------------------------------------------------------------------
-
-13.1  The App stores the account details and business records you enter.
-
-13.2  Passwords are stored hashed, not in plain text.
-
-13.3  A hosted copy may log technical data (such as request time and
-      errors) needed to run and secure the service.
-
-13.4  Do not put data in the App that you are not allowed to store.
-
-13.5  If a separate privacy policy is published for a hosted site,
-      that policy applies together with this section.
-
-------------------------------------------------------------------------------
-14. TERMINATION
-------------------------------------------------------------------------------
-
-14.1  You may stop using the App at any time. Export your data first
-      if you need a copy.
-
-14.2  We may end or suspend the licence if you seriously or repeatedly
-      break these terms, or if we stop offering the product.
-
-14.3  Sections that should survive (ownership, data responsibility,
-      disclaimers, liability limits, and third-party notices) continue
-      after termination.
-
-------------------------------------------------------------------------------
-15. CHANGES TO THESE TERMS
-------------------------------------------------------------------------------
-
-We may update this document when the App changes. The copy shipped
-with a given version applies to that version unless a hosted site
-shows a newer copy and asks you to accept it. Continued use after
-an update, where you have had a reasonable chance to read it, means
-you accept the updated terms.
-
-------------------------------------------------------------------------------
-16. GENERAL
-------------------------------------------------------------------------------
-
-16.1  If one part of this document cannot be enforced, the rest still
-      applies.
-
-16.2  If we do not enforce a right on one occasion, we may still
-      enforce it later.
-
-16.3  You may not assign this licence without our consent, except as
-      part of transferring your whole business, provided the new owner
-      accepts these terms.
-
-16.4  These terms are the whole agreement for use of the App, unless
-      a separate written contract is signed.
-
-16.5  Governing law and venue are the laws and courts of the place
-      where KAZE Traders lawfully operates the relevant copy of the
-      App, unless a hosted site names a different place. If you
-      self-host, local mandatory consumer or business laws still
-      apply to you.
-
-------------------------------------------------------------------------------
-17. CONTACT / PRODUCT
-------------------------------------------------------------------------------
-
-Product name:     KAZE Traders Business Manager
-Document:         End User Licence Agreement and Terms of Use
-File name:        LICENCE
-Requirements:     requirements.txt
-Runtime:          runtime.txt
-Usual start:      gunicorn app:app
-
-By using the App you confirm that you have read and agree to this
-End User Licence Agreement and these Terms of Use.
+Product:              KAZE Traders Business Manager ("KAZE", "the App")
+Legal version:        3.1.7
+Brand:                KAZE Traders
+Rightful owner:       Ephraim Zulu
+Licensor:             Ephraim Zulu, rightful owner of KAZE Traders ("we")
+Year:                 2026
+Controlling file:     LICENCE
+
+COPYRIGHT (C) 2026 EPHRAIM ZULU AND KAZE TRADERS. ALL RIGHTS RESERVED.
+
+By creating an account, ticking acceptance, signing in, hosting, paying,
+starting a trial, or using any feature, you agree to this document.
+The App records that acceptance (version and time) against your login.
+
+This is not personal legal, tax, or investment advice.
+
+==============================================================================
+PART A -- COPYRIGHT, LICENCE, SHARES
+==============================================================================
+
+A1. Ephraim Zulu owns KAZE Traders and the Software (source, templates,
+    design, KAZE sounds, docs, this file, names, package names).
+    Third-party libraries keep their own licences. Your typed shop
+    data remains yours.
+
+A2. You receive a limited, personal, non-exclusive, non-transferable,
+    revocable permission to use unlocked features for your own shop
+    records. You do not buy the Software, copyright, or shares.
+
+A3. You may not sell, rent, white-label, or relicense the App; remove
+    notices; claim authorship; scrape or attack a hosted copy; bypass
+    package, trial, mode, or payment locks; use a payment method you
+    have no right to use; or present KAZE as certified accounting,
+    tax, or legal software.
+
+A4. Shares: Ephraim Zulu may grant a percentage of KAZE Traders shares
+    to whoever he chooses, only if he judges it benefits the company.
+    He alone decides whether it is worth it. A grant needs a separate
+    signed writing. Using or paying for the App is not a share purchase.
+
+==============================================================================
+PART B -- ACCOUNTS, TEAM, DATA
+==============================================================================
+
+B1. Keep login details accurate and passwords secret. You are
+    responsible for Staff you invite.
+
+B2. Modes only hide modules. Settings, currency, and keys are your
+    operational choices.
+
+B3. Keep your own backups. Clear data cannot be undone in-app.
+
+B4. The App will refuse use of the desk until you accept this legal
+    version. A later version may require acceptance again.
+
+==============================================================================
+PART C -- FEATURES (CONDITIONS)
+==============================================================================
+
+All shipped features are covered: dashboard; income and expenses;
+stock (including bulk, import, low-stock, valuation, price list);
+sales (including auto-sale, aged sales, invoice, receipt); counter /
+till; customers and statements; services and sessions; book-keeping
+papers (quotation through payslip and later paper types); account
+tracking books (cash book through cash-flow statement and later
+books); standalone cash book; banking; investments; shop listings
+and orders; market value; purchase orders; suppliers; recurring
+items; budgets; reports; statistics and CSV / Excel / PDF export;
+tax estimate; SWOT; business plan; tasks; notes; calendar;
+reminders; calculator; day close; documents; shortcuts; tutorial;
+payments history; packages; team; search; notifications; activity;
+backup export / import; theme and sound cues; health and job URLs.
+
+Conditions for every feature:
+  - lawful shop records only;
+  - locked modules stay locked without payment or an active trial;
+  - papers and totals are working records, not certified filings
+    unless you confirm the law of your country;
+  - wrong entries make wrong reports -- that is your responsibility.
+
+==============================================================================
+PART D -- PACKAGES AND TRIAL
+==============================================================================
+
+One-time prices in Zambian Kwacha (hardcoded):
+    New user K 0.00; New user + K 25.00; Entrepreneur K 50.00;
+    Entrepreneur + K 75.00; Businessman K 100.00;
+    Businessman pro K 150.00; CEO K 300.00;
+    Founder's premium K 500.00.
+
+A paid package unlocks only after Stripe, PayPal, or Flutterwave
+confirms, or a bank transfer is marked paid. One trial per shop
+(7 to 17 days, default 12). Unused trial days are not paid out.
+
+==============================================================================
+PART E -- PAYMENT
+==============================================================================
+
+Only the Account Owner may pay. Opening checkout is not payment.
+Provider and bank fees are yours. Refunds are not routine after a
+successful unlock. Change of mind is not a refund ground. Chargebacks
+after use may relock the package and count as breach.
+
+==============================================================================
+PART F -- SPECIFIC BREACH PENALTIES
+==============================================================================
+
+These penalties apply in addition to any remedy the law allows.
+They are intended as a clear price for breach, not as a permission
+to breach if you "pay the fine".
+
+F1. Schedule
+
+    Breach                              Automated / immediate result     Further penalty we will pursue
+    ----------------------------------  -------------------------------  --------------------------------
+    Using the App without accepting     Access blocked until you         Account may be closed if you
+    this legal version                  accept                           refuse
+    ----------------------------------  -------------------------------  --------------------------------
+    Setting or forcing a paid package   Action refused; attempt logged   Liquidated sum equal to that
+    without completed payment           as a licence breach              package price (see Part D)
+    ----------------------------------  -------------------------------  --------------------------------
+    Chargeback after using unlocked     Package relocked; login may      Package price + provider fees
+    modules                             be suspended                     as a debt
+    ----------------------------------  -------------------------------  --------------------------------
+    Copying, reselling, white-labelling Immediate termination            Damages not less than K 500.00
+    or relicensing the Software                                          (Founder's premium) plus all
+                                                                         proven extra loss and legal costs
+    ----------------------------------  -------------------------------  --------------------------------
+    Removing copyright or owner names   Termination and takedown         Same floor as copying, plus
+                                                                         correction of public copies
+    ----------------------------------  -------------------------------  --------------------------------
+    Attacking the host, scraping other  Immediate ban; keys revoked      Report to the host and, where
+    shops, or breaking into data                                         the law allows, the police
+    ----------------------------------  -------------------------------  --------------------------------
+    Using a card or wallet without      Unlock reversed; login banned    Report as fraud; recovery of
+    authority                                                            the taken amount
+    ----------------------------------  -------------------------------  --------------------------------
+    Sharing an Owner login as a public  Warning, then suspension         Termination if it continues
+    password
+    ----------------------------------  -------------------------------  --------------------------------
+    False papers or tax filings made    Feature may be limited           You bear the fine from any
+    from App figures                                                     authority; we are not your filer
+
+F2. Liquidated amounts
+    Where the table names a Kwacha floor, you agree that amount is a
+    reasonable pre-estimate of harm to Ephraim Zulu and KAZE Traders
+    for that class of breach (lost control of the product, support
+    time, and enforcement). A court may award more if actual loss is
+    higher.
+
+F3. No set-off
+    Paying a penalty does not buy you the right to keep breaching
+    and does not transfer copyright or shares.
+
+==============================================================================
+PART G -- TERMINATION
+==============================================================================
+
+G1. You may end your use at any time. Export your shop data first.
+    Ending use does not create a refund or a share right.
+
+G2. Automatic termination
+    This licence ends at once, without extra notice, if you:
+      (a) copy, sell, or relicense the Software without a signed grant;
+      (b) bypass payment, trial, or mode locks after a recorded warning
+          or logged breach;
+      (c) attack the service or another shop;
+      (d) refuse this legal version after it is shown to you;
+      (e) use a payment method without authority.
+
+G3. Termination on notice
+    We may end or suspend the licence if you seriously or repeatedly
+    break any other clause, including unpaid chargebacks.
+
+G4. After termination
+      (a) permission to use the Software ends;
+      (b) paid modules relock;
+      (c) you must stop using the Software and, after a written demand
+          following a copyright breach, delete copies you control;
+      (d) you may keep exports of your own shop data;
+      (e) Parts A, F, G, H, and the liability limits still apply;
+      (f) money already validly paid is not refunded because of your
+          breach.
+
+G5. Survival
+    Copyright, share policy, payment debts, penalty schedule,
+    termination effects, and liability limits survive termination.
+
+==============================================================================
+PART H -- ENFORCEMENT: SUE, CHARGE, PROSECUTE
+==============================================================================
+
+H1. Notice
+    Ephraim Zulu and KAZE Traders will sue, charge, and -- where the
+    criminal law of the relevant country allows -- prosecute anyone
+    who violates this licence or the Terms of Service.
+
+H2. What that includes
+      (a) civil claims for injunctions (orders to stop and to take
+          copies down);
+      (b) civil claims for damages, liquidated amounts in Part F,
+          provider fees, and legal costs;
+      (c) reports to payment providers, hosts, app stores, and
+          repositories;
+      (d) criminal complaints for fraud, unauthorised access, or
+          copyright offences where those offences exist.
+
+H3. No waiver
+    A delay in suing is not permission to continue. A settlement with
+    one person does not bind Ephraim Zulu as to anyone else.
+
+H4. Who may enforce
+    Only Ephraim Zulu and KAZE Traders (or a lawyer they appoint)
+    enforce this file. A shop user cannot use this file to sue another
+    shop user except about that user's own shop data.
+
+==============================================================================
+PART I -- LIABILITY, PRIVACY, CHANGES
+==============================================================================
+
+I1. THE APP IS PROVIDED "AS IS". No warranty of uptime or correct totals.
+
+I2. To the fullest extent the law allows, Ephraim Zulu and KAZE Traders
+    are not liable for lost profits, lost data, or wrong filings.
+    Where a cap must apply, it is the package fees you paid in the
+    three months before the claim, or zero if you paid none -- except
+    that this cap does not limit our claim against you for your breach.
+
+I3. Passwords are hashed. Full card numbers are not stored in KAZE.
+
+I4. This file may be updated with the App. A new legal version can
+    require a fresh tick. Continued use after a reasonable chance to
+    read it means you accept it.
+
+I5. If one clause fails, the rest stands.
+
+==============================================================================
+PART J -- CONTACT LINE
+==============================================================================
+
+Product:          KAZE Traders Business Manager
+Brand:            KAZE Traders
+Rightful owner:   Ephraim Zulu
+Copyright:        (C) 2026 Ephraim Zulu and KAZE Traders. All rights reserved.
+Legal version:    3.1.7
+Companion file:   TERMS_OF_SERVICE (this LICENCE controls if they differ)
+
+By ticking acceptance or using the App you confirm you have read
+Parts A to J, including the penalty table and the termination clauses.

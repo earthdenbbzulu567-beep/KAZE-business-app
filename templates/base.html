@@ -1704,7 +1704,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         </nav>
 
         <div class="sidebar-footer">
-            <span>KAZE v2.9.5 · {{ plan.label if plan else 'New user' }} · {{ app_modes[app_mode].label if app_mode in app_modes else 'Full suite' }}</span>
+            <span>KAZE · {{ plan.label if plan else 'New user' }} · <a href="{{ url_for('legal_licence') }}" style="color:inherit;">Licence</a></span>
             <span class="version">⚡</span>
         </div>
     </div>
@@ -1739,6 +1739,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
                         <a href="{{ url_for('backup_export') }}">Download backup</a>
                         <a href="#" onclick="openModal('tutorialModal'); return false;">Help / Tutorial</a>
                         <a href="{{ url_for('settings') }}">Settings</a>
+                        <a href="{{ url_for('legal_licence') }}">Licence</a>
+                        <a href="{{ url_for('legal_terms') }}">Terms</a>
                         <a href="{{ url_for('logout') }}">Logout</a>
                     </div>
                 </div>

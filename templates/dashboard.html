@@ -530,10 +530,16 @@ function dismissOnboarding() {
 {% endif %}
 
 
-{% if plan and plan.key not in ['ceo', 'founder'] %}
+{% if plan and plan.trial and plan.trial.active %}
+<div class="widget">
+    <h2>Trial desk</h2>
+    <p style="color:var(--text2);">CEO tools are open for {{ plan.trial.days_left }} more day{{ '' if plan.trial.days_left == 1 else 's' }}. Pay on Packages to keep a paid plan after {{ plan.trial.ends }}.</p>
+    <p><a href="{{ url_for('plans') }}">Packages</a></p>
+</div>
+{% elif plan and plan.key not in ['ceo', 'founder'] %}
 <div class="widget">
     <h2>{{ plan.label }} package</h2>
-    <p style="color:var(--text2);">{{ plan.tagline }} Some modules stay off until you move up.</p>
+    <p style="color:var(--text2);">{{ plan.tagline }} Some modules stay off until you pay to unlock a higher package.</p>
     <p><a href="{{ url_for('plans') }}">See all packages</a></p>
 </div>
 {% endif %}

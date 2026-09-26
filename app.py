@@ -5,6 +5,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, Res
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
+import secrets
 import io
 import csv
 import psycopg2
@@ -24,11 +25,15 @@ import mode_runtime
 import stripe_payments
 import integrations
 import gateways
+import oauth_login
 
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
 _TPL_DIR = os.path.join(_APP_DIR, 'templates') if os.path.isdir(os.path.join(_APP_DIR, 'templates')) else _APP_DIR
 app = Flask(__name__, template_folder=_TPL_DIR)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+LEGAL_VERSION = '3.1.7'
+LEGAL_DIR = _APP_DIR
+_LEGAL_CACHE = {}
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 86400
 app.config['TEMPLATES_AUTO_RELOAD'] = False
 app.config['SESSION_REFRESH_EACH_REQUEST'] = False
@@ -73,15 +78,6 @@ login_manager.login_view = 'login'
 def healthz():
     return {'ok': True}, 200
 
-
-@app.after_request
-def _fast_headers(resp):
-    path = request.path or ''
-    if path.startswith('/static/'):
-        resp.cache_control.public = True
-        resp.cache_control.max_age = 86400
-        resp.headers.setdefault('Vary', 'Accept-Encoding')
-    return resp
 
 # --------------------- Database ---------------------
 _pool = None
@@ -239,6 +235,11 @@ def init_db():
     ''')
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'owner'")
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS owner_id INTEGER REFERENCES users(id)")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted INTEGER DEFAULT 0")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_version TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_provider TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_id TEXT DEFAULT ''")
     cur.execute('''
         CREATE TABLE IF NOT EXISTS income (
             id SERIAL PRIMARY KEY,
@@ -379,7 +380,6 @@ def init_db():
     cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS bank_account_name TEXT DEFAULT ''")
     cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS bank_account_number TEXT DEFAULT ''")
     cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS bank_branch TEXT DEFAULT ''")
-    cur.execute("ALTER TABLE stripe_payments ADD COLUMN IF NOT EXISTS provider TEXT DEFAULT 'stripe'")
     cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS alpha_vantage_key TEXT DEFAULT ''")
 
     cur.execute('''
@@ -398,6 +398,8 @@ def init_db():
             paid_date TEXT DEFAULT ''
         )
     ''')
+
+    cur.execute("ALTER TABLE stripe_payments ADD COLUMN IF NOT EXISTS provider TEXT DEFAULT 'stripe'")
     cur.execute('CREATE INDEX IF NOT EXISTS idx_stripe_user ON stripe_payments (user_id)')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_stripe_checkout ON stripe_payments (checkout_id)')
 
@@ -1985,7 +1987,10 @@ def _apply_app_mode():
     g.app_mode = 'full'
     g.live_modules = set(ALL_OPTIONAL)
     path = request.path or ''
-    if path.startswith('/static/') or path in ('/healthz', '/favicon.ico', '/webhooks/stripe', '/webhooks/flutterwave'):
+    if path.startswith('/static/') or path.startswith('/auth/callback/') or path.startswith('/login/') or path in (
+        '/healthz', '/favicon.ico', '/webhooks/stripe', '/webhooks/flutterwave',
+        '/licence', '/terms', '/signup', '/login',
+    ):
         return
     if not getattr(current_user, 'is_authenticated', False):
         return
@@ -2000,6 +2005,11 @@ def _apply_app_mode():
         g._settings_loaded = True
     except Exception:
         return
+    if path not in ('/logout', '/licence', '/terms', '/legal/accept') and request.endpoint not in (
+        'legal_accept', 'legal_licence', 'legal_terms', 'logout',
+    ):
+        if not _licence_ok(getattr(current_user, 'db_id', None)):
+            return redirect(url_for('legal_accept'))
     g.app_mode = ((row.get('app_mode') if row else None) or 'full')
     g.live_modules = resolve_live_modules(row)
     ep = request.endpoint
@@ -2058,6 +2068,54 @@ def send_email(to_email, subject, body):
     except Exception as e:
         print("Email error: {}".format(e))
         return False
+
+def _legal_text(kind='licence'):
+    name = 'LICENCE' if kind != 'terms' else 'TERMS_OF_SERVICE'
+    cached = _LEGAL_CACHE.get(name)
+    if cached is not None:
+        return cached
+    path = os.path.join(LEGAL_DIR, name)
+    try:
+        with open(path, 'r', encoding='utf-8') as fh:
+            text = fh.read()
+    except Exception:
+        text = 'Legal file missing. Contact Ephraim Zulu / KAZE Traders.'
+    _LEGAL_CACHE[name] = text
+    return text
+
+
+def _licence_ok(user_db_id):
+    if not user_db_id:
+        return False
+    cached = getattr(g, '_licence_ok', None)
+    if cached is not None:
+        return cached
+    ok = False
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute('SELECT terms_accepted, terms_version FROM users WHERE id=%s', (user_db_id,))
+        row = cur.fetchone() or {}
+        cur.close()
+        ok = int(row.get('terms_accepted') or 0) == 1 and str(row.get('terms_version') or '') == LEGAL_VERSION
+    except Exception:
+        ok = False
+    g._licence_ok = ok
+    return ok
+
+
+def _stamp_licence(user_db_id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        'UPDATE users SET terms_accepted=1, terms_version=%s, terms_accepted_at=%s WHERE id=%s',
+        (LEGAL_VERSION, datetime.now().strftime('%Y-%m-%d %H:%M:%S'), user_db_id),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    g._licence_ok = True
+
 
 # --------------------- User class ---------------------
 def _business_id_for(role, owner_id, own_id):
@@ -2184,6 +2242,9 @@ def inject_settings():
             pay_methods=gateways.ready_methods(settings),
             alpha_ready=integrations.alpha_ready(settings),
             plan=plan_info(settings),
+            oauth_providers=oauth_login.ready_list(),
+            oauth_catalog=oauth_login.PROVIDERS,
+            legal_version=LEGAL_VERSION,
             nav_groups=live_nav_groups(live),
         )
     return dict(
@@ -2196,6 +2257,9 @@ def inject_settings():
         theme_pref='dark',
         stripe_ready=False, flutterwave_ready=False, paypal_ready=False, bank_ready=False, pay_methods=[], alpha_ready=False,
         plan=plan_info({'plan_tier': 'new_user'}),
+        oauth_providers=oauth_login.ready_list(),
+        oauth_catalog=oauth_login.PROVIDERS,
+        legal_version=LEGAL_VERSION,
         nav_groups=live_nav_groups(set(ALL_OPTIONAL)),
     )
 
@@ -2233,8 +2297,18 @@ def signup():
         conn = get_db()
         cur = conn.cursor()
         try:
-            cur.execute('INSERT INTO users (username, email, password) VALUES (%s, %s, %s)',
+            if request.form.get('accept_terms') != 'on':
+                flash('You must accept the licence and terms of service.', 'danger')
+                return render_template('signup.html')
+            cur.execute('INSERT INTO users (username, email, password) VALUES (%s, %s, %s) RETURNING id',
                         (username, email, hashed))
+            created = cur.fetchone() or {}
+            new_id = created.get('id')
+            if new_id:
+                cur.execute(
+                    'UPDATE users SET terms_accepted=1, terms_version=%s, terms_accepted_at=%s WHERE id=%s',
+                    (LEGAL_VERSION, datetime.now().strftime('%Y-%m-%d %H:%M:%S'), new_id),
+                )
             conn.commit()
             flash('Account created! Please log in.', 'success')
             return redirect(url_for('login'))
@@ -2245,6 +2319,159 @@ def signup():
             cur.close()
             conn.close()
     return render_template('signup.html')
+
+def _complete_local_login(user):
+    login_user(User(user['id'], user['username'], user['email'], user.get('role'), user.get('owner_id')))
+    try:
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+        business_id = _business_id_for(user.get('role'), user.get('owner_id'), user['id'])
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute('INSERT INTO user_activity (user_id, username, login_time, ip_address) VALUES (%s, %s, %s, %s)',
+                    (business_id, user['username'], now, ip))
+        cur.execute("INSERT INTO settings (user_id, notify_email, plan_tier) VALUES (%s, %s, 'new_user') ON CONFLICT (user_id) DO NOTHING",
+                    (business_id, user.get('email') or ''))
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as exc:
+        print('Activity log error:', exc)
+    return redirect(url_for('dashboard'))
+
+
+def _oauth_find_or_create(provider, profile):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM users WHERE oauth_provider=%s AND oauth_id=%s', (provider, profile['id']))
+    user = cur.fetchone()
+    if user:
+        cur.close(); conn.close()
+        return user, None
+    email = (profile.get('email') or '').strip().lower()
+    if email and not email.endswith('@oauth.kaze.invalid'):
+        cur.execute('SELECT * FROM users WHERE lower(email)=%s', (email,))
+        user = cur.fetchone()
+        if user:
+            cur.execute('UPDATE users SET oauth_provider=%s, oauth_id=%s WHERE id=%s', (provider, profile['id'], user['id']))
+            conn.commit()
+            cur.execute('SELECT * FROM users WHERE id=%s', (user['id'],))
+            user = cur.fetchone()
+            cur.close(); conn.close()
+            return user, None
+    base = ''.join(ch for ch in (profile.get('username') or provider) if ch.isalnum() or ch in '._-')[:28] or provider
+    username = base
+    n = 1
+    while True:
+        cur.execute('SELECT id FROM users WHERE username=%s', (username,))
+        if not cur.fetchone():
+            break
+        n += 1
+        username = '{}{}'.format(base[:24], n)
+    if not email:
+        email = '{}_{}@oauth.kaze.invalid'.format(provider, profile['id'])
+    cur.execute('SELECT id FROM users WHERE lower(email)=%s', (email,))
+    if cur.fetchone():
+        email = '{}_{}@oauth.kaze.invalid'.format(provider, profile['id'])
+    hashed = generate_password_hash(secrets.token_urlsafe(24))
+    cur.execute(
+        'INSERT INTO users (username, email, password, oauth_provider, oauth_id, terms_accepted, terms_version, terms_accepted_at) VALUES (%s,%s,%s,%s,%s,1,%s,%s) RETURNING *',
+        (username, email, hashed, provider, profile['id'], LEGAL_VERSION, datetime.now().strftime('%Y-%m-%d %H:%M:%S')),
+    )
+    user = cur.fetchone()
+    conn.commit()
+    cur.close(); conn.close()
+    return user, 'created'
+
+
+@app.route('/licence')
+def legal_licence():
+    return render_template('legal.html', title='Licence', legal_text=_legal_text('licence'), legal_version=LEGAL_VERSION)
+
+
+@app.route('/terms')
+def legal_terms():
+    return render_template('legal.html', title='Terms of Service', legal_text=_legal_text('terms'), legal_version=LEGAL_VERSION)
+
+
+@app.route('/legal/accept', methods=['GET', 'POST'])
+@login_required
+def legal_accept():
+    if request.method == 'POST':
+        if request.form.get('accept_terms') != 'on':
+            flash('Tick the box to accept the licence and terms.', 'danger')
+            return render_template('legal_accept.html', legal_version=LEGAL_VERSION, legal_text=_legal_text('licence'))
+        _stamp_licence(current_user.db_id)
+        flash('Licence and terms accepted (version {}).'.format(LEGAL_VERSION), 'success')
+        return redirect(url_for('dashboard'))
+    return render_template('legal_accept.html', legal_version=LEGAL_VERSION, legal_text=_legal_text('licence'))
+
+
+@app.route('/login/<provider>')
+def oauth_start(provider):
+    from flask import session
+    provider = (provider or '').strip().lower()
+    if provider not in oauth_login.PROVIDERS:
+        flash('That sign-in method is not supported.', 'danger')
+        return redirect(url_for('login'))
+    if not oauth_login.ready(provider):
+        flash('{} sign-in is not configured yet.'.format(oauth_login.PROVIDERS[provider]['label']), 'danger')
+        return redirect(url_for('login'))
+    state = secrets.token_urlsafe(24)
+    verifier = challenge = None
+    if oauth_login.PROVIDERS[provider].get('pkce'):
+        verifier, challenge = oauth_login.make_pkce()
+    session['oauth_state'] = state
+    session['oauth_provider'] = provider
+    session['oauth_verifier'] = verifier or ''
+    redirect_uri = url_for('oauth_callback', provider=provider, _external=True)
+    dest = oauth_login.authorize_url(provider, redirect_uri, state, challenge)
+    if not dest:
+        flash('Could not start {} sign-in.'.format(oauth_login.PROVIDERS[provider]['label']), 'danger')
+        return redirect(url_for('login'))
+    return redirect(dest)
+
+
+@app.route('/auth/callback/<provider>')
+def oauth_callback(provider):
+    from flask import session
+    provider = (provider or '').strip().lower()
+    if provider not in oauth_login.PROVIDERS:
+        flash('That sign-in method is not supported.', 'danger')
+        return redirect(url_for('login'))
+    if request.args.get('error'):
+        flash('{} sign-in was cancelled or refused.'.format(oauth_login.PROVIDERS[provider]['label']), 'info')
+        return redirect(url_for('login'))
+    if (request.args.get('state') or '') != (session.get('oauth_state') or '') or session.get('oauth_provider') != provider:
+        flash('Sign-in state did not match. Try again.', 'danger')
+        return redirect(url_for('login'))
+    code = (request.args.get('code') or '').strip()
+    if not code:
+        flash('No authorisation code came back.', 'danger')
+        return redirect(url_for('login'))
+    redirect_uri = url_for('oauth_callback', provider=provider, _external=True)
+    token, err = oauth_login.exchange_code(provider, code, redirect_uri, session.get('oauth_verifier') or None)
+    session.pop('oauth_state', None)
+    session.pop('oauth_verifier', None)
+    if err or not token:
+        flash(err or 'Could not finish sign-in.', 'danger')
+        return redirect(url_for('login'))
+    profile, err = oauth_login.fetch_profile(provider, token.get('access_token') or '')
+    if err or not profile:
+        flash(err or 'Could not read the provider profile.', 'danger')
+        return redirect(url_for('login'))
+    try:
+        user, created = _oauth_find_or_create(provider, profile)
+    except Exception as exc:
+        print('oauth user error', exc)
+        flash('Could not open a KAZE login from that account.', 'danger')
+        return redirect(url_for('login'))
+    if created:
+        flash('Welcome. Your {} account is linked to KAZE.'.format(oauth_login.PROVIDERS[provider]['label']), 'success')
+    else:
+        flash('Signed in with {}.'.format(oauth_login.PROVIDERS[provider]['label']), 'success')
+    return _complete_local_login(user)
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -2258,27 +2485,10 @@ def login():
         cur.close()
         conn.close()
         if user and check_password_hash(user['password'], password):
-            login_user(User(user['id'], user['username'], user['email'], user.get('role'), user.get('owner_id')))
-            # Log activity + ensure settings row exists
-            try:
-                now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                ip = request.headers.get('X-Forwarded-For', request.remote_addr)
-                business_id = _business_id_for(user.get('role'), user.get('owner_id'), user['id'])
-                conn = get_db()
-                cur = conn.cursor()
-                cur.execute('INSERT INTO user_activity (user_id, username, login_time, ip_address) VALUES (%s, %s, %s, %s)',
-                            (business_id, user['username'], now, ip))
-                cur.execute("INSERT INTO settings (user_id, notify_email, plan_tier) VALUES (%s, %s, 'new_user') ON CONFLICT (user_id) DO NOTHING",
-                            (business_id, user.get('email') or ''))
-                conn.commit()
-                cur.close()
-                conn.close()
-            except Exception as e:
-                print(f"Activity log error: {e}")
-            return redirect(url_for('dashboard'))
-        else:
-            flash('Invalid credentials', 'danger')
+            return _complete_local_login(user)
+        flash('Invalid credentials', 'danger')
     return render_template('login.html')
+
 
 @app.route('/dashboard')
 @login_required

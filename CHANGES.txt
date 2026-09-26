@@ -1,3 +1,5 @@
+v3.1.8 — Deep clean: removed duplicate response hook, Stripe table created before ALTER. Licence/TOS integrated (accept tick, stored version, gate, /licence /terms). OAuth Google/Yahoo/X/Microsoft. Cached legal text.
+
 v3.0.7 — Fix homepage 500: sidebar groups no longer use the dict key name items (Jinja treated it as dict.items).
 
 v3.0.6 — Payments: Stripe (Visa/Mastercard), PayPal, Flutterwave, and current-account transfers share one checkout path.

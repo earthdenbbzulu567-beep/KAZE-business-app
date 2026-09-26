@@ -17,8 +17,31 @@
             <label>Password</label>
             <input type="password" name="password" minlength="6" maxlength="80" placeholder="At least 6 characters" required autocomplete="new-password">
         </div>
+        <div class="form-group">
+            <label style="display:flex;gap:0.55rem;align-items:flex-start;">
+                <input type="checkbox" name="accept_terms" required>
+                <span>I accept the <a href="{{ url_for('legal_licence') }}" target="_blank" rel="noopener">licence</a> and <a href="{{ url_for('legal_terms') }}" target="_blank" rel="noopener">terms of service</a>.</span>
+            </label>
+        </div>
         <button type="submit">Create account</button>
     </form>
+
+    <div class="oauth-box">
+        <p class="oauth-split">or continue with</p>
+        <div class="oauth-row">
+            {% for key, spec in (oauth_catalog or {}).items() %}
+            <a class="oauth-btn" href="{{ url_for('oauth_start', provider=key) }}">Continue with {{ spec.label }}</a>
+            {% endfor %}
+        </div>
+        <p class="oauth-note">Google, Yahoo, X, and Microsoft open their own page. KAZE only keeps the id, name, and email needed to link this login.</p>
+    </div>
+    <style>
+    .oauth-box{margin-top:1.1rem}
+    .oauth-split{text-align:center;color:var(--text3);font-size:0.8rem;margin:0 0 0.7rem}
+    .oauth-row{display:grid;gap:0.45rem}
+    .oauth-btn{display:block;text-align:center;padding:0.55rem 0.8rem;border:1px solid var(--border);border-radius:10px;text-decoration:none;color:inherit;font-weight:650;font-size:0.92rem}
+    .oauth-note{font-size:0.75rem;color:var(--text3);margin-top:0.65rem;line-height:1.4}
+    </style>
     <p style="text-align:center;margin-top:1rem;">Already have an account? <a href="{{ url_for('login') }}">Log in</a></p>
 </div>
 {% endblock %}

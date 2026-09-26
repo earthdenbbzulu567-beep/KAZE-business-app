@@ -5,8 +5,31 @@
     <div>
         <h1>Packages</h1>
         <p>You are on <strong>{{ current.label }}</strong> — {{ current.tagline }}</p>
+        {% if trial and trial.active %}
+        <p class="pkg-note" style="margin-top:0.4rem;">Free trial is on. Full CEO tools stay open for <strong>{{ trial.days_left }}</strong> day{{ '' if trial.days_left == 1 else 's' }} (until {{ trial.ends }}).</p>
+        {% elif trial and trial.expired %}
+        <p class="pkg-note" style="margin-top:0.4rem;">The free trial ended on {{ trial.ends }}. Paid packages only unlock after checkout completes.</p>
+        {% endif %}
     </div>
 </div>
+
+{% if is_owner and trial and not trial.started %}
+<div class="widget" style="margin-bottom:1.1rem;">
+    <h2>Free trial</h2>
+    <p style="color:var(--text2);max-width:40rem;">Try the full CEO desk for 7 to 17 days. One trial per shop. Reminder emails go out 3 days out, 1 day out, and when it ends.</p>
+    <form method="POST" action="{{ url_for('start_trial') }}" style="display:flex;gap:0.6rem;flex-wrap:wrap;align-items:flex-end;">
+        <div class="form-group">
+            <label>Trial length</label>
+            <select name="trial_days">
+                {% for d in trial_day_choices %}
+                <option value="{{ d }}" {% if d == 12 %}selected{% endif %}>{{ d }} days</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit">Start free trial</button>
+    </form>
+</div>
+{% endif %}
 
 <div class="stat-grid">
     <div class="stat-chip"><span>Stock used</span><strong>{{ counts.stock }}{% if current.limits.stock %}/{{ current.limits.stock }}{% endif %}</strong></div>
@@ -31,21 +54,33 @@
         <li>{{ line }}</li>
         {% endfor %}
     </ul>
-    {% if t.key == current.key %}
-        <p><span class="status-pill status-ok">Current package</span></p>
-    {% elif is_owner %}
-        {% if t.price %}
+    {% set paid_ok = (not t.price) or (loop.index0 <= (unlocked_rank or 0)) %}
+    {% if t.key == current.stored_key or (current.trial and current.trial.active and t.key == current.key) %}
+        <p><span class="status-pill status-ok">{% if current.trial and current.trial.active and t.key == 'ceo' %}Trial desk{% else %}Current package{% endif %}</span></p>
+    {% endif %}
+    {% if is_owner %}
+        {% if t.price and not paid_ok %}
+            <p style="font-size:0.82rem;color:var(--text3);">Locked until you pay.</p>
             <div class="pay-methods">
                 {% if stripe_ready %}<a class="btn-secondary" href="{{ url_for('pay_plan', tier=t.key) }}?method=stripe">Visa / Mastercard</a>{% endif %}
                 {% if paypal_ready %}<a class="btn-secondary" href="{{ url_for('pay_plan', tier=t.key) }}?method=paypal">PayPal</a>{% endif %}
                 {% if flutterwave_ready %}<a class="btn-secondary" href="{{ url_for('pay_plan', tier=t.key) }}?method=flutterwave">Card / MoMo</a>{% endif %}
                 {% if bank_ready %}<a class="btn-secondary" href="{{ url_for('pay_plan', tier=t.key) }}?method=bank">Current account</a>{% endif %}
             </div>
-        {% endif %}
+        {% elif t.price and paid_ok %}
+            <p><span class="status-pill status-ok">Unlocked</span></p>
+            {% if t.key != current.stored_key %}
+            <form method="POST" action="{{ url_for('set_plan') }}">
+                <input type="hidden" name="plan_tier" value="{{ t.key }}">
+                <button type="submit" class="btn-secondary">Use {{ t.label }}</button>
+            </form>
+            {% endif %}
+        {% elif not t.price and t.key != current.stored_key %}
         <form method="POST" action="{{ url_for('set_plan') }}">
             <input type="hidden" name="plan_tier" value="{{ t.key }}">
-            <button type="submit" class="btn-secondary">{% if t.price %}Set {{ t.label }}{% else %}Switch to New user{% endif %}</button>
+            <button type="submit" class="btn-secondary">Switch to New user</button>
         </form>
+        {% endif %}
     {% endif %}
 </article>
 {% endfor %}

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ title }}</h1>
+        <p>KAZE Traders · Ephraim Zulu · version {{ legal_version if legal_version is defined else '3.1.7' }}</p>
+    </div>
+</div>
+<div class="widget" style="max-width:52rem;">
+    <p style="font-size:0.88rem;color:var(--text2);">This is the binding text shipped with the App. Using the App means you accept it.</p>
+    <pre style="white-space:pre-wrap;font-size:0.82rem;line-height:1.45;max-height:70vh;overflow:auto;padding:1rem;border:1px solid var(--border);border-radius:12px;">{{ legal_text }}</pre>
+    <p style="margin-top:0.8rem;">
+        <a href="{{ url_for('legal_licence') }}">Licence</a>
+        ·
+        <a href="{{ url_for('legal_terms') }}">Terms of Service</a>
+    </p>
+</div>
+{% endblock %}
