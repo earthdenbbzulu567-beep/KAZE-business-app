@@ -38,10 +38,11 @@ def stripe_ready(settings=None):
 
 
 def currency_code(settings=None):
-    code = ''
+    env = (os.environ.get('STRIPE_CURRENCY') or '').strip().upper()
+    shop = ''
     if settings:
-        code = str(settings.get('currency_code') or '').strip()
-    code = (code or os.environ.get('STRIPE_CURRENCY') or 'USD').upper()
+        shop = str(settings.get('currency_code') or '').strip().upper()
+    code = env or shop or 'USD'
     if len(code) != 3:
         code = 'USD'
     return code

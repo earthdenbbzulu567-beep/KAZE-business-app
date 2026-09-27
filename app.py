@@ -27,17 +27,25 @@ import integrations
 import gateways
 import oauth_login
 
+def _log(*args):
+    if os.environ.get('KAZE_DEBUG'):
+        import sys
+        sys.stderr.write(' '.join(str(a) for a in args) + '\n')
+
+
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
 _TPL_DIR = os.path.join(_APP_DIR, 'templates') if os.path.isdir(os.path.join(_APP_DIR, 'templates')) else _APP_DIR
 app = Flask(__name__, template_folder=_TPL_DIR)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
-LEGAL_VERSION = '3.1.7'
+LEGAL_VERSION = '3.3.1'
 LEGAL_DIR = _APP_DIR
 _LEGAL_CACHE = {}
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 86400
 app.config['TEMPLATES_AUTO_RELOAD'] = False
 app.config['SESSION_REFRESH_EACH_REQUEST'] = False
 app.config['JSONIFY_PRETTYPRINT_REGULAR'] = False
+app.config['MAX_CONTENT_LENGTH'] = 8 * 1024 * 1024
+app.config['PREFERRED_URL_SCHEME'] = os.environ.get('PREFERRED_URL_SCHEME', 'https')
 
 # --------------------- Helper: time since (for activity feed) ---------------------
 @app.template_filter('timesince')
@@ -205,7 +213,7 @@ def _fast_headers(resp):
                 data = None
             if data and 800 < len(data) < 2_000_000:
                 import gzip
-                packed = gzip.compress(data, compresslevel=5)
+                packed = gzip.compress(data, compresslevel=3)
                 if len(packed) < len(data) - 120:
                     resp.set_data(packed)
                     resp.headers['Content-Encoding'] = 'gzip'
@@ -381,6 +389,9 @@ def init_db():
     cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS bank_account_number TEXT DEFAULT ''")
     cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS bank_branch TEXT DEFAULT ''")
     cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS alpha_vantage_key TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS trial_started INTEGER DEFAULT 0")
+    cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS trial_ends TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS trial_days INTEGER DEFAULT 0")
 
     cur.execute('''
         CREATE TABLE IF NOT EXISTS stripe_payments (
@@ -1385,7 +1396,7 @@ def multi_add(kind):
         except Exception:
             pass
         flash('Could not save the rows. Check the numbers and try again.', 'danger')
-        print('multi_add error:', exc)
+        _log('multi_add error:', exc)
         return redirect(url_for('dashboard'))
     finally:
         try:
@@ -1427,8 +1438,6 @@ def _accent_palette(hex_color):
         'surface': '#{:02x}{:02x}{:02x}'.format(*surface),
         'light_bg': '#{:02x}{:02x}{:02x}'.format(*light_bg),
     }
-
-
 
 
 # ======================== App modes (run some parts, leave others dormant) ========================
@@ -1595,8 +1604,6 @@ def priced_tiers(settings=None):
     return rows
 
 
-
-
 def normalize_plan(raw):
     key = str(raw or '').strip().lower().replace('+', ' plus').replace("'", '')
     key = ' '.join(key.replace('-', ' ').replace('_', ' ').split())
@@ -1619,15 +1626,41 @@ def normalize_plan(raw):
     return 'ceo' if not raw else 'new_user'
 
 
+def trial_info(settings=None):
+    settings = settings or {}
+    flag = settings.get('trial_started')
+    started = str(flag).strip() not in ('', '0', 'None', 'false', 'False')
+    ends = str(settings.get('trial_ends') or '')[:10]
+    today = datetime.today().strftime('%Y-%m-%d')
+    active = bool(started and ends and ends >= today)
+    expired = bool(started and ends and ends < today)
+    days_left = 0
+    if active:
+        try:
+            days_left = max(0, (datetime.strptime(ends, '%Y-%m-%d') - datetime.today()).days)
+        except Exception:
+            days_left = 0
+    return {
+        'started': started,
+        'active': active,
+        'expired': expired,
+        'ends': ends,
+        'days_left': days_left,
+    }
+
 
 def plan_info(settings=None):
     raw = None
     if settings:
         raw = settings.get('plan_tier')
-    key = normalize_plan(raw if raw not in (None, '') else 'ceo')
+    stored = normalize_plan(raw if raw not in (None, '') else 'ceo')
+    trial = trial_info(settings)
+    key = 'ceo' if trial.get('active') else stored
     info = dict(PLAN_TIERS[key])
     info['key'] = key
+    info['stored_key'] = stored
     info['price'] = package_prices_for(settings).get(key, info.get('price') or 0)
+    info['trial'] = trial
     return info
 
 
@@ -1689,7 +1722,6 @@ def _plan_block(kind, extra=1):
             info['label'], cap, kind.replace('_', ' ')
         )
     return None
-
 
 
 ALWAYS_ON = frozenset({
@@ -1795,7 +1827,6 @@ def live_nav_groups(live=None):
         if visible:
             groups.append({'title': title, 'links': visible})
     return groups
-
 
 
 APP_MODES = {
@@ -1988,7 +2019,7 @@ def _apply_app_mode():
     g.live_modules = set(ALL_OPTIONAL)
     path = request.path or ''
     if path.startswith('/static/') or path.startswith('/auth/callback/') or path.startswith('/login/') or path in (
-        '/healthz', '/favicon.ico', '/webhooks/stripe', '/webhooks/flutterwave',
+        '/healthz', '/favicon.ico', '/robots.txt', '/webhooks/stripe', '/webhooks/flutterwave',
         '/licence', '/terms', '/signup', '/login',
     ):
         return
@@ -2044,10 +2075,10 @@ def send_email(to_email, subject, body):
     from_email = (os.environ.get('MAIL_USERNAME') or '').strip()
     password = os.environ.get('MAIL_PASSWORD') or os.environ.get('MAIL_APP_PASSWORD')
     if not to_email or '@' not in to_email:
-        print("Email error: no destination address")
+        _log("Email error: no destination address")
         return False
     if not from_email or not password:
-        print("Email error: MAIL_USERNAME/MAIL_PASSWORD environment variables are not set")
+        _log("Email error: MAIL_USERNAME/MAIL_PASSWORD environment variables are not set")
         return False
     msg = MIMEText(body, _charset='utf-8')
     msg['Subject'] = subject
@@ -2066,7 +2097,7 @@ def send_email(to_email, subject, body):
         server.quit()
         return True
     except Exception as e:
-        print("Email error: {}".format(e))
+        _log("Email error: {}".format(e))
         return False
 
 def _legal_text(kind='licence'):
@@ -2092,12 +2123,16 @@ def _licence_ok(user_db_id):
         return cached
     ok = False
     try:
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute('SELECT terms_accepted, terms_version FROM users WHERE id=%s', (user_db_id,))
-        row = cur.fetchone() or {}
-        cur.close()
-        ok = int(row.get('terms_accepted') or 0) == 1 and str(row.get('terms_version') or '') == LEGAL_VERSION
+        u = current_user if getattr(current_user, 'is_authenticated', False) else None
+        if u is not None and getattr(u, 'db_id', None) == user_db_id and hasattr(u, 'terms_version'):
+            ok = int(getattr(u, 'terms_accepted', 0) or 0) == 1 and str(getattr(u, 'terms_version') or '') == LEGAL_VERSION
+        else:
+            conn = get_db()
+            cur = conn.cursor()
+            cur.execute('SELECT terms_accepted, terms_version FROM users WHERE id=%s', (user_db_id,))
+            row = cur.fetchone() or {}
+            cur.close()
+            ok = int(row.get('terms_accepted') or 0) == 1 and str(row.get('terms_version') or '') == LEGAL_VERSION
     except Exception:
         ok = False
     g._licence_ok = ok
@@ -2124,12 +2159,14 @@ def _business_id_for(role, owner_id, own_id):
     return own_id
 
 class User(UserMixin):
-    def __init__(self, db_id, username, email, role='owner', owner_id=None):
+    def __init__(self, db_id, username, email, role='owner', owner_id=None, terms_accepted=0, terms_version=''):
         self.db_id = db_id
         self.username = username
         self.email = email
         self.role = role or 'owner'
         self.owner_id = owner_id
+        self.terms_accepted = terms_accepted
+        self.terms_version = terms_version or ''
         self.id = _business_id_for(self.role, self.owner_id, self.db_id)
 
     def get_id(self):
@@ -2268,12 +2305,14 @@ def inject_settings():
 def load_user(user_id):
     conn = get_db()
     cur = conn.cursor()
-    cur.execute('SELECT id, username, email, role, owner_id FROM users WHERE id = %s', (user_id,))
+    cur.execute('SELECT id, username, email, role, owner_id, terms_accepted, terms_version FROM users WHERE id = %s', (user_id,))
     user = cur.fetchone()
     cur.close()
-    conn.close()
     if user:
-        return User(user['id'], user['username'], user['email'], user['role'], user['owner_id'])
+        return User(
+            user['id'], user['username'], user['email'], user['role'], user['owner_id'],
+            user.get('terms_accepted') or 0, user.get('terms_version') or '',
+        )
     return None
 
 # ======================== Routes ========================
@@ -2321,7 +2360,7 @@ def signup():
     return render_template('signup.html')
 
 def _complete_local_login(user):
-    login_user(User(user['id'], user['username'], user['email'], user.get('role'), user.get('owner_id')))
+    login_user(User(user['id'], user['username'], user['email'], user.get('role'), user.get('owner_id'), user.get('terms_accepted') or 0, user.get('terms_version') or ''))
     try:
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         ip = request.headers.get('X-Forwarded-For', request.remote_addr)
@@ -2336,7 +2375,7 @@ def _complete_local_login(user):
         cur.close()
         conn.close()
     except Exception as exc:
-        print('Activity log error:', exc)
+        _log('Activity log error:', exc)
     return redirect(url_for('dashboard'))
 
 
@@ -2463,7 +2502,7 @@ def oauth_callback(provider):
     try:
         user, created = _oauth_find_or_create(provider, profile)
     except Exception as exc:
-        print('oauth user error', exc)
+        _log('oauth user error', exc)
         flash('Could not open a KAZE login from that account.', 'danger')
         return redirect(url_for('login'))
     if created:
@@ -3063,7 +3102,7 @@ def stock_bulk():
         except Exception:
             pass
         flash('Bulk stock action failed. Nothing was changed.', 'danger')
-        print('stock_bulk:', exc)
+        _log('stock_bulk:', exc)
     finally:
         try:
             cur.close()
@@ -3131,7 +3170,7 @@ def sales_bulk():
         except Exception:
             pass
         flash('Bulk sales action failed. Nothing was changed.', 'danger')
-        print('sales_bulk:', exc)
+        _log('sales_bulk:', exc)
     finally:
         try:
             cur.close()
@@ -3195,7 +3234,7 @@ def customers_bulk():
         except Exception:
             pass
         flash('Bulk customer action failed. Nothing was changed.', 'danger')
-        print('customers_bulk:', exc)
+        _log('customers_bulk:', exc)
     finally:
         try:
             cur.close()
@@ -3259,7 +3298,7 @@ def services_bulk():
         except Exception:
             pass
         flash('Bulk services action failed.', 'danger')
-        print('services_bulk:', exc)
+        _log('services_bulk:', exc)
     finally:
         try:
             cur.close()
@@ -3320,7 +3359,7 @@ def sessions_bulk():
         except Exception:
             pass
         flash('Bulk sessions action failed.', 'danger')
-        print('sessions_bulk:', exc)
+        _log('sessions_bulk:', exc)
     finally:
         try:
             cur.close()
@@ -3786,14 +3825,21 @@ def delete_sale(id):
 
 def _csv_response(filename, header, rows):
     buf = io.StringIO()
-    writer = csv.writer(buf)
+    writer = csv.writer(buf, lineterminator='\n')
     writer.writerow(header)
     for row in rows:
-        writer.writerow(row)
+        writer.writerow([('' if c is None else c) for c in row])
+    stamp = datetime.today().strftime('%Y%m%d')
+    name = filename or 'export.csv'
+    if not str(name).lower().endswith('.csv'):
+        name = str(name) + '.csv'
+    if stamp not in name:
+        name = name[:-4] + '-' + stamp + '.csv'
+    payload = '\ufeff' + buf.getvalue()
     return Response(
-        buf.getvalue(),
-        mimetype='text/csv',
-        headers={'Content-Disposition': f'attachment; filename={filename}'}
+        payload.encode('utf-8'),
+        mimetype='text/csv; charset=utf-8',
+        headers={'Content-Disposition': 'attachment; filename="{}"'.format(name)},
     )
 
 @app.route('/export/income.csv')
@@ -6523,7 +6569,6 @@ def account_book_csv(book):
                     headers={'Content-Disposition': 'attachment; filename={}'.format(filename)})
 
 
-
 # ======================== Extra tools ========================
 
 @app.route('/reminders')
@@ -6746,8 +6791,6 @@ def price_list():
                      download_name='price-list.pdf')
 
 
-
-
 @app.route('/settings/clear-data', methods=['POST'])
 @login_required
 def clear_data():
@@ -6807,7 +6850,6 @@ def clear_data():
     log_activity(current_user.id, current_user.username, 'Cleared all business data', 'start over')
     flash('Business data cleared. Your account and settings are still here.', 'success')
     return redirect(url_for('dashboard'))
-
 
 
 @app.route('/stock/valuation-pdf')
@@ -7021,7 +7063,7 @@ def tasks_bulk_complete():
         except Exception:
             pass
         flash('Task bulk action failed.', 'danger')
-        print('tasks_bulk:', exc)
+        _log('tasks_bulk:', exc)
     finally:
         cur.close()
         conn.close()
@@ -7673,8 +7715,6 @@ def stats_xlsx():
     )
 
 
-
-
 @app.route('/theme', methods=['POST'])
 def set_display_theme():
     """Save dark / light / auto (or special themes) and remember it on this browser."""
@@ -8033,7 +8073,7 @@ def stripe_pay_success():
             if (sess.get('payment_status') or '') == 'paid':
                 _fulfill_stripe_payment(current_user.id, kind, record_id, session_id, intent, amount)
         except Exception as exc:
-            print('stripe success retrieve:', exc)
+            _log('stripe success retrieve:', exc)
     flash('Payment received. Thank you.', 'success')
     if kind == 'session':
         return redirect(url_for('services'))
@@ -8091,8 +8131,6 @@ def stripe_webhook():
     return ('', 200)
 
 
-
-
 @app.route('/packages')
 @app.route('/plans')
 @login_required
@@ -8106,15 +8144,24 @@ def plans():
         counts[kind] = _plan_count(cur, current_user.id, kind)
     cur.close()
     conn.close()
+    trial = current.get('trial') or trial_info(settings)
+    unlocked_rank = PLAN_RANK.get(current.get('stored_key') or current['key'], 0)
+    if trial.get('active'):
+        unlocked_rank = PLAN_RANK.get('ceo', unlocked_rank)
     return render_template(
         'plans.html',
         tiers=priced_tiers(settings),
         current=current,
         counts=counts,
         stripe_ready=stripe_payments.stripe_ready(settings),
+        paypal_ready=gateways.paypal_ready(settings),
+        flutterwave_ready=integrations.flutterwave_ready(settings),
+        bank_ready=gateways.bank_ready(settings),
+        trial=trial,
+        trial_day_choices=list(range(7, 18)),
+        unlocked_rank=unlocked_rank,
         is_owner=(getattr(current_user, 'role', 'owner') == 'owner'),
     )
-
 
 
 @app.route('/pay/paypal/return')
@@ -8207,6 +8254,34 @@ def bank_pay_confirm(ref):
     return redirect(url_for('payments'))
 
 
+@app.route('/plans/trial', methods=['POST'])
+@login_required
+def start_trial():
+    if getattr(current_user, 'role', 'owner') != 'owner':
+        flash('Only the owner can start a trial.', 'danger')
+        return redirect(url_for('plans'))
+    settings = _stripe_settings() or {}
+    if trial_info(settings).get('started'):
+        flash('This shop already used its free trial.', 'info')
+        return redirect(url_for('plans'))
+    try:
+        days = int(request.form.get('trial_days') or 12)
+    except (TypeError, ValueError):
+        days = 12
+    days = min(17, max(7, days))
+    ends = (datetime.today() + timedelta(days=days)).strftime('%Y-%m-%d')
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        'UPDATE settings SET trial_started=1, trial_ends=%s, trial_days=%s WHERE user_id=%s',
+        (ends, days, current_user.id),
+    )
+    conn.commit()
+    cur.close()
+    flash('Free trial is on for {} days (until {}).'.format(days, ends), 'success')
+    return redirect(url_for('plans'))
+
+
 @app.route('/plans/set', methods=['POST'])
 @login_required
 def set_plan():
@@ -8243,9 +8318,6 @@ def pay_plan(tier):
         return redirect(url_for('plans'))
     title = 'KAZE package: {}'.format(wanted)
     return _start_checkout('plan', PLAN_RANK[wanted], amount, title, 'plans')
-
-
-
 
 
 BANK_ACCOUNT_TYPES = ('Current', 'Savings', 'Mobile money', 'Credit', 'Cash till', 'Other')
@@ -8919,7 +8991,6 @@ def delete_valuation(id):
     cur.close()
     conn.close()
     return redirect(url_for('market'))
-
 
 
 def _mark_shop_paid(uid, order_id, tx_ref='', tx_id=''):
