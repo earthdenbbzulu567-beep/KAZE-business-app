@@ -2,7 +2,7 @@
 KAZE TRADERS BUSINESS MANAGER -- TERMS OF SERVICE
 ==============================================================================
 
-Companion to LICENCE version 3.3.1. If they differ, LICENCE controls.
+Companion to LICENCE version 3.3.5. If they differ, LICENCE controls.
 
 Brand:           KAZE Traders
 Rightful owner:  Ephraim Zulu
@@ -16,7 +16,7 @@ Copyright:       (C) 2026 Ephraim Zulu and KAZE Traders. All rights reserved.
    data you type.
 
 3. Locked features stay locked until payment or an active trial.
-   Wrong entries make wrong reports.
+   Wrong entries make wrong reports. Notes may use simple markdown. Raw HTML is escaped.
 
 4. Prices (Kwacha, one-time): New user K 0; New user + K 25;
    Entrepreneur K 50; Entrepreneur + K 75; Businessman K 100;

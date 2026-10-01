@@ -1,4 +1,4 @@
-v3.3.1 — Clean finished build. Dead debug prints gated, extra blank lines removed, trial route restored, licence check cached, UTF-8 CSV, faster gzip, 8MB upload cap. Licence/TOS 3.3.1.
+v3.3.5 — Fixed missing trial route, snippet routes, error pages, markdown, Stripe currency env, and licence 3.3.5.
 
 v3.1.8 — Deep clean: removed duplicate response hook, Stripe table created before ALTER. Licence/TOS integrated (accept tick, stored version, gate, /licence /terms). OAuth Google/Yahoo/X/Microsoft. Cached legal text.
 

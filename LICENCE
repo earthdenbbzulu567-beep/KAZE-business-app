@@ -5,7 +5,7 @@ FEATURE CONDITIONS, BREACH PENALTIES, AND TERMINATION
 ==============================================================================
 
 Product:              KAZE Traders Business Manager ("KAZE", "the App")
-Legal version:        3.3.1
+Legal version:        3.3.5
 Brand:                KAZE Traders
 Rightful owner:       Ephraim Zulu
 Licensor:             Ephraim Zulu, rightful owner of KAZE Traders ("we")
@@ -72,7 +72,7 @@ tracking books (cash book through cash-flow statement and later
 books); standalone cash book; banking; investments; shop listings
 and orders; market value; purchase orders; suppliers; recurring
 items; budgets; reports; statistics and CSV / Excel / PDF export;
-tax estimate; SWOT; business plan; tasks; notes; calendar;
+tax estimate; SWOT; business plan; tasks; notes; snippets; calendar;
 reminders; calculator; day close; documents; shortcuts; tutorial;
 payments history; packages; team; search; notifications; activity;
 backup export / import; theme and sound cues; health and job URLs.
@@ -83,6 +83,9 @@ Conditions for every feature:
   - papers and totals are working records, not certified filings
     unless you confirm the law of your country;
   - wrong entries make wrong reports -- that is your responsibility.
+
+Markdown: notes, snippets, and legal pages may use simple markdown.
+Raw HTML is escaped. You are responsible for the words you save.
 
 ==============================================================================
 PART D -- PACKAGES AND TRIAL
@@ -248,7 +251,7 @@ Product:          KAZE Traders Business Manager
 Brand:            KAZE Traders
 Rightful owner:   Ephraim Zulu
 Copyright:        (C) 2026 Ephraim Zulu and KAZE Traders. All rights reserved.
-Legal version:    3.3.1
+Legal version:    3.3.5
 Companion file:   TERMS_OF_SERVICE (this LICENCE controls if they differ)
 
 By ticking acceptance or using the App you confirm you have read

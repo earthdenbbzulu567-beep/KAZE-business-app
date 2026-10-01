@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Edit stock item</h1>
+        <p>Update quantity, prices, SKU, and category. Sales use the selling price you save here.</p>
+    </div>
+    <a href="{{ url_for('stock') }}" class="btn-secondary" style="text-decoration:none;padding:10px 18px;">Back to stock</a>
+</div>
+<form method="POST" class="widget">
+    <div class="form-group">
+        <label>Product name</label>
+        <input type="text" name="product_name" value="{{ item.product_name }}" required>
+    </div>
+    <div class="form-group">
+        <label>SKU / code</label>
+        <input type="text" name="sku" maxlength="40" value="{{ item.sku or '' }}" placeholder="SKU">
+    </div>
+    <div class="form-group">
+        <label>Category</label>
+        <input type="text" name="category" value="{{ item.category or '' }}" placeholder="Category">
+    </div>
+    <div class="form-group">
+        <label>Quantity</label>
+        <input type="number" step="any" name="quantity" min="0" value="{{ item.quantity }}" required>
+    </div>
+    <div class="form-group">
+        <label>Unit</label>
+        <input type="text" name="unit" value="{{ item.unit or '' }}" placeholder="kg, pcs…">
+    </div>
+    <div class="form-group">
+        <label>Cost price</label>
+        <input type="number" step="any" name="cost_price" min="0" value="{{ item.cost_price }}" required>
+    </div>
+    <div class="form-group">
+        <label>Selling price</label>
+        <input type="number" step="any" name="selling_price" min="0" value="{{ item.selling_price }}" required>
+    </div>
+    <button type="submit">Save changes</button>
+    <a href="{{ url_for('stock') }}">Cancel</a>
+</form>
+{% endblock %}

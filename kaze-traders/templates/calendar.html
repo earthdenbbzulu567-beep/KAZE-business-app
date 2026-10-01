@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Calendar</h1>
+        <p>Upcoming tasks, recurring items, and purchase orders for the next 60 days.</p>
+    </div>
+</div>
+<div class="stat-grid">
+    <div class="stat-chip"><span>Today</span><strong>{{ today }}</strong></div>
+    <div class="stat-chip"><span>Events</span><strong>{{ events|length }}</strong></div>
+</div>
+<div class="table-wrapper">
+<table>
+<thead><tr><th>Date</th><th>Type</th><th>Title</th><th>Detail</th></tr></thead>
+<tbody>
+{% for e in events %}
+<tr>
+    <td>{{ e.date }}</td>
+    <td><span class="status-pill">{{ e.kind }}</span></td>
+    <td>{{ e.title }}</td>
+    <td>{{ e.extra }}</td>
+</tr>
+{% else %}
+<tr><td colspan="4">Nothing coming up. Add due dates on tasks or expected dates on purchase orders.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endblock %}

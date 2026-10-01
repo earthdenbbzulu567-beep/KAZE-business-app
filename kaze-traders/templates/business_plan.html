@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>📈 Business Plan</h1>
+        <p>Sketch out the core of your business strategy. Save any time — it's always editable.</p>
+    </div>
+    {% if plan %}
+    <a href="{{ url_for('business_plan_pdf') }}" class="btn-secondary" style="padding:10px 20px; border-radius:8px; text-decoration:none;">⬇️ Download PDF</a>
+    {% endif %}
+</div>
+{% set fields = [plan.mission, plan.products_services, plan.target_market, plan.marketing_strategy, plan.operations_plan, plan.financial_plan, plan.goals] if plan else [] %}
+{% set filled = fields | select | list | length %}
+<div class="stat-grid">
+    <div class="stat-chip"><span>Sections filled</span><strong>{{ filled if plan else 0 }} / 7</strong></div>
+</div>
+
+{% if plan and plan.updated_date %}
+<p style="color:#888; font-size:0.85rem; margin-bottom:1rem;">Last updated: {{ plan.updated_date }}</p>
+{% endif %}
+
+<form method="POST">
+    <div class="form-group" style="display:block; width:100%; margin-bottom:1rem;">
+        <label style="display:block; font-size:0.85rem; margin-bottom:4px;">Business Name</label>
+        <input type="text" name="business_name" value="{{ plan.business_name if plan else '' }}" style="width:100%; max-width:400px;">
+    </div>
+
+    <div class="plan-section">
+        <label>🎯 Mission Statement</label>
+        <p class="hint">Why does your business exist? What problem are you solving?</p>
+        <textarea name="mission" rows="3">{{ plan.mission if plan else '' }}</textarea>
+    </div>
+
+    <div class="plan-section">
+        <label>📦 Products / Services</label>
+        <p class="hint">What are you selling, and what makes it different?</p>
+        <textarea name="products_services" rows="3">{{ plan.products_services if plan else '' }}</textarea>
+    </div>
+
+    <div class="plan-section">
+        <label>🎯 Target Market</label>
+        <p class="hint">Who are your customers? Describe your ideal buyer.</p>
+        <textarea name="target_market" rows="3">{{ plan.target_market if plan else '' }}</textarea>
+    </div>
+
+    <div class="plan-section">
+        <label>📣 Marketing Strategy</label>
+        <p class="hint">How will people find out about you, and why will they choose you?</p>
+        <textarea name="marketing_strategy" rows="3">{{ plan.marketing_strategy if plan else '' }}</textarea>
+    </div>
+
+    <div class="plan-section">
+        <label>⚙️ Operations Plan</label>
+        <p class="hint">How does the day-to-day of the business actually run?</p>
+        <textarea name="operations_plan" rows="3">{{ plan.operations_plan if plan else '' }}</textarea>
+    </div>
+
+    <div class="plan-section">
+        <label>💵 Financial Plan</label>
+        <p class="hint">Startup costs, pricing, revenue targets, funding needs.</p>
+        <textarea name="financial_plan" rows="3">{{ plan.financial_plan if plan else '' }}</textarea>
+    </div>
+
+    <div class="plan-section">
+        <label>🚩 Goals</label>
+        <p class="hint">What does success look like in 6 months? A year? Three years?</p>
+        <textarea name="goals" rows="3">{{ plan.goals if plan else '' }}</textarea>
+    </div>
+
+    <button type="submit">💾 Save Business Plan</button>
+</form>
+
+<div class="widget" style="margin-top:2rem;">
+    <h2>💡 Tip</h2>
+    <p style="font-size:0.9rem; color:#666;">
+        Pair this with your <a href="{{ url_for('swot') }}">SWOT Analysis</a> — your Strengths and
+        Opportunities are great input for your Marketing Strategy, and your Weaknesses and Threats
+        can help you spot gaps in your Operations or Financial Plan.
+    </p>
+</div>
+
+<style>
+    .plan-section {
+        margin-bottom: 1.5rem;
+    }
+    .plan-section label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 2px;
+    }
+    .plan-section .hint {
+        font-size: 0.8rem;
+        color: #888;
+        margin: 0 0 6px 0;
+    }
+    .plan-section textarea {
+        width: 100%;
+        max-width: 700px;
+        resize: vertical;
+        border-radius: 8px;
+        border: 1px solid #ddd;
+        padding: 10px 12px;
+        font-family: inherit;
+        font-size: 0.92rem;
+    }
+</style>
+{% endblock %}

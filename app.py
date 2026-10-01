@@ -27,17 +27,11 @@ import integrations
 import gateways
 import oauth_login
 
-def _log(*args):
-    if os.environ.get('KAZE_DEBUG'):
-        import sys
-        sys.stderr.write(' '.join(str(a) for a in args) + '\n')
-
-
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
 _TPL_DIR = os.path.join(_APP_DIR, 'templates') if os.path.isdir(os.path.join(_APP_DIR, 'templates')) else _APP_DIR
 app = Flask(__name__, template_folder=_TPL_DIR)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
-LEGAL_VERSION = '3.3.1'
+LEGAL_VERSION = '3.3.5'
 LEGAL_DIR = _APP_DIR
 _LEGAL_CACHE = {}
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 86400
@@ -45,7 +39,6 @@ app.config['TEMPLATES_AUTO_RELOAD'] = False
 app.config['SESSION_REFRESH_EACH_REQUEST'] = False
 app.config['JSONIFY_PRETTYPRINT_REGULAR'] = False
 app.config['MAX_CONTENT_LENGTH'] = 8 * 1024 * 1024
-app.config['PREFERRED_URL_SCHEME'] = os.environ.get('PREFERRED_URL_SCHEME', 'https')
 
 # --------------------- Helper: time since (for activity feed) ---------------------
 @app.template_filter('timesince')
@@ -165,6 +158,85 @@ def get_db():
     return psycopg2.connect(_db_url(), cursor_factory=RealDictCursor)
 
 
+
+def _wants_json():
+    path = request.path or ''
+    if path.startswith('/webhooks/') or path.startswith('/healthz'):
+        return True
+    best = request.accept_mimetypes.best
+    return best == 'application/json' and best != 'text/html'
+
+
+def _error_body(code, title, message):
+    if _wants_json():
+        return {'ok': False, 'error': title, 'message': message}, code
+    try:
+        return render_template('errors.html', code=code, title=title, message=message), code
+    except Exception:
+        safe = (
+            '<!DOCTYPE html><meta charset="utf-8"><title>{code} · KAZE</title>'
+            '<body style="font-family:sans-serif;background:#0b1220;color:#e8eef8;padding:2rem">'
+            '<h1>{title}</h1><p>{message}</p><p><a href="/">Home</a></p></body>'
+        ).format(code=code, title=title, message=message)
+        return safe, code
+
+
+@app.errorhandler(400)
+def _err_400(err):
+    return _error_body(400, 'Bad request', 'That request was incomplete or not valid.')
+
+
+@app.errorhandler(403)
+def _err_403(err):
+    return _error_body(403, 'Not allowed', 'You do not have permission for that page.')
+
+
+@app.errorhandler(404)
+def _err_404(err):
+    return _error_body(404, 'Page not found', 'That page is not in KAZE. Check the link and try again.')
+
+
+@app.errorhandler(405)
+def _err_405(err):
+    return _error_body(405, 'Wrong method', 'That action cannot be opened that way.')
+
+
+@app.errorhandler(413)
+def _err_413(err):
+    return _error_body(413, 'File too large', 'That upload is over 8 MB. Use a smaller file.')
+
+
+@app.errorhandler(500)
+def _err_500(err):
+    try:
+        import sys, traceback
+        sys.stderr.write('KAZE 500: %s\n' % (err,))
+        traceback.print_exc()
+    except Exception:
+        pass
+    return _error_body(500, 'Something went wrong', 'KAZE hit an error and rolled the request back. Try again.')
+
+
+@app.errorhandler(Exception)
+def _err_any(err):
+    from werkzeug.exceptions import HTTPException
+    if isinstance(err, HTTPException):
+        return _error_body(err.code or 500, err.name or 'Error', err.description or 'That request failed.')
+    try:
+        import sys, traceback
+        sys.stderr.write('KAZE error: %s\n' % (err,))
+        traceback.print_exc()
+    except Exception:
+        pass
+    try:
+        conn = getattr(g, '_kaze_raw', None)
+        if conn is not None:
+            conn.rollback()
+    except Exception:
+        pass
+    return _error_body(500, 'Something went wrong', 'KAZE hit an error and did not save that change. Try again.')
+
+
 @app.teardown_appcontext
 def _return_db(_exc):
     wrap = getattr(g, '_kaze_conn', None)
@@ -213,7 +285,7 @@ def _fast_headers(resp):
                 data = None
             if data and 800 < len(data) < 2_000_000:
                 import gzip
-                packed = gzip.compress(data, compresslevel=3)
+                packed = gzip.compress(data, compresslevel=5)
                 if len(packed) < len(data) - 120:
                     resp.set_data(packed)
                     resp.headers['Content-Encoding'] = 'gzip'
@@ -552,6 +624,20 @@ def init_db():
             updated_date TEXT NOT NULL
         )
     ''')
+
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS code_snippets (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            title TEXT NOT NULL,
+            language TEXT DEFAULT 'text',
+            body TEXT DEFAULT '',
+            pinned INTEGER DEFAULT 0,
+            created_date TEXT NOT NULL,
+            updated_date TEXT NOT NULL
+        )
+    ''')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_snippets_user ON code_snippets (user_id)')
     cur.execute('''
         CREATE TABLE IF NOT EXISTS bookkeeping_docs (
             id SERIAL PRIMARY KEY,
@@ -1396,7 +1482,7 @@ def multi_add(kind):
         except Exception:
             pass
         flash('Could not save the rows. Check the numbers and try again.', 'danger')
-        _log('multi_add error:', exc)
+        print('multi_add error:', exc)
         return redirect(url_for('dashboard'))
     finally:
         try:
@@ -1438,6 +1524,8 @@ def _accent_palette(hex_color):
         'surface': '#{:02x}{:02x}{:02x}'.format(*surface),
         'light_bg': '#{:02x}{:02x}{:02x}'.format(*light_bg),
     }
+
+
 
 
 # ======================== App modes (run some parts, leave others dormant) ========================
@@ -1604,6 +1692,8 @@ def priced_tiers(settings=None):
     return rows
 
 
+
+
 def normalize_plan(raw):
     key = str(raw or '').strip().lower().replace('+', ' plus').replace("'", '')
     key = ' '.join(key.replace('-', ' ').replace('_', ' ').split())
@@ -1624,6 +1714,7 @@ def normalize_plan(raw):
     if mapped:
         return mapped
     return 'ceo' if not raw else 'new_user'
+
 
 
 def trial_info(settings=None):
@@ -1724,6 +1815,7 @@ def _plan_block(kind, extra=1):
     return None
 
 
+
 ALWAYS_ON = frozenset({
     'dashboard', 'settings', 'search', 'notifications', 'tutorial',
     'shortcuts', 'activity', 'team', 'backup', 'index', 'auth', 'plans', 'payments',
@@ -1789,6 +1881,7 @@ NAV_GROUPS = (
     ('Workspace', (
         ('Tasks', 'tasks', 'check-square', 'workspace', ('tasks',)),
         ('Notes', 'notes', 'sticky-note', 'workspace', ('notes', 'edit_note')),
+        ('Snippets', 'snippets', 'code', 'workspace', ('snippets',)),
         ('Calendar', 'calendar', 'calendar', 'workspace', ('calendar',)),
         ('Reminders', 'reminders', 'bell', 'reminders', ('reminders',)),
         ('Day close', 'day_close', 'sunset', 'day_close', ('day_close',)),
@@ -1827,6 +1920,7 @@ def live_nav_groups(live=None):
         if visible:
             groups.append({'title': title, 'links': visible})
     return groups
+
 
 
 APP_MODES = {
@@ -1940,6 +2034,7 @@ _bind_module(
 )
 _bind_module('documents', 'docs', 'add_doc', 'delete_doc', 'doc_pdf')
 _bind_module('calculator', 'calculator')
+_bind_module('workspace', 'snippets', 'add_snippet', 'update_snippet', 'delete_snippet', 'snippet_starters')
 _bind_module('day_close', 'day_close')
 _bind_module('reminders', 'reminders')
 _bind_module(
@@ -2019,7 +2114,7 @@ def _apply_app_mode():
     g.live_modules = set(ALL_OPTIONAL)
     path = request.path or ''
     if path.startswith('/static/') or path.startswith('/auth/callback/') or path.startswith('/login/') or path in (
-        '/healthz', '/favicon.ico', '/robots.txt', '/webhooks/stripe', '/webhooks/flutterwave',
+        '/healthz', '/favicon.ico', '/webhooks/stripe', '/webhooks/flutterwave',
         '/licence', '/terms', '/signup', '/login',
     ):
         return
@@ -2075,10 +2170,10 @@ def send_email(to_email, subject, body):
     from_email = (os.environ.get('MAIL_USERNAME') or '').strip()
     password = os.environ.get('MAIL_PASSWORD') or os.environ.get('MAIL_APP_PASSWORD')
     if not to_email or '@' not in to_email:
-        _log("Email error: no destination address")
+        print("Email error: no destination address")
         return False
     if not from_email or not password:
-        _log("Email error: MAIL_USERNAME/MAIL_PASSWORD environment variables are not set")
+        print("Email error: MAIL_USERNAME/MAIL_PASSWORD environment variables are not set")
         return False
     msg = MIMEText(body, _charset='utf-8')
     msg['Subject'] = subject
@@ -2097,7 +2192,7 @@ def send_email(to_email, subject, body):
         server.quit()
         return True
     except Exception as e:
-        _log("Email error: {}".format(e))
+        print("Email error: {}".format(e))
         return False
 
 def _legal_text(kind='licence'):
@@ -2123,16 +2218,12 @@ def _licence_ok(user_db_id):
         return cached
     ok = False
     try:
-        u = current_user if getattr(current_user, 'is_authenticated', False) else None
-        if u is not None and getattr(u, 'db_id', None) == user_db_id and hasattr(u, 'terms_version'):
-            ok = int(getattr(u, 'terms_accepted', 0) or 0) == 1 and str(getattr(u, 'terms_version') or '') == LEGAL_VERSION
-        else:
-            conn = get_db()
-            cur = conn.cursor()
-            cur.execute('SELECT terms_accepted, terms_version FROM users WHERE id=%s', (user_db_id,))
-            row = cur.fetchone() or {}
-            cur.close()
-            ok = int(row.get('terms_accepted') or 0) == 1 and str(row.get('terms_version') or '') == LEGAL_VERSION
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute('SELECT terms_accepted, terms_version FROM users WHERE id=%s', (user_db_id,))
+        row = cur.fetchone() or {}
+        cur.close()
+        ok = int(row.get('terms_accepted') or 0) == 1 and str(row.get('terms_version') or '') == LEGAL_VERSION
     except Exception:
         ok = False
     g._licence_ok = ok
@@ -2159,14 +2250,12 @@ def _business_id_for(role, owner_id, own_id):
     return own_id
 
 class User(UserMixin):
-    def __init__(self, db_id, username, email, role='owner', owner_id=None, terms_accepted=0, terms_version=''):
+    def __init__(self, db_id, username, email, role='owner', owner_id=None):
         self.db_id = db_id
         self.username = username
         self.email = email
         self.role = role or 'owner'
         self.owner_id = owner_id
-        self.terms_accepted = terms_accepted
-        self.terms_version = terms_version or ''
         self.id = _business_id_for(self.role, self.owner_id, self.db_id)
 
     def get_id(self):
@@ -2215,6 +2304,97 @@ def _excel_money_format(settings_row=None):
     if decimals:
         return '"{}"#,##0.{}'.format(safe, zeros)
     return '"{}"#,##0'.format(safe)
+
+
+
+def _render_markdown(text):
+    import html as _html
+    import re as _re
+    from markupsafe import Markup
+    raw = '' if text is None else str(text).replace('\r\n', '\n')
+    if not raw.strip():
+        return Markup('')
+    lines = raw.split('\n')
+    out = []
+    in_code = False
+    in_list = False
+    para = []
+
+    def flush_para():
+        nonlocal para
+        if para:
+            out.append('<p>' + '<br>'.join(para) + '</p>')
+            para = []
+
+    def flush_list():
+        nonlocal in_list
+        if in_list:
+            out.append('</ul>')
+            in_list = False
+
+    def inline(s):
+        s = _html.escape(s)
+        s = _re.sub(r'`([^`]+)`', r'<code>\1</code>', s)
+        s = _re.sub(r'\*\*([^*]+)\*\*', r'<strong>\1</strong>', s)
+        s = _re.sub(r'(?<!\*)\*([^*]+)\*(?!\*)', r'<em>\1</em>', s)
+
+        def link(m):
+            label, url = m.group(1), m.group(2)
+            if url.startswith('http://') or url.startswith('https://'):
+                return '<a href="{}" rel="noopener">{}</a>'.format(_html.escape(url), label)
+            return label
+        return _re.sub(r'\[([^\]]+)\]\(([^)]+)\)', link, s)
+
+    for line in lines:
+        if line.startswith('```'):
+            flush_para()
+            flush_list()
+            if in_code:
+                out.append('</code></pre>')
+                in_code = False
+            else:
+                out.append('<pre class="md-code"><code>')
+                in_code = True
+            continue
+        if in_code:
+            out.append(_html.escape(line) + '\n')
+            continue
+        stripped = line.strip()
+        if not stripped:
+            flush_para()
+            flush_list()
+            continue
+        if stripped.startswith('### '):
+            flush_para(); flush_list()
+            out.append('<h3>' + inline(stripped[4:]) + '</h3>')
+            continue
+        if stripped.startswith('## '):
+            flush_para(); flush_list()
+            out.append('<h2>' + inline(stripped[3:]) + '</h2>')
+            continue
+        if stripped.startswith('# '):
+            flush_para(); flush_list()
+            out.append('<h1>' + inline(stripped[2:]) + '</h1>')
+            continue
+        if stripped.startswith('- ') or stripped.startswith('* '):
+            flush_para()
+            if not in_list:
+                out.append('<ul>')
+                in_list = True
+            out.append('<li>' + inline(stripped[2:]) + '</li>')
+            continue
+        flush_list()
+        para.append(inline(stripped))
+    if in_code:
+        out.append('</code></pre>')
+    flush_para()
+    flush_list()
+    return Markup('\n'.join(out))
+
+
+@app.template_filter('md')
+def markdown_filter(text):
+    return _render_markdown(text)
 
 
 @app.template_filter('money')
@@ -2305,14 +2485,12 @@ def inject_settings():
 def load_user(user_id):
     conn = get_db()
     cur = conn.cursor()
-    cur.execute('SELECT id, username, email, role, owner_id, terms_accepted, terms_version FROM users WHERE id = %s', (user_id,))
+    cur.execute('SELECT id, username, email, role, owner_id FROM users WHERE id = %s', (user_id,))
     user = cur.fetchone()
     cur.close()
+    conn.close()
     if user:
-        return User(
-            user['id'], user['username'], user['email'], user['role'], user['owner_id'],
-            user.get('terms_accepted') or 0, user.get('terms_version') or '',
-        )
+        return User(user['id'], user['username'], user['email'], user['role'], user['owner_id'])
     return None
 
 # ======================== Routes ========================
@@ -2360,7 +2538,7 @@ def signup():
     return render_template('signup.html')
 
 def _complete_local_login(user):
-    login_user(User(user['id'], user['username'], user['email'], user.get('role'), user.get('owner_id'), user.get('terms_accepted') or 0, user.get('terms_version') or ''))
+    login_user(User(user['id'], user['username'], user['email'], user.get('role'), user.get('owner_id')))
     try:
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         ip = request.headers.get('X-Forwarded-For', request.remote_addr)
@@ -2375,7 +2553,7 @@ def _complete_local_login(user):
         cur.close()
         conn.close()
     except Exception as exc:
-        _log('Activity log error:', exc)
+        print('Activity log error:', exc)
     return redirect(url_for('dashboard'))
 
 
@@ -2502,7 +2680,7 @@ def oauth_callback(provider):
     try:
         user, created = _oauth_find_or_create(provider, profile)
     except Exception as exc:
-        _log('oauth user error', exc)
+        print('oauth user error', exc)
         flash('Could not open a KAZE login from that account.', 'danger')
         return redirect(url_for('login'))
     if created:
@@ -3102,7 +3280,7 @@ def stock_bulk():
         except Exception:
             pass
         flash('Bulk stock action failed. Nothing was changed.', 'danger')
-        _log('stock_bulk:', exc)
+        print('stock_bulk:', exc)
     finally:
         try:
             cur.close()
@@ -3170,7 +3348,7 @@ def sales_bulk():
         except Exception:
             pass
         flash('Bulk sales action failed. Nothing was changed.', 'danger')
-        _log('sales_bulk:', exc)
+        print('sales_bulk:', exc)
     finally:
         try:
             cur.close()
@@ -3234,7 +3412,7 @@ def customers_bulk():
         except Exception:
             pass
         flash('Bulk customer action failed. Nothing was changed.', 'danger')
-        _log('customers_bulk:', exc)
+        print('customers_bulk:', exc)
     finally:
         try:
             cur.close()
@@ -3298,7 +3476,7 @@ def services_bulk():
         except Exception:
             pass
         flash('Bulk services action failed.', 'danger')
-        _log('services_bulk:', exc)
+        print('services_bulk:', exc)
     finally:
         try:
             cur.close()
@@ -3359,7 +3537,7 @@ def sessions_bulk():
         except Exception:
             pass
         flash('Bulk sessions action failed.', 'danger')
-        _log('sessions_bulk:', exc)
+        print('sessions_bulk:', exc)
     finally:
         try:
             cur.close()
@@ -3825,21 +4003,14 @@ def delete_sale(id):
 
 def _csv_response(filename, header, rows):
     buf = io.StringIO()
-    writer = csv.writer(buf, lineterminator='\n')
+    writer = csv.writer(buf)
     writer.writerow(header)
     for row in rows:
-        writer.writerow([('' if c is None else c) for c in row])
-    stamp = datetime.today().strftime('%Y%m%d')
-    name = filename or 'export.csv'
-    if not str(name).lower().endswith('.csv'):
-        name = str(name) + '.csv'
-    if stamp not in name:
-        name = name[:-4] + '-' + stamp + '.csv'
-    payload = '\ufeff' + buf.getvalue()
+        writer.writerow(row)
     return Response(
-        payload.encode('utf-8'),
-        mimetype='text/csv; charset=utf-8',
-        headers={'Content-Disposition': 'attachment; filename="{}"'.format(name)},
+        buf.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': f'attachment; filename={filename}'}
     )
 
 @app.route('/export/income.csv')
@@ -5702,6 +5873,133 @@ def delete_note(id):
     return redirect(url_for('notes'))
 
 
+
+# ======================== Code snippets ========================
+
+SNIPPET_LANGS = ('text', 'html', 'python', 'sql', 'json', 'receipt')
+STARTER_SNIPPETS = (
+    ('Receipt footer', 'receipt', 'Thank you for shopping with us.\nGoods sold in good condition.\nKeep this receipt for returns.'),
+    ('Invoice note', 'text', 'Payment is due within 7 days.\nPlease quote the invoice number on your transfer.'),
+    ('Low stock message', 'text', 'Hello, {product} is down to {qty}. Please restock before the next sales day.'),
+    ('HTML price tag', 'html', '<div class="tag"><strong>{name}</strong><span>{price}</span></div>'),
+)
+
+
+@app.route('/snippets')
+@login_required
+def snippets():
+    q = (request.args.get('q') or '').strip()
+    conn = get_db()
+    cur = conn.cursor()
+    if q:
+        like = '%' + q + '%'
+        cur.execute(
+            'SELECT * FROM code_snippets WHERE user_id=%s AND (title ILIKE %s OR body ILIKE %s OR language ILIKE %s) '
+            'ORDER BY pinned DESC, updated_date DESC',
+            (current_user.id, like, like, like),
+        )
+    else:
+        cur.execute(
+            'SELECT * FROM code_snippets WHERE user_id=%s ORDER BY pinned DESC, updated_date DESC',
+            (current_user.id,),
+        )
+    items = cur.fetchall()
+    cur.close()
+    conn.close()
+    return render_template('snippets.html', items=items, q=q, langs=SNIPPET_LANGS)
+
+
+@app.route('/snippets/add', methods=['POST'])
+@login_required
+def add_snippet():
+    title, e1 = _clean_text('title', max_len=80, label='title')
+    body = (request.form.get('body') or '').strip()
+    language = (request.form.get('language') or 'text').strip().lower()
+    if language not in SNIPPET_LANGS:
+        language = 'text'
+    if _reject((title, e1)):
+        return redirect(url_for('snippets'))
+    if not body or len(body) > 8000:
+        flash('Snippet body is required and must be under 8000 characters.', 'danger')
+        return redirect(url_for('snippets'))
+    now = datetime.today().strftime('%Y-%m-%d %H:%M')
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        'INSERT INTO code_snippets (user_id, title, language, body, pinned, created_date, updated_date) '
+        'VALUES (%s, %s, %s, %s, 0, %s, %s)',
+        (current_user.id, title, language, body, now, now),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    log_activity(current_user.id, current_user.username, 'Added snippet', title)
+    flash('Snippet saved.', 'success')
+    return redirect(url_for('snippets'))
+
+
+@app.route('/snippets/update/<int:id>', methods=['POST'])
+@login_required
+def update_snippet(id):
+    title, e1 = _clean_text('title', max_len=80, label='title')
+    body = (request.form.get('body') or '').strip()
+    language = (request.form.get('language') or 'text').strip().lower()
+    pinned = 1 if request.form.get('pinned') == 'on' else 0
+    if language not in SNIPPET_LANGS:
+        language = 'text'
+    if _reject((title, e1)) or not body or len(body) > 8000:
+        flash('Snippet body is required and must be under 8000 characters.', 'danger')
+        return redirect(url_for('snippets'))
+    now = datetime.today().strftime('%Y-%m-%d %H:%M')
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        'UPDATE code_snippets SET title=%s, language=%s, body=%s, pinned=%s, updated_date=%s WHERE id=%s AND user_id=%s',
+        (title, language, body, pinned, now, id, current_user.id),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Snippet updated.', 'success')
+    return redirect(url_for('snippets'))
+
+
+@app.route('/snippets/delete/<int:id>')
+@login_required
+def delete_snippet(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('DELETE FROM code_snippets WHERE id=%s AND user_id=%s', (id, current_user.id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Snippet deleted.', 'success')
+    return redirect(url_for('snippets'))
+
+
+@app.route('/snippets/starters', methods=['POST'])
+@login_required
+def snippet_starters():
+    now = datetime.today().strftime('%Y-%m-%d %H:%M')
+    conn = get_db()
+    cur = conn.cursor()
+    added = 0
+    for title, language, body in STARTER_SNIPPETS:
+        cur.execute('SELECT id FROM code_snippets WHERE user_id=%s AND title=%s', (current_user.id, title))
+        if cur.fetchone():
+            continue
+        cur.execute(
+            'INSERT INTO code_snippets (user_id, title, language, body, pinned, created_date, updated_date) VALUES (%s, %s, %s, %s, 0, %s, %s)',
+            (current_user.id, title, language, body, now, now),
+        )
+        added += 1
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Added {} starter snippet(s).'.format(added) if added else 'Starters are already saved.', 'success' if added else 'info')
+    return redirect(url_for('snippets'))
+
+
 # ======================== Calendar ========================
 
 @app.route('/calendar')
@@ -6569,6 +6867,7 @@ def account_book_csv(book):
                     headers={'Content-Disposition': 'attachment; filename={}'.format(filename)})
 
 
+
 # ======================== Extra tools ========================
 
 @app.route('/reminders')
@@ -6791,6 +7090,8 @@ def price_list():
                      download_name='price-list.pdf')
 
 
+
+
 @app.route('/settings/clear-data', methods=['POST'])
 @login_required
 def clear_data():
@@ -6850,6 +7151,7 @@ def clear_data():
     log_activity(current_user.id, current_user.username, 'Cleared all business data', 'start over')
     flash('Business data cleared. Your account and settings are still here.', 'success')
     return redirect(url_for('dashboard'))
+
 
 
 @app.route('/stock/valuation-pdf')
@@ -7063,7 +7365,7 @@ def tasks_bulk_complete():
         except Exception:
             pass
         flash('Task bulk action failed.', 'danger')
-        _log('tasks_bulk:', exc)
+        print('tasks_bulk:', exc)
     finally:
         cur.close()
         conn.close()
@@ -7715,6 +8017,8 @@ def stats_xlsx():
     )
 
 
+
+
 @app.route('/theme', methods=['POST'])
 def set_display_theme():
     """Save dark / light / auto (or special themes) and remember it on this browser."""
@@ -8073,7 +8377,7 @@ def stripe_pay_success():
             if (sess.get('payment_status') or '') == 'paid':
                 _fulfill_stripe_payment(current_user.id, kind, record_id, session_id, intent, amount)
         except Exception as exc:
-            _log('stripe success retrieve:', exc)
+            print('stripe success retrieve:', exc)
     flash('Payment received. Thank you.', 'success')
     if kind == 'session':
         return redirect(url_for('services'))
@@ -8131,6 +8435,8 @@ def stripe_webhook():
     return ('', 200)
 
 
+
+
 @app.route('/packages')
 @app.route('/plans')
 @login_required
@@ -8162,6 +8468,7 @@ def plans():
         unlocked_rank=unlocked_rank,
         is_owner=(getattr(current_user, 'role', 'owner') == 'owner'),
     )
+
 
 
 @app.route('/pay/paypal/return')
@@ -8318,6 +8625,9 @@ def pay_plan(tier):
         return redirect(url_for('plans'))
     title = 'KAZE package: {}'.format(wanted)
     return _start_checkout('plan', PLAN_RANK[wanted], amount, title, 'plans')
+
+
+
 
 
 BANK_ACCOUNT_TYPES = ('Current', 'Savings', 'Mobile money', 'Credit', 'Cash till', 'Other')
@@ -8991,6 +9301,7 @@ def delete_valuation(id):
     cur.close()
     conn.close()
     return redirect(url_for('market'))
+
 
 
 def _mark_shop_paid(uid, order_id, tx_ref='', tx_id=''):

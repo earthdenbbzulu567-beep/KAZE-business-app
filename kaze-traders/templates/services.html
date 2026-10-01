@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Services</h1>
+        <p>Teaching, coaching, repairs, and other work that is not a stock item.</p>
+    </div>
+    <div>
+        <a class="btn-secondary" href="{{ url_for('export_services_csv') }}">Export CSV</a>
+    </div>
+</div>
+
+<div class="stat-grid">
+    <div class="stat-chip"><span>In catalog</span><strong>{{ catalog|length }}</strong></div>
+    <div class="stat-chip"><span>Booked</span><strong>{{ booked }}</strong></div>
+    <div class="stat-chip"><span>Done</span><strong>{{ done }}</strong></div>
+    <div class="stat-chip"><span>Earned (done)</span><strong>{{ money(earned) }}</strong></div>
+    <div class="stat-chip"><span>Upcoming</span><strong>{{ upcoming_count }}</strong></div>
+</div>
+
+<div class="widget" style="margin-bottom:1.25rem;">
+    <h2>What this is for</h2>
+    <p style="color:var(--text2);max-width:52rem;">Add a service once (for example “Math tutoring” or “Business coaching”). Then book sessions against a customer. When you mark a session done, KAZE records the fee as income using your chosen currency.</p>
+</div>
+
+<details open>
+    <summary>Add a service</summary>
+    <div>
+        <form method="POST" action="{{ url_for('add_service') }}">
+            <div class="form-group"><label>Name</label><input type="text" name="name" required placeholder="Grade 10 maths coaching"></div>
+            <div class="form-group"><label>Category</label>
+                <select name="category">
+                    {% for cat in categories %}<option value="{{ cat }}">{{ cat }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group"><label>Duration (minutes)</label><input type="number" name="duration_minutes" value="60" min="0"></div>
+            <div class="form-group"><label>Price</label><input type="number" name="price" step="0.01" min="0" required placeholder="0.00"></div>
+            <div class="form-group" style="display:block;width:100%;"><label>Notes</label>
+                <textarea name="description" rows="2" style="width:100%;max-width:640px;" placeholder="What the session includes"></textarea>
+            </div>
+            <button type="submit">Save service</button>
+        </form>
+
+        <details class="multi-wrap">
+            <summary>Add several services</summary>
+            <div>
+                <form method="POST" action="{{ url_for('multi_add', kind='services') }}">
+                    <div class="table-wrapper">
+                    <table class="multi-table" id="multiServices">
+                        <thead><tr><th>Name</th><th>Category</th><th>Minutes</th><th>Price</th><th>Notes</th><th></th></tr></thead>
+                        <tbody>
+                        {% for _ in range(3) %}
+                        <tr class="multi-row">
+                            <td><input type="text" name="name" placeholder="Service"></td>
+                            <td><select name="category">{% for cat in categories %}<option value="{{ cat }}">{{ cat }}</option>{% endfor %}</select></td>
+                            <td><input type="number" name="duration_minutes" value="60" min="0"></td>
+                            <td><input type="number" name="price" step="0.01" min="0"></td>
+                            <td><input type="text" name="description"></td>
+                            <td><button type="button" class="btn-secondary multi-row-del" onclick="kazeDelRow(this)">×</button></td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                    </div>
+                    <div class="multi-actions">
+                        <button type="button" class="btn-secondary" onclick="kazeAddRow('multiServices')">+ Row</button>
+                        <button type="submit">Save all services</button>
+                    </div>
+                </form>
+            </div>
+        </details>
+    </div>
+</details>
+
+<details open>
+    <summary>Book a session</summary>
+    <div>
+        {% if active_catalog %}
+        <form method="POST" action="{{ url_for('add_service_session') }}">
+            <div class="form-group"><label>Service</label>
+                <select name="service_id" required>
+                    {% for s in active_catalog %}
+                    <option value="{{ s.id }}">{{ s.name }} · {{ money(s.price) }} · {{ s.duration_minutes }} min</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group"><label>Customer</label>
+                <select name="customer_id">
+                    <option value="">Walk-in / type a name</option>
+                    {% for c in customers %}
+                    <option value="{{ c.id }}">{{ c.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group"><label>Or customer name</label><input type="text" name="customer_name" placeholder="Optional if not in the list"></div>
+            <div class="form-group"><label>Date</label><input type="date" name="session_date" value="{{ today }}" required></div>
+            <div class="form-group"><label>Time</label><input type="time" name="session_time"></div>
+            <div class="form-group"><label>Price override</label><input type="number" name="price" step="0.01" min="0" placeholder="Leave blank to use list price"></div>
+            <div class="form-group"><label>Pay</label>
+                <select name="payment_method">
+                    <option value="cash">Cash</option>
+                    <option value="mobile">Mobile</option>
+                    <option value="bank">Bank</option>
+                    <option value="card">Card</option>
+                    <option value="credit">On account</option>
+                </select>
+            </div>
+            <div class="form-group" style="display:block;width:100%;"><label>Notes</label>
+                <textarea name="notes" rows="2" style="width:100%;max-width:640px;"></textarea>
+            </div>
+            <button type="submit">Book session</button>
+        </form>
+
+        <details class="multi-wrap">
+            <summary>Book several sessions</summary>
+            <div>
+                <form method="POST" action="{{ url_for('multi_add', kind='sessions') }}">
+                    <div class="table-wrapper">
+                    <table class="multi-table" id="multiSessions">
+                        <thead><tr><th>Service</th><th>Customer</th><th>Date</th><th>Time</th><th>Price</th><th>Notes</th><th></th></tr></thead>
+                        <tbody>
+                        {% for _ in range(3) %}
+                        <tr class="multi-row">
+                            <td>
+                                <select name="service_id">
+                                    <option value="">Choose</option>
+                                    {% for s in active_catalog %}
+                                    <option value="{{ s.id }}">{{ s.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                            <td>
+                                <select name="customer_id">
+                                    <option value="">Walk-in</option>
+                                    {% for c in customers %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+                                </select>
+                                <input type="hidden" name="customer_name" value="">
+                            </td>
+                            <td><input type="date" name="session_date" value="{{ today }}"></td>
+                            <td><input type="time" name="session_time"></td>
+                            <td><input type="number" name="price" step="0.01" min="0"></td>
+                            <td><input type="text" name="notes"></td>
+                            <td><button type="button" class="btn-secondary multi-row-del" onclick="kazeDelRow(this)">×</button></td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                    </div>
+                    <div class="multi-actions">
+                        <button type="button" class="btn-secondary" onclick="kazeAddRow('multiSessions')">+ Row</button>
+                        <button type="submit">Save all bookings</button>
+                    </div>
+                </form>
+            </div>
+        </details>
+        {% else %}
+        <p>Add a service first, then you can book sessions.</p>
+        {% endif %}
+    </div>
+</details>
+
+<h2>Catalog</h2>
+<form id="catalogBulk" method="POST" action="{{ url_for('services_bulk') }}" onsubmit="return kazeConfirmBulk(this)">
+<div style="display:flex;gap:0.5rem;margin-bottom:0.5rem;align-items:center;flex-wrap:wrap;">
+    <select name="action">
+        <option value="">Bulk action</option>
+        <option value="hide">Hide selected</option>
+        <option value="show">Show selected</option>
+        <option value="delete">Delete unused / hide used</option>
+        <option value="export">Export selected</option>
+    </select>
+    <button type="submit">Apply</button>
+</div>
+</form>
+<div class="table-wrapper">
+<table>
+<thead><tr><th><input form="catalogBulk" type="checkbox" onclick="kazeToggleAll(this)"></th><th>Service</th><th>Category</th><th>Time</th><th>Price</th><th>Status</th><th>Action</th></tr></thead>
+<tbody>
+{% for s in catalog %}
+<tr {% if not s.active %}style="opacity:0.55;"{% endif %}>
+    <td><input form="catalogBulk" type="checkbox" name="selected_ids" value="{{ s.id }}"></td>
+    <td>
+        <strong>{{ s.name }}</strong>
+        {% if s.description %}<div style="color:var(--text3);font-size:0.82rem;">{{ s.description }}</div>{% endif %}
+        <details>
+            <summary style="cursor:pointer;color:var(--text3);font-size:0.8rem;">Edit</summary>
+            <form method="POST" action="{{ url_for('update_service', id=s.id) }}" style="margin-top:0.5rem;">
+                <input type="text" name="name" value="{{ s.name }}" required>
+                <select name="category">
+                    {% for cat in categories %}
+                    <option value="{{ cat }}" {% if s.category == cat %}selected{% endif %}>{{ cat }}</option>
+                    {% endfor %}
+                </select>
+                <input type="number" name="duration_minutes" value="{{ s.duration_minutes }}" min="0">
+                <input type="number" name="price" step="0.01" min="0" value="{{ s.price }}">
+                <input type="text" name="description" value="{{ s.description or '' }}">
+                <button type="submit">Update</button>
+            </form>
+        </details>
+    </td>
+    <td>{{ s.category }}</td>
+    <td>{{ s.duration_minutes }} min</td>
+    <td>{{ money(s.price) }}</td>
+    <td>{% if s.active %}<span class="status-pill status-ok">Active</span>{% else %}<span class="status-pill status-warn">Hidden</span>{% endif %}</td>
+    <td>
+        <a href="{{ url_for('toggle_service', id=s.id) }}">{% if s.active %}Hide{% else %}Show{% endif %}</a>
+        <a href="{{ url_for('delete_service', id=s.id) }}" class="delete-btn" onclick="return confirm('Hide or delete this service?')">Delete</a>
+    </td>
+</tr>
+{% else %}
+<tr><td colspan="7">No services yet. Add teaching, coaching, or any other job you sell.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+
+<h2>Sessions</h2>
+<form id="sessionBulk" method="POST" action="{{ url_for('sessions_bulk') }}" onsubmit="return kazeConfirmBulk(this)">
+<div style="display:flex;gap:0.5rem;margin-bottom:0.5rem;align-items:center;flex-wrap:wrap;">
+    <select name="action">
+        <option value="">Bulk action</option>
+        <option value="done">Mark done</option>
+        <option value="cancelled">Cancel</option>
+        <option value="booked">Rebook</option>
+        <option value="delete">Delete</option>
+    </select>
+    <button type="submit">Apply</button>
+</div>
+</form>
+<div class="table-wrapper">
+<table>
+<thead><tr><th><input form="sessionBulk" type="checkbox" onclick="kazeToggleAll(this)"></th><th>When</th><th>Service</th><th>Customer</th><th>Price</th><th>Status</th><th>Action</th></tr></thead>
+<tbody>
+{% for s in sessions %}
+<tr>
+    <td><input form="sessionBulk" type="checkbox" name="selected_ids" value="{{ s.id }}"></td>
+    <td>{{ s.session_date }}{% if s.session_time %} · {{ s.session_time }}{% endif %}</td>
+    <td><strong>{{ s.service_name or 'Service' }}</strong>{% if s.notes %}<div style="color:var(--text3);font-size:0.82rem;">{{ s.notes }}</div>{% endif %}</td>
+    <td>{{ s.customer_name or 'Walk-in' }}</td>
+    <td>{{ money(s.price) }}</td>
+    <td>
+        {% if s.status == 'done' %}<span class="status-pill status-ok">Done</span>
+        {% elif s.status == 'cancelled' %}<span class="status-pill status-warn">Cancelled</span>
+        {% else %}<span class="status-pill">Booked</span>{% endif %}
+    </td>
+    <td>
+        {% if s.status != 'done' %}<a href="{{ url_for('set_session_status', id=s.id, action='done') }}">Mark done</a>{% if stripe_ready %} <a href="{{ url_for('pay_service_session', id=s.id) }}">Pay with card</a>{% endif %}{% endif %}
+        {% if s.status == 'booked' %}<a href="{{ url_for('set_session_status', id=s.id, action='cancelled') }}">Cancel</a>{% endif %}
+        {% if s.status == 'cancelled' %}<a href="{{ url_for('set_session_status', id=s.id, action='booked') }}">Rebook</a>{% endif %}
+        <a href="{{ url_for('delete_service_session', id=s.id) }}" class="delete-btn" onclick="return confirm('Delete this session?')">Delete</a>
+    </td>
+</tr>
+{% else %}
+<tr><td colspan="7">No sessions booked yet.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endblock %}
