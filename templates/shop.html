@@ -112,7 +112,7 @@
             </td>
             <td>
                 {% if flutterwave_ready and o.status != 'paid' %}
-                <a href="{{ url_for('pay_shop_order', id=o.id) }}">Collect card / MoMo</a>
+                <a href="{{ url_for('kaze_checkout', kind='shop', id=o.id) }}">Pay now</a>
                 {% endif %}
                 <form method="POST" action="{{ url_for('delete_shop_order', id=o.id) }}" onsubmit="return confirm('Delete order?');">
                     <button type="submit" class="btn-secondary">Delete</button>

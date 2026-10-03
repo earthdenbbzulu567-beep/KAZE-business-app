@@ -6,6 +6,7 @@
     <link rel="icon" type="image/png" sizes="64x64" href="{{ url_for('static', filename='favicon-64.png') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     {% set _ff = (user_settings.font_family if user_settings and user_settings.font_family else 'Plus Jakarta Sans') %}
@@ -168,27 +169,58 @@
             background: linear-gradient(90deg, var(--red-glow), transparent 80%);
         }
         .brand-mark {
-            width: 38px;
-            height: 38px;
-            border-radius: 10px;
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            background: var(--red-bright);
-            box-shadow: 0 0 0 2px var(--red-glow), 0 8px 18px var(--red-glow);
+            background: #070707;
+            box-shadow: 0 0 0 1px rgba(46, 125, 50, 0.55), 0 8px 16px rgba(0,0,0,0.35);
             flex-shrink: 0;
+            overflow: hidden;
         }
         .sidebar-brand img {
-            width: 30px;
-            height: 30px;
-            border-radius: 7px;
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
             display: block;
-            background: var(--red-dim);
-            filter: drop-shadow(0 0 6px var(--red-glow));
+            background: #070707;
+            object-fit: cover;
+            filter: none;
             transition: transform 0.3s var(--ease-spring);
         }
         .sidebar-brand:hover .brand-mark { transform: scale(1.06) rotate(-4deg); }
         .sidebar-brand .brand-mark { transition: transform 0.3s var(--ease-spring); }
+        .sidebar-brand .wordmark {
+            display: flex;
+            flex-direction: column;
+            line-height: 1;
+            min-width: 0;
+        }
+        .sidebar-brand .wordmark b {
+            font-family: "Outfit", "Plus Jakarta Sans", sans-serif;
+            font-size: 1.22rem;
+            font-weight: 800;
+            letter-spacing: 0.18em;
+            color: var(--text);
+            text-transform: uppercase;
+        }
+        .sidebar-brand .wordmark b i {
+            font-style: normal;
+            color: #2f9e44;
+            display: inline-block;
+            transform: skewX(-12deg);
+            margin-left: 0.04em;
+        }
+        .sidebar-brand .wordmark small {
+            margin-top: 0.18rem;
+            font-size: 0.58rem;
+            font-weight: 700;
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+            color: var(--text3);
+        }
         .sidebar-brand span {
             font-size: 1.1rem;
             font-weight: 700;
@@ -429,11 +461,34 @@
             padding: 0;
             clip-path: none;
             box-shadow: none;
+            transition: transform 0.2s ease, border-color 0.2s ease;
         }
-        .theme-toggle:hover {
+        .status-chip {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            height: 36px;
+            min-width: 36px;
+            padding: 0 0.75rem;
+            border-radius: 999px;
+            border: 1px solid var(--red-dim);
+            background: var(--red-glow);
+            color: var(--text);
+            text-decoration: none;
+            font-size: 0.78rem;
+            font-weight: 700;
+            line-height: 1;
+            white-space: nowrap;
+        }
+        .status-chip:hover, .theme-toggle:hover {
             transform: scale(1.08);
             border-color: var(--red-bright);
             background: var(--accent-wash);
+        }
+        @media (max-width: 720px) {
+            .status-chip, .theme-toggle { height: 32px; font-size: 0.72rem; }
+            .theme-toggle { width: 32px; }
+            .status-chip { padding: 0 0.55rem; }
         }
         html.theme-light .theme-toggle { color: #111; }
 
@@ -1250,19 +1305,56 @@
             padding: 0.5rem 2rem;
         }
     
-.plan-badge {
-    display: inline-flex;
-    margin-left: 0.45rem;
-    padding: 0.12rem 0.5rem;
-    border: 1px solid color-mix(in srgb, var(--accent, #2ecc71) 55%, transparent);
-    border-radius: 999px;
-    font-size: 0.68rem;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--accent, #2ecc71);
-    background: color-mix(in srgb, var(--accent, #2ecc71) 12%, transparent);
+.sidebar-brand .plan-badge {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 0.08rem;
+    margin-left: auto;
+    min-height: 36px;
+    max-width: 9.2rem;
+    padding: 0.28rem 0.62rem 0.32rem;
+    border: 1px solid var(--red-dim);
+    border-radius: 12px;
+    background:
+        linear-gradient(135deg, var(--red-glow), transparent 70%),
+        var(--bg2);
+    color: var(--text);
+    text-decoration: none;
+    text-transform: none;
+    letter-spacing: 0;
+    line-height: 1.05;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+    transition: border-color 0.2s ease, transform 0.2s ease;
 }
-.sidebar.collapsed .plan-badge { display: none; }
+.sidebar-brand .plan-badge:hover {
+    border-color: var(--red-bright);
+    transform: translateY(-1px);
+}
+.sidebar-brand .plan-badge em {
+    font-style: normal;
+    font-size: 0.58rem;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--red-bright);
+}
+.sidebar-brand .plan-badge strong {
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    font-size: 0.84rem;
+    font-weight: 650;
+    font-style: italic;
+    letter-spacing: -0.02em;
+    text-transform: none;
+    color: var(--text);
+    white-space: normal;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+.sidebar.collapsed .plan-badge, .sidebar.collapsed .wordmark small { display: none; }
 </style>
     {% block charts_js %}{% endblock %}
 
@@ -1684,10 +1776,11 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     <div class="sidebar" id="sidebar">
         <div class="sidebar-brand">
             <span class="brand-mark"><img src="{{ url_for('static', filename='logo_icon.png') }}" alt="KAZE"></span>
-            <span>KAZE</span>
-            {% if plan %}
-            <span class="plan-badge">{{ plan.label }}</span>
-            {% endif %}
+            <span class="wordmark"><b>KA<i>Z</i>E</b><small>Traders</small></span>
+            <a class="plan-badge" href="{{ url_for('plans') }}" title="Package">
+                <em>Package</em>
+                <strong>{{ plan.label if plan else 'New user' }}</strong>
+            </a>
         </div>
 
         <nav class="sidebar-nav">
@@ -1724,6 +1817,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
             <!-- Right group: notifications + user menu -->
             <div class="right-group">
+                <a class="status-chip" href="{{ url_for('settings') }}" title="App mode">{{ app_modes[app_mode].label if app_modes is defined and app_mode in app_modes else (app_mode or 'Full') }}</a>
+                <a class="status-chip" href="{{ url_for('plans') }}" title="Package">{{ plan.label if plan else 'New user' }}</a>
                 <button type="button" class="theme-toggle" id="themeToggle" title="Switch dark / light mode" aria-label="Switch dark or light mode">🌙</button>
                 <button type="button" class="theme-toggle" id="soundToggle" title="Sound cues on / off" aria-label="Sound cues on or off">🔔</button>
                 <span class="live-clock" id="liveClock" title="Local time"></span>
@@ -2134,6 +2229,41 @@ function kazeDelRow(btn) {
             play(name);
         });
     });
+})();
+</script>
+
+<script>
+(function () {
+  var meta = document.querySelector('meta[name="csrf-token"]');
+  if (!meta) return;
+  var token = meta.content;
+  document.querySelectorAll('form').forEach(function (form) {
+    var method = (form.getAttribute('method') || 'get').toLowerCase();
+    if (method !== 'post') return;
+    if (!form.querySelector('input[name="csrf_token"]')) {
+      var input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'csrf_token';
+      input.value = token;
+      form.appendChild(input);
+    }
+  });
+  if (window.fetch) {
+    var orig = window.fetch;
+    window.fetch = function (url, opts) {
+      opts = opts || {};
+      var method = String(opts.method || 'GET').toUpperCase();
+      if (method !== 'GET' && method !== 'HEAD') {
+        if (opts.headers instanceof Headers) {
+          if (!opts.headers.has('X-CSRF-Token')) opts.headers.set('X-CSRF-Token', token);
+        } else {
+          opts.headers = opts.headers || {};
+          if (!opts.headers['X-CSRF-Token']) opts.headers['X-CSRF-Token'] = token;
+        }
+      }
+      return orig.call(this, url, opts);
+    };
+  }
 })();
 </script>
 </body>

@@ -76,7 +76,7 @@ def from_stripe_amount(units, currency='USD'):
     return units / 100.0
 
 
-def create_checkout(settings, *, amount, title, success_url, cancel_url, metadata):
+def create_checkout(settings, *, amount, title, success_url, cancel_url, metadata, embedded=False):
     secret, _, _ = keys_from(settings)
     if not secret:
         return None, 'Stripe secret key is not set. Add it in Settings or as STRIPE_SECRET_KEY.'
@@ -89,11 +89,9 @@ def create_checkout(settings, *, amount, title, success_url, cancel_url, metadat
     if units <= 0:
         return None, 'Amount must be greater than zero.'
     try:
-        session = stripe.checkout.Session.create(
-            mode='payment',
-            success_url=success_url,
-            cancel_url=cancel_url,
-            line_items=[{
+        payload = {
+            'mode': 'payment',
+            'line_items': [{
                 'quantity': 1,
                 'price_data': {
                     'currency': currency.lower(),
@@ -101,8 +99,15 @@ def create_checkout(settings, *, amount, title, success_url, cancel_url, metadat
                     'product_data': {'name': (title or 'KAZE payment')[:120]},
                 },
             }],
-            metadata={str(k): str(v)[:500] for k, v in (metadata or {}).items()},
-        )
+            'metadata': {str(k): str(v)[:500] for k, v in (metadata or {}).items()},
+        }
+        if embedded:
+            payload['ui_mode'] = 'embedded'
+            payload['return_url'] = success_url
+        else:
+            payload['success_url'] = success_url
+            payload['cancel_url'] = cancel_url
+        session = stripe.checkout.Session.create(**payload)
         return session, None
     except Exception as exc:
         return None, 'Stripe could not start checkout: {}'.format(exc)

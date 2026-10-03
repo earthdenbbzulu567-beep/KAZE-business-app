@@ -523,6 +523,39 @@
 })();
 </script>
 
+<h2>Two-factor authentication</h2>
+<div class="widget">
+    {% if totp_on %}
+    <p>Authenticator codes are required after your password or social sign-in.</p>
+    {% if backup_codes %}
+    <p><strong>Save these backup codes now.</strong> Each one works once if you lose the phone.</p>
+    <pre style="white-space:pre-wrap;">{{ backup_codes|join('\n') }}</pre>
+    {% endif %}
+    <form method="POST" action="{{ url_for('twofa_disable') }}">
+        <div class="form-group"><label>Password</label><input type="password" name="password" required autocomplete="current-password"></div>
+        <div class="form-group"><label>Current code or backup code</label><input type="text" name="code" required autocomplete="one-time-code"></div>
+        <button type="submit" class="btn-secondary">Turn off two-factor</button>
+    </form>
+    {% elif totp_secret %}
+    <p>Add KAZE in your authenticator app, then enter a code to finish.</p>
+    {% if totp_qr %}{{ totp_qr|safe }}{% endif %}
+    <p>Manual key: <code>{{ totp_secret }}</code></p>
+    {% if backup_codes %}
+    <p>Backup codes (save these):</p>
+    <pre style="white-space:pre-wrap;">{{ backup_codes|join('\n') }}</pre>
+    {% endif %}
+    <form method="POST" action="{{ url_for('twofa_confirm') }}">
+        <div class="form-group"><label>6-digit code</label><input type="text" name="code" inputmode="numeric" maxlength="6" required autocomplete="one-time-code"></div>
+        <button type="submit">Turn on two-factor</button>
+    </form>
+    {% else %}
+    <p>Use an authenticator app such as Google Authenticator, Authy, or Microsoft Authenticator. KAZE will ask for a code after the password.</p>
+    <form method="POST" action="{{ url_for('twofa_start') }}">
+        <button type="submit">Set up two-factor</button>
+    </form>
+    {% endif %}
+</div>
+
 <h2>Password</h2>
 <form method="POST" action="{{ url_for('change_password') }}">
     <div class="form-group"><label>Current password</label><input type="password" name="old_password" required></div>

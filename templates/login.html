@@ -1,10 +1,13 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="auth-card">
+    <img src="{{ url_for('static', filename='logo_icon.png') }}" alt="KAZE" style="width:64px;height:64px;border-radius:16px;display:block;margin:0 auto 0.7rem;background:#070707;">
     <p class="home-kicker" style="text-align:center;">KAZE Traders</p>
     <h1>Welcome back</h1>
     <p style="margin-top:-0.55rem; margin-bottom:1.25rem; text-align:center; color:var(--text2);">Log in and pick up the trading day.</p>
     <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="next" value="{{ next or '' }}">
         <div class="form-group">
             <label>Email or username</label>
             <input type="text" name="login_input" placeholder="Email or username" required autocomplete="username">

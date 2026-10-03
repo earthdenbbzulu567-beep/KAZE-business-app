@@ -222,7 +222,7 @@
                     <td>{{ sale.customer_email or '—' }}</td>
                     <td>{{ sale.payment_method or 'cash' }}</td>
                     <td>
-                        <a href="{{ url_for('sale_receipt', id=sale.id) }}">Receipt</a>{% if stripe_ready %} <a href="{{ url_for('pay_sale', id=sale.id) }}">Pay with card</a>{% endif %} <a href="{{ url_for('sale_to_invoice', id=sale.id) }}">Invoice</a> <a href="{{ url_for('repeat_sale', id=sale.id) }}" onclick="return confirm('Record the same sale again for today?')">Repeat</a>
+                        <a href="{{ url_for('sale_receipt', id=sale.id) }}">Receipt</a><a href="{{ url_for('kaze_checkout', kind='sale', id=sale.id) }}">Pay now</a> <a href="{{ url_for('sale_to_invoice', id=sale.id) }}">Invoice</a> <a href="{{ url_for('repeat_sale', id=sale.id) }}" onclick="return confirm('Record the same sale again for today?')">Repeat</a>
                         <a href="{{ url_for('delete_sale', id=sale.id) }}" onclick="return confirm('Delete? This will restore stock.')">Delete</a>
                     </td>
                 </tr>

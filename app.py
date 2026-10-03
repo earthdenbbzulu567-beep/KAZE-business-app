@@ -1,13 +1,18 @@
 # KAZE Traders Business Manager
 # Flask + PostgreSQL. Run with: gunicorn app:app
 
-from flask import Flask, render_template, request, redirect, url_for, flash, Response, send_file, g
+from flask import Flask, render_template, request, redirect, url_for, flash, Response, send_file, g, session
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import secrets
 import io
 import csv
+import hmac
+import hashlib
+import struct
+import base64
+import time
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from datetime import datetime, timedelta
@@ -39,6 +44,64 @@ app.config['TEMPLATES_AUTO_RELOAD'] = False
 app.config['SESSION_REFRESH_EACH_REQUEST'] = False
 app.config['JSONIFY_PRETTYPRINT_REGULAR'] = False
 app.config['MAX_CONTENT_LENGTH'] = 8 * 1024 * 1024
+
+
+def _totp_new_secret():
+    return base64.b32encode(secrets.token_bytes(20)).decode('ascii').rstrip('=')
+
+def _totp_at(secret, at):
+    raw = (secret or '').strip().replace(' ', '').upper()
+    raw += '=' * ((8 - len(raw) % 8) % 8)
+    digest = hmac.new(base64.b32decode(raw), struct.pack('>Q', int(at // 30)), hashlib.sha1).digest()
+    offset = digest[-1] & 15
+    code = struct.unpack('>I', digest[offset:offset + 4])[0] & 0x7fffffff
+    return str(code % 1000000).zfill(6)
+
+def _totp_ok(secret, code):
+    code = ''.join(ch for ch in (code or '') if ch.isdigit())
+    if len(code) != 6 or not secret:
+        return False
+    now = time.time()
+    return any(secrets.compare_digest(_totp_at(secret, now + drift), code) for drift in (-30, 0, 30))
+
+def _backup_codes():
+    plain = ['%s-%s' % (secrets.token_hex(2), secrets.token_hex(2)) for _ in range(8)]
+    return plain, json.dumps([generate_password_hash(c) for c in plain])
+
+def _backup_take(stored, code):
+    code = (code or '').strip().lower()
+    try:
+        hashes = json.loads(stored or '[]')
+    except Exception:
+        hashes = []
+    kept, hit = [], False
+    for item in hashes:
+        if not hit and check_password_hash(item, code):
+            hit = True
+            continue
+        kept.append(item)
+    return hit, json.dumps(kept)
+
+def _needs_2fa(user):
+    return bool(user and int(user.get('totp_enabled') or 0) == 1 and (user.get('totp_secret') or ''))
+
+def _begin_2fa(user):
+    session['pre_2fa_id'] = int(user['id'])
+    session['pre_2fa_exp'] = time.time() + 300
+    return redirect(url_for('login_2fa'))
+
+def _otpauth_uri(secret, label):
+    label = (label or 'user').replace(' ', '')[:40]
+    return 'otpauth://totp/KAZE:{0}?secret={1}&issuer=KAZE&digits=6&period=30'.format(label, secret)
+
+def _qr_svg(payload):
+    try:
+        import qrcode, qrcode.image.svg
+        img = qrcode.make(payload, image_factory=qrcode.image.svg.SvgPathImage, border=2)
+        buf = io.BytesIO(); img.save(buf)
+        return buf.getvalue().decode('utf-8', 'replace')
+    except Exception:
+        return ''
 
 # --------------------- Helper: time since (for activity feed) ---------------------
 @app.template_filter('timesince')
@@ -320,6 +383,9 @@ def init_db():
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TEXT DEFAULT ''")
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_provider TEXT DEFAULT ''")
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_id TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_enabled INTEGER DEFAULT 0")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_backup TEXT DEFAULT ''")
     cur.execute('''
         CREATE TABLE IF NOT EXISTS income (
             id SERIAL PRIMARY KEY,
@@ -2687,24 +2753,119 @@ def oauth_callback(provider):
         flash('Welcome. Your {} account is linked to KAZE.'.format(oauth_login.PROVIDERS[provider]['label']), 'success')
     else:
         flash('Signed in with {}.'.format(oauth_login.PROVIDERS[provider]['label']), 'success')
+    if _needs_2fa(user):
+        return _begin_2fa(user)
     return _complete_local_login(user)
 
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        login_input = request.form['login_input']
-        password = request.form['password']
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute('SELECT * FROM users WHERE username = %s OR email = %s', (login_input, login_input))
-        user = cur.fetchone()
-        cur.close()
-        conn.close()
+        login_input = (request.form.get('login_input') or '').strip()
+        password = request.form.get('password') or ''
+        user = None
+        if login_input and password:
+            conn = get_db()
+            cur = conn.cursor()
+            cur.execute('SELECT * FROM users WHERE username = %s OR email = %s', (login_input, login_input))
+            user = cur.fetchone()
+            cur.close(); conn.close()
         if user and check_password_hash(user['password'], password):
+            if _needs_2fa(user):
+                return _begin_2fa(user)
             return _complete_local_login(user)
         flash('Invalid credentials', 'danger')
     return render_template('login.html')
+
+
+@app.route('/login/2fa', methods=['GET', 'POST'])
+def login_2fa():
+    uid = session.get('pre_2fa_id')
+    exp = float(session.get('pre_2fa_exp') or 0)
+    if not uid or exp < time.time():
+        session.pop('pre_2fa_id', None)
+        flash('The sign-in check expired. Log in again.', 'info')
+        return redirect(url_for('login'))
+    if request.method == 'POST':
+        code = (request.form.get('code') or '').strip()
+        conn = get_db(); cur = conn.cursor()
+        cur.execute('SELECT * FROM users WHERE id=%s', (uid,))
+        user = cur.fetchone()
+        if not user or not _needs_2fa(user):
+            cur.close(); conn.close()
+            session.pop('pre_2fa_id', None)
+            flash('Two-factor is not on for that account.', 'danger')
+            return redirect(url_for('login'))
+        ok = _totp_ok(user.get('totp_secret'), code)
+        if not ok:
+            ok, left = _backup_take(user.get('totp_backup') or '', code)
+            if ok:
+                cur.execute('UPDATE users SET totp_backup=%s WHERE id=%s', (left, uid))
+                conn.commit()
+        cur.close(); conn.close()
+        if not ok:
+            flash('That code is not valid.', 'danger')
+            return render_template('login_2fa.html')
+        session.pop('pre_2fa_id', None)
+        session.pop('pre_2fa_exp', None)
+        return _complete_local_login(user)
+    return render_template('login_2fa.html')
+
+
+@app.route('/settings/2fa/start', methods=['POST'])
+@login_required
+def twofa_start():
+    secret = _totp_new_secret()
+    plain, hashed = _backup_codes()
+    conn = get_db(); cur = conn.cursor()
+    cur.execute('UPDATE users SET totp_secret=%s, totp_enabled=0, totp_backup=%s WHERE id=%s', (secret, hashed, current_user.db_id))
+    conn.commit(); cur.close(); conn.close()
+    session['totp_backup_show'] = plain
+    flash('Scan the code, then enter a 6-digit code to turn two-factor on.', 'info')
+    return redirect(url_for('settings'))
+
+
+@app.route('/settings/2fa/confirm', methods=['POST'])
+@login_required
+def twofa_confirm():
+    code = (request.form.get('code') or '').strip()
+    conn = get_db(); cur = conn.cursor()
+    cur.execute('SELECT totp_secret FROM users WHERE id=%s', (current_user.db_id,))
+    row = cur.fetchone() or {}
+    if not _totp_ok(row.get('totp_secret'), code):
+        cur.close(); conn.close()
+        flash('That code did not match. Check the time on your phone and try again.', 'danger')
+        return redirect(url_for('settings'))
+    cur.execute('UPDATE users SET totp_enabled=1 WHERE id=%s', (current_user.db_id,))
+    conn.commit(); cur.close(); conn.close()
+    flash('Two-factor authentication is on. Save the backup codes.', 'success')
+    return redirect(url_for('settings'))
+
+
+@app.route('/settings/2fa/disable', methods=['POST'])
+@login_required
+def twofa_disable():
+    password = request.form.get('password') or ''
+    code = (request.form.get('code') or '').strip()
+    conn = get_db(); cur = conn.cursor()
+    cur.execute('SELECT password, totp_secret, totp_enabled, totp_backup FROM users WHERE id=%s', (current_user.db_id,))
+    row = cur.fetchone() or {}
+    if not row or not check_password_hash(row.get('password') or '', password):
+        cur.close(); conn.close()
+        flash('Password did not match.', 'danger')
+        return redirect(url_for('settings'))
+    ok = _totp_ok(row.get('totp_secret'), code)
+    if not ok:
+        ok, _left = _backup_take(row.get('totp_backup') or '', code)
+    if int(row.get('totp_enabled') or 0) == 1 and not ok:
+        cur.close(); conn.close()
+        flash('Enter a current code or a backup code to turn two-factor off.', 'danger')
+        return redirect(url_for('settings'))
+    cur.execute("UPDATE users SET totp_enabled=0, totp_secret='', totp_backup='' WHERE id=%s", (current_user.db_id,))
+    conn.commit(); cur.close(); conn.close()
+    session.pop('totp_backup_show', None)
+    flash('Two-factor authentication is off.', 'success')
+    return redirect(url_for('settings'))
 
 
 @app.route('/dashboard')
@@ -3709,7 +3870,20 @@ def settings():
     cur.close()
     conn.close()
     custom_modules = _parse_custom_modules(settings_row.get('enabled_modules') if settings_row else '')
-    return render_template('settings.html', settings=settings_row, custom_modules=custom_modules)
+    totp_on, totp_secret = 0, ''
+    try:
+        tcur = get_db().cursor()
+        tcur.execute('SELECT totp_enabled, totp_secret FROM users WHERE id=%s', (current_user.db_id,))
+        totp_row = tcur.fetchone() or {}
+        tcur.close()
+        totp_on = int(totp_row.get('totp_enabled') or 0)
+        if not totp_on:
+            totp_secret = totp_row.get('totp_secret') or ''
+    except Exception:
+        totp_on, totp_secret = 0, ''
+    backup_codes = session.pop('totp_backup_show', None) if totp_on else (session.get('totp_backup_show') or [])
+    return render_template('settings.html', settings=settings_row, custom_modules=custom_modules, totp_on=totp_on, totp_secret=totp_secret, totp_qr=_qr_svg(_otpauth_uri(totp_secret, current_user.username)) if totp_secret else '', backup_codes=backup_codes or [])
+
 
 # ======================== Cash Book ========================
 
@@ -8179,82 +8353,148 @@ def _record_payment(uid, kind, record_id, amount, title, checkout_id, provider='
         pass
 
 
-def _start_checkout(kind, record_id, amount, title, cancel_endpoint='dashboard', method=None):
+def _checkout_subject(kind, record_id, tier=''):
     settings = _stripe_settings()
-    method = (method or request.values.get('method') or gateways.default_method(settings) or 'stripe').lower()
-    if method not in ('stripe', 'paypal', 'flutterwave', 'bank'):
-        method = 'stripe'
+    kind = (kind or 'custom').strip().lower()
     uid = current_user.id
-    currency = stripe_payments.currency_code(settings)
+    title, amount, party, back = 'KAZE payment', 0, '', 'payments'
+    if kind == 'plan':
+        tier = (tier or '').strip().lower()
+        if not tier and record_id is not None and 0 <= int(record_id) < len(PLAN_ORDER):
+            tier = PLAN_ORDER[int(record_id)]
+        row = next((t for t in priced_tiers(settings) if t['key'] == tier), None)
+        if not row or not row.get('price'):
+            return None, 'That package does not need a payment.'
+        title, amount, back = 'KAZE package: ' + tier, row['price'], 'plans'
+        record_id = PLAN_RANK.get(tier, record_id or 0)
+    elif kind == 'session':
+        conn = get_db(); cur = conn.cursor()
+        cur.execute('SELECT price, customer_name FROM service_sessions WHERE id=%s AND user_id=%s', (record_id, uid))
+        row = cur.fetchone(); cur.close(); conn.close()
+        if not row:
+            return None, 'Session not found.'
+        title, amount, party, back = 'Service session', row.get('price') or 0, row.get('customer_name') or '', 'services'
+    elif kind == 'book':
+        conn = get_db(); cur = conn.cursor()
+        cur.execute('SELECT amount, title, party FROM bookkeeping_docs WHERE id=%s AND user_id=%s', (record_id, uid))
+        row = cur.fetchone(); cur.close(); conn.close()
+        if not row:
+            return None, 'Document not found.'
+        title, amount, party, back = row.get('title') or 'Document', row.get('amount') or 0, row.get('party') or '', 'bookkeeping'
+    elif kind == 'sale':
+        conn = get_db(); cur = conn.cursor()
+        cur.execute('SELECT total_amount, customer_name FROM sales WHERE id=%s AND user_id=%s', (record_id, uid))
+        row = cur.fetchone(); cur.close(); conn.close()
+        if not row:
+            return None, 'Sale not found.'
+        title, amount, party, back = 'Sale receipt', row.get('total_amount') or 0, row.get('customer_name') or '', 'sales'
+    elif kind == 'shop':
+        conn = get_db(); cur = conn.cursor()
+        cur.execute('SELECT amount, buyer FROM shop_orders WHERE id=%s AND user_id=%s', (record_id, uid))
+        row = cur.fetchone(); cur.close(); conn.close()
+        if not row:
+            return None, 'Order not found.'
+        title, amount, party, back = 'Shop order', row.get('amount') or 0, row.get('buyer') or '', 'shop'
+    elif kind == 'custom':
+        try:
+            amount = float(request.values.get('amount') or 0)
+        except (TypeError, ValueError):
+            amount = 0
+        title = (request.values.get('title') or 'Custom payment')[:160]
+    else:
+        return None, 'Unknown payment.'
+    return {'kind': kind, 'record_id': record_id or 0, 'tier': tier or '', 'title': title, 'amount': amount, 'party': party, 'back': back, 'currency': stripe_payments.currency_code(settings), 'settings': settings}, None
 
+
+def _start_checkout(kind, record_id, amount, title, cancel_endpoint='dashboard', method=None):
+    tier = request.values.get('tier') or ''
+    if kind == 'plan' and not tier:
+        try:
+            tier = PLAN_ORDER[int(record_id)]
+        except (TypeError, ValueError, IndexError):
+            tier = ''
+    return redirect(url_for('kaze_checkout', kind=kind, id=record_id or 0, tier=tier, method=(method or request.values.get('method') or ''), title=title or '', amount=amount or 0))
+
+
+@app.route('/checkout')
+@login_required
+def kaze_checkout():
+    kind = (request.args.get('kind') or 'custom').strip().lower()
+    try:
+        record_id = int(request.args.get('id') or 0)
+    except ValueError:
+        record_id = 0
+    subject, err = _checkout_subject(kind, record_id, (request.args.get('tier') or '').strip().lower())
+    if err:
+        flash(err, 'danger')
+        return redirect(url_for('payments'))
+    settings = subject.pop('settings')
+    return render_template('checkout.html', kind=subject['kind'], record_id=subject['record_id'], tier=subject['tier'], title=subject['title'], party=subject['party'], amount=subject['amount'], currency=subject['currency'], method=(request.args.get('method') or gateways.default_method(settings) or '').lower(), back=subject['back'], pay_methods=gateways.ready_methods(settings))
+
+
+@app.route('/checkout/embed', methods=['POST'])
+@login_required
+def kaze_checkout_embed():
+    kind = (request.form.get('kind') or 'custom').strip().lower()
+    try:
+        record_id = int(request.form.get('id') or 0)
+    except ValueError:
+        record_id = 0
+    subject, err = _checkout_subject(kind, record_id, (request.form.get('tier') or '').strip().lower())
+    if err:
+        return {'ok': False, 'error': err}, 400
+    if subject['amount'] <= 0:
+        return {'ok': False, 'error': 'Amount must be greater than zero.'}, 400
+    settings = subject.pop('settings')
+    method = (request.form.get('method') or '').lower()
+    uid = current_user.id
+    meta = {'user_id': uid, 'kind': subject['kind'], 'record_id': subject['record_id'], 'tier': subject['tier'], 'title': subject['title']}
     if method == 'stripe':
         if not stripe_payments.stripe_ready(settings):
-            flash('Stripe is not set up yet. Add Visa/Mastercard keys in Settings.', 'danger')
-            return redirect(url_for('settings'))
+            return {'ok': False, 'error': 'Stripe is not set up yet.'}, 400
         success = url_for('stripe_pay_success', _external=True) + '?session_id={CHECKOUT_SESSION_ID}'
-        cancel = url_for('stripe_pay_cancel', _external=True)
-        session, err = stripe_payments.create_checkout(
-            settings,
-            amount=amount,
-            title=title,
-            success_url=success,
-            cancel_url=cancel,
-            metadata={'user_id': uid, 'kind': kind, 'record_id': record_id or 0, 'title': title},
-        )
+        sess, err = stripe_payments.create_checkout(settings, amount=subject['amount'], title=subject['title'], success_url=success, cancel_url=url_for('stripe_pay_cancel', _external=True), metadata=meta, embedded=True)
         if err:
-            flash(err, 'danger')
-            return redirect(url_for(cancel_endpoint))
-        _record_payment(uid, kind, record_id, amount, title, session.id, 'stripe')
-        return redirect(session.url, code=303)
-
+            return {'ok': False, 'error': err}, 400
+        _record_payment(uid, subject['kind'], subject['record_id'], subject['amount'], subject['title'], sess.id, 'stripe')
+        return {'ok': True, 'method': 'stripe', 'publishable': stripe_payments.keys_from(settings)[1], 'client_secret': sess.client_secret}
     if method == 'paypal':
         if not gateways.paypal_ready(settings):
-            flash('PayPal is not set up yet. Add the client id and secret in Settings.', 'danger')
-            return redirect(url_for('settings'))
-        custom = 'kaze-%s-%s-%s' % (kind, record_id or 0, uid)
-        order, err = gateways.paypal_create_order(
-            settings,
-            amount=amount,
-            currency=currency,
-            title=title,
-            return_url=url_for('paypal_return', _external=True),
-            cancel_url=url_for('stripe_pay_cancel', _external=True),
-            custom_id=custom,
-        )
+            return {'ok': False, 'error': 'PayPal is not set up yet.'}, 400
+        order, err = gateways.paypal_create_order(settings, amount=subject['amount'], currency=subject['currency'], title=subject['title'], return_url=url_for('paypal_return', _external=True), cancel_url=url_for('stripe_pay_cancel', _external=True), custom_id='kaze-%s-%s-%s' % (subject['kind'], subject['record_id'], uid))
         if err:
-            flash(err, 'danger')
-            return redirect(url_for(cancel_endpoint))
-        _record_payment(uid, kind, record_id, amount, title, order['id'], 'paypal')
-        return redirect(order['url'], code=303)
-
+            return {'ok': False, 'error': err}, 400
+        _record_payment(uid, subject['kind'], subject['record_id'], subject['amount'], subject['title'], order['id'], 'paypal')
+        return {'ok': True, 'method': 'paypal', 'order_id': order['id'], 'client_id': gateways.paypal_keys(settings)[0], 'currency': subject['currency']}
     if method == 'flutterwave':
         if not integrations.flutterwave_ready(settings):
-            flash('Flutterwave is not set up yet. Add keys in Settings.', 'danger')
-            return redirect(url_for('settings'))
-        tx_ref = 'kaze-%s-%s-%s' % (kind, record_id or 0, int(datetime.now().timestamp()))
-        pay, err = integrations.create_flutterwave_payment(
-            settings,
-            tx_ref=tx_ref,
-            amount=amount,
-            currency=currency,
-            redirect_url=url_for('flutterwave_return', _external=True),
-            title=title,
-            customer_name=getattr(current_user, 'username', '') or '',
-            customer_email=getattr(current_user, 'email', '') or '',
-            meta={'user_id': uid, 'kind': kind, 'record_id': record_id or 0},
-        )
-        if err:
-            flash(err, 'danger')
-            return redirect(url_for(cancel_endpoint))
-        _record_payment(uid, kind, record_id, amount, title, tx_ref, 'flutterwave')
-        return redirect(pay['link'], code=303)
+            return {'ok': False, 'error': 'Flutterwave is not set up yet.'}, 400
+        tx_ref = 'kaze-%s-%s-%s' % (subject['kind'], subject['record_id'], int(datetime.now().timestamp()))
+        _record_payment(uid, subject['kind'], subject['record_id'], subject['amount'], subject['title'], tx_ref, 'flutterwave')
+        _s, public, _h = integrations.flutterwave_keys(settings)
+        return {'ok': True, 'method': 'flutterwave', 'public_key': public, 'tx_ref': tx_ref, 'amount': subject['amount'], 'currency': subject['currency'], 'title': subject['title'], 'email': getattr(current_user, 'email', '') or 'shop@kaze.local', 'name': getattr(current_user, 'username', '') or 'KAZE', 'redirect': url_for('flutterwave_return', _external=True)}
+    if method == 'bank':
+        if not gateways.bank_ready(settings):
+            return {'ok': False, 'error': 'Add bank details in Settings first.'}, 400
+        ref = 'KAZE-%s-%s-%s' % (subject['kind'].upper()[:8], uid, int(datetime.now().timestamp()))
+        _record_payment(uid, subject['kind'], subject['record_id'], subject['amount'], subject['title'], ref, 'bank')
+        return {'ok': True, 'method': 'bank', 'ref': ref, 'bank': gateways.bank_details(settings), 'confirm': url_for('bank_pay_confirm', ref=ref)}
+    return {'ok': False, 'error': 'Choose a payment method that is switched on.'}, 400
 
-    if not gateways.bank_ready(settings):
-        flash('Add current-account details in Settings to take bank transfers.', 'danger')
-        return redirect(url_for('settings'))
-    ref = 'KAZE-%s-%s-%s' % (kind.upper()[:8], uid, int(datetime.now().timestamp()))
-    _record_payment(uid, kind, record_id, amount, title, ref, 'bank')
-    return redirect(url_for('bank_pay_notice', ref=ref))
+
+@app.route('/checkout/paypal/capture', methods=['POST'])
+@login_required
+def kaze_paypal_capture():
+    order_id = (request.form.get('order_id') or '').strip()
+    payload, err = gateways.paypal_capture(_stripe_settings(), order_id)
+    if err:
+        return {'ok': False, 'error': err}, 400
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("SELECT * FROM stripe_payments WHERE user_id=%s AND checkout_id=%s ORDER BY id DESC LIMIT 1", (current_user.id, order_id))
+    row = cur.fetchone() or {}
+    cur.close(); conn.close()
+    _fulfill_stripe_payment(current_user.id, row.get('kind') or 'custom', row.get('record_id') or 0, order_id, order_id, row.get('amount'))
+    return {'ok': True, 'next': url_for('payments')}
 
 
 @app.route('/pay/session/<int:id>')

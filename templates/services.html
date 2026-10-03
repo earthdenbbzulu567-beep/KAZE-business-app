@@ -244,7 +244,7 @@
         {% else %}<span class="status-pill">Booked</span>{% endif %}
     </td>
     <td>
-        {% if s.status != 'done' %}<a href="{{ url_for('set_session_status', id=s.id, action='done') }}">Mark done</a>{% if stripe_ready %} <a href="{{ url_for('pay_service_session', id=s.id) }}">Pay with card</a>{% endif %}{% endif %}
+        {% if s.status != 'done' %}<a href="{{ url_for('set_session_status', id=s.id, action='done') }}">Mark done</a><a href="{{ url_for('kaze_checkout', kind='session', id=s.id) }}">Pay now</a>{% endif %}
         {% if s.status == 'booked' %}<a href="{{ url_for('set_session_status', id=s.id, action='cancelled') }}">Cancel</a>{% endif %}
         {% if s.status == 'cancelled' %}<a href="{{ url_for('set_session_status', id=s.id, action='booked') }}">Rebook</a>{% endif %}
         <a href="{{ url_for('delete_service_session', id=s.id) }}" class="delete-btn" onclick="return confirm('Delete this session?')">Delete</a>
