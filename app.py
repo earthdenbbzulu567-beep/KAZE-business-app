@@ -138,6 +138,10 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 
 
+@app.route('/favicon.ico')
+def favicon():
+    return redirect(url_for('static', filename='favicon-32.png'))
+
 @app.route('/healthz')
 def healthz():
     return {'ok': True}, 200
@@ -8371,131 +8375,104 @@ def _checkout_subject(kind, record_id, tier=''):
         conn = get_db(); cur = conn.cursor()
         cur.execute('SELECT price, customer_name FROM service_sessions WHERE id=%s AND user_id=%s', (record_id, uid))
         row = cur.fetchone(); cur.close(); conn.close()
-        if not row:
-            return None, 'Session not found.'
+        if not row: return None, 'Session not found.'
         title, amount, party, back = 'Service session', row.get('price') or 0, row.get('customer_name') or '', 'services'
     elif kind == 'book':
         conn = get_db(); cur = conn.cursor()
         cur.execute('SELECT amount, title, party FROM bookkeeping_docs WHERE id=%s AND user_id=%s', (record_id, uid))
         row = cur.fetchone(); cur.close(); conn.close()
-        if not row:
-            return None, 'Document not found.'
+        if not row: return None, 'Document not found.'
         title, amount, party, back = row.get('title') or 'Document', row.get('amount') or 0, row.get('party') or '', 'bookkeeping'
     elif kind == 'sale':
         conn = get_db(); cur = conn.cursor()
         cur.execute('SELECT total_amount, customer_name FROM sales WHERE id=%s AND user_id=%s', (record_id, uid))
         row = cur.fetchone(); cur.close(); conn.close()
-        if not row:
-            return None, 'Sale not found.'
+        if not row: return None, 'Sale not found.'
         title, amount, party, back = 'Sale receipt', row.get('total_amount') or 0, row.get('customer_name') or '', 'sales'
     elif kind == 'shop':
         conn = get_db(); cur = conn.cursor()
         cur.execute('SELECT amount, buyer FROM shop_orders WHERE id=%s AND user_id=%s', (record_id, uid))
         row = cur.fetchone(); cur.close(); conn.close()
-        if not row:
-            return None, 'Order not found.'
+        if not row: return None, 'Order not found.'
         title, amount, party, back = 'Shop order', row.get('amount') or 0, row.get('buyer') or '', 'shop'
     elif kind == 'custom':
-        try:
-            amount = float(request.values.get('amount') or 0)
-        except (TypeError, ValueError):
-            amount = 0
+        try: amount = float(request.values.get('amount') or 0)
+        except (TypeError, ValueError): amount = 0
         title = (request.values.get('title') or 'Custom payment')[:160]
     else:
         return None, 'Unknown payment.'
     return {'kind': kind, 'record_id': record_id or 0, 'tier': tier or '', 'title': title, 'amount': amount, 'party': party, 'back': back, 'currency': stripe_payments.currency_code(settings), 'settings': settings}, None
 
-
 def _start_checkout(kind, record_id, amount, title, cancel_endpoint='dashboard', method=None):
     tier = request.values.get('tier') or ''
     if kind == 'plan' and not tier:
-        try:
-            tier = PLAN_ORDER[int(record_id)]
-        except (TypeError, ValueError, IndexError):
-            tier = ''
+        try: tier = PLAN_ORDER[int(record_id)]
+        except (TypeError, ValueError, IndexError): tier = ''
     return redirect(url_for('kaze_checkout', kind=kind, id=record_id or 0, tier=tier, method=(method or request.values.get('method') or ''), title=title or '', amount=amount or 0))
-
 
 @app.route('/checkout')
 @login_required
 def kaze_checkout():
     kind = (request.args.get('kind') or 'custom').strip().lower()
-    try:
-        record_id = int(request.args.get('id') or 0)
-    except ValueError:
-        record_id = 0
+    try: record_id = int(request.args.get('id') or 0)
+    except ValueError: record_id = 0
     subject, err = _checkout_subject(kind, record_id, (request.args.get('tier') or '').strip().lower())
     if err:
-        flash(err, 'danger')
-        return redirect(url_for('payments'))
+        flash(err, 'danger'); return redirect(url_for('payments'))
     settings = subject.pop('settings')
     return render_template('checkout.html', kind=subject['kind'], record_id=subject['record_id'], tier=subject['tier'], title=subject['title'], party=subject['party'], amount=subject['amount'], currency=subject['currency'], method=(request.args.get('method') or gateways.default_method(settings) or '').lower(), back=subject['back'], pay_methods=gateways.ready_methods(settings))
-
 
 @app.route('/checkout/embed', methods=['POST'])
 @login_required
 def kaze_checkout_embed():
     kind = (request.form.get('kind') or 'custom').strip().lower()
-    try:
-        record_id = int(request.form.get('id') or 0)
-    except ValueError:
-        record_id = 0
+    try: record_id = int(request.form.get('id') or 0)
+    except ValueError: record_id = 0
     subject, err = _checkout_subject(kind, record_id, (request.form.get('tier') or '').strip().lower())
-    if err:
-        return {'ok': False, 'error': err}, 400
-    if subject['amount'] <= 0:
-        return {'ok': False, 'error': 'Amount must be greater than zero.'}, 400
+    if err: return {'ok': False, 'error': err}, 400
+    if subject['amount'] <= 0: return {'ok': False, 'error': 'Amount must be greater than zero.'}, 400
     settings = subject.pop('settings')
     method = (request.form.get('method') or '').lower()
     uid = current_user.id
     meta = {'user_id': uid, 'kind': subject['kind'], 'record_id': subject['record_id'], 'tier': subject['tier'], 'title': subject['title']}
     if method == 'stripe':
-        if not stripe_payments.stripe_ready(settings):
-            return {'ok': False, 'error': 'Stripe is not set up yet.'}, 400
+        if not stripe_payments.stripe_ready(settings): return {'ok': False, 'error': 'Stripe is not set up yet.'}, 400
         success = url_for('stripe_pay_success', _external=True) + '?session_id={CHECKOUT_SESSION_ID}'
         sess, err = stripe_payments.create_checkout(settings, amount=subject['amount'], title=subject['title'], success_url=success, cancel_url=url_for('stripe_pay_cancel', _external=True), metadata=meta, embedded=True)
-        if err:
-            return {'ok': False, 'error': err}, 400
+        if err: return {'ok': False, 'error': err}, 400
         _record_payment(uid, subject['kind'], subject['record_id'], subject['amount'], subject['title'], sess.id, 'stripe')
         return {'ok': True, 'method': 'stripe', 'publishable': stripe_payments.keys_from(settings)[1], 'client_secret': sess.client_secret}
     if method == 'paypal':
-        if not gateways.paypal_ready(settings):
-            return {'ok': False, 'error': 'PayPal is not set up yet.'}, 400
+        if not gateways.paypal_ready(settings): return {'ok': False, 'error': 'PayPal is not set up yet.'}, 400
         order, err = gateways.paypal_create_order(settings, amount=subject['amount'], currency=subject['currency'], title=subject['title'], return_url=url_for('paypal_return', _external=True), cancel_url=url_for('stripe_pay_cancel', _external=True), custom_id='kaze-%s-%s-%s' % (subject['kind'], subject['record_id'], uid))
-        if err:
-            return {'ok': False, 'error': err}, 400
+        if err: return {'ok': False, 'error': err}, 400
         _record_payment(uid, subject['kind'], subject['record_id'], subject['amount'], subject['title'], order['id'], 'paypal')
         return {'ok': True, 'method': 'paypal', 'order_id': order['id'], 'client_id': gateways.paypal_keys(settings)[0], 'currency': subject['currency']}
     if method == 'flutterwave':
-        if not integrations.flutterwave_ready(settings):
-            return {'ok': False, 'error': 'Flutterwave is not set up yet.'}, 400
+        if not integrations.flutterwave_ready(settings): return {'ok': False, 'error': 'Flutterwave is not set up yet.'}, 400
         tx_ref = 'kaze-%s-%s-%s' % (subject['kind'], subject['record_id'], int(datetime.now().timestamp()))
         _record_payment(uid, subject['kind'], subject['record_id'], subject['amount'], subject['title'], tx_ref, 'flutterwave')
         _s, public, _h = integrations.flutterwave_keys(settings)
         return {'ok': True, 'method': 'flutterwave', 'public_key': public, 'tx_ref': tx_ref, 'amount': subject['amount'], 'currency': subject['currency'], 'title': subject['title'], 'email': getattr(current_user, 'email', '') or 'shop@kaze.local', 'name': getattr(current_user, 'username', '') or 'KAZE', 'redirect': url_for('flutterwave_return', _external=True)}
     if method == 'bank':
-        if not gateways.bank_ready(settings):
-            return {'ok': False, 'error': 'Add bank details in Settings first.'}, 400
+        if not gateways.bank_ready(settings): return {'ok': False, 'error': 'Add bank details in Settings first.'}, 400
         ref = 'KAZE-%s-%s-%s' % (subject['kind'].upper()[:8], uid, int(datetime.now().timestamp()))
         _record_payment(uid, subject['kind'], subject['record_id'], subject['amount'], subject['title'], ref, 'bank')
         return {'ok': True, 'method': 'bank', 'ref': ref, 'bank': gateways.bank_details(settings), 'confirm': url_for('bank_pay_confirm', ref=ref)}
     return {'ok': False, 'error': 'Choose a payment method that is switched on.'}, 400
-
 
 @app.route('/checkout/paypal/capture', methods=['POST'])
 @login_required
 def kaze_paypal_capture():
     order_id = (request.form.get('order_id') or '').strip()
     payload, err = gateways.paypal_capture(_stripe_settings(), order_id)
-    if err:
-        return {'ok': False, 'error': err}, 400
+    if err: return {'ok': False, 'error': err}, 400
     conn = get_db(); cur = conn.cursor()
     cur.execute("SELECT * FROM stripe_payments WHERE user_id=%s AND checkout_id=%s ORDER BY id DESC LIMIT 1", (current_user.id, order_id))
     row = cur.fetchone() or {}
     cur.close(); conn.close()
     _fulfill_stripe_payment(current_user.id, row.get('kind') or 'custom', row.get('record_id') or 0, order_id, order_id, row.get('amount'))
     return {'ok': True, 'next': url_for('payments')}
-
 
 @app.route('/pay/session/<int:id>')
 @login_required
