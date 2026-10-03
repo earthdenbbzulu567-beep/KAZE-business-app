@@ -1,0 +1,149 @@
+/* KAZE Traders — GUI redesign. Overrides the desk without changing routes. */
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,680&family=Outfit:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+:root {
+    --font: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+    --display: 'Fraunces', 'Outfit', serif;
+    --mono: 'IBM Plex Mono', ui-monospace, monospace;
+    --sidebar-width: 248px;
+    --radius: 16px;
+    --shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+}
+
+body {
+    background:
+        radial-gradient(900px 420px at 0% -10%, var(--accent-wash), transparent 60%),
+        var(--bg);
+}
+body::before { opacity: 0.55; }
+
+.sidebar {
+    background: color-mix(in srgb, var(--bg2) 88%, black);
+    border-right: 1px solid var(--border);
+    padding: 14px 12px;
+    backdrop-filter: blur(10px);
+}
+.sidebar-brand span, .brand-name { font-family: var(--display); letter-spacing: -0.03em; }
+.sidebar-nav .nav-section-title {
+    font-size: 0.68rem;
+    letter-spacing: 0.16em;
+    padding: 0.4rem 0.7rem;
+}
+.sidebar-nav a {
+    border-radius: 12px;
+    margin: 2px 0;
+    padding: 0.55rem 0.7rem;
+}
+.sidebar-nav a.active {
+    background: var(--accent-wash);
+    color: var(--text);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--red-bright) 45%, transparent);
+}
+.sidebar-nav a.active::before { display: none; }
+
+.main-content { margin-left: var(--sidebar-width); }
+.topbar {
+    justify-content: flex-end;
+    gap: 0.6rem;
+    background: color-mix(in srgb, var(--bg) 78%, transparent);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+}
+.page-header h1, .home-hero h1, .auth-card h1, .widget h2 {
+    font-family: var(--display);
+    letter-spacing: -0.03em;
+}
+.widget, .stat-chip, .pkg-card, .auth-card, .table-wrapper {
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+}
+.stat-chip strong { font-family: var(--mono); }
+button, .pay-now, a.pay-now {
+    border-radius: 999px;
+    font-weight: 700;
+}
+.btn-secondary { border-radius: 999px; }
+table { border-collapse: separate; border-spacing: 0; }
+th { font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text3); }
+tbody tr:hover { background: var(--accent-wash); }
+input, select, textarea {
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+}
+.home-hero { border-radius: 28px; overflow: hidden; }
+.auth-card {
+    max-width: 420px;
+    margin: 8vh auto;
+    padding: 1.6rem;
+    background: var(--surface);
+}
+
+.kaze-cli {
+    position: fixed;
+    left: calc(var(--sidebar-width) + 16px);
+    right: 16px;
+    bottom: 16px;
+    z-index: 80;
+    border-radius: 18px;
+    border: 1px solid var(--border);
+    background: #10140f;
+    color: #d7ffe4;
+    box-shadow: var(--shadow);
+    font-family: var(--mono);
+    overflow: hidden;
+}
+.kaze-cli[hidden] { display: none; }
+.kaze-cli header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.45rem 0.7rem;
+    background: #182117;
+    color: #9dccb0;
+    font-size: 0.75rem;
+}
+.kaze-cli header button {
+    background: transparent;
+    color: inherit;
+    border: 0;
+    padding: 0;
+    font-family: inherit;
+}
+.kaze-cli pre {
+    margin: 0;
+    max-height: 180px;
+    overflow: auto;
+    padding: 0.7rem 0.8rem 0.2rem;
+    white-space: pre-wrap;
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+.kaze-cli form { display: flex; gap: 0.4rem; padding: 0.45rem 0.7rem 0.7rem; }
+.kaze-cli input {
+    flex: 1;
+    background: transparent;
+    color: #f4fff7;
+    border: 0;
+    border-radius: 0;
+    font-family: inherit;
+    outline: none;
+}
+.cli-fab {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: 70;
+    border-radius: 999px;
+    padding: 10px 14px;
+    background: var(--red-bright);
+    color: #07210f;
+    border: 0;
+    font-weight: 800;
+    cursor: pointer;
+}
+@media (max-width: 800px) {
+    .kaze-cli { left: 10px; right: 10px; bottom: 72px; }
+    .main-content { margin-left: 0; }
+}

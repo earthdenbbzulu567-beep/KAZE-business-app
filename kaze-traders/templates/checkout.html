@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}KAZE Traders checkout{% endblock %}
+{% block content %}
+<div class="kaze-checkout">
+    <div class="kaze-brand">
+        <span class="kaze-mark">K</span>
+        <div>
+            <p class="kicker">KAZE Traders</p>
+            <h1>Checkout</h1>
+            <p>Stripe, PayPal, and Flutterwave open inside this page. You do not leave KAZE.</p>
+        </div>
+        <a class="btn-secondary back-btn" href="{{ url_for(back or 'payments') }}">Go back</a>
+    </div>
+
+    <section class="widget checkout-card" id="checkout-summary">
+        <p class="kicker">Paying for</p>
+        <h2>{{ title or 'Payment' }}</h2>
+        {% if party %}<p>{{ party }}</p>{% endif %}
+        <p class="checkout-amount">{{ money(amount or 0) }} <span>{{ currency or 'USD' }}</span></p>
+        <form id="kaze-pay-form">
+            <input type="hidden" name="kind" value="{{ kind }}">
+            <input type="hidden" name="id" value="{{ record_id or 0 }}">
+            <input type="hidden" name="tier" value="{{ tier or '' }}">
+            <input type="hidden" name="title" value="{{ title or '' }}">
+            <input type="hidden" name="amount" value="{{ amount or 0 }}">
+            <div class="form-group">
+                <label>Pay with</label>
+                <select name="method" id="pay-method" required>
+                    {% for m in pay_methods if m.ready %}
+                    <option value="{{ m.key }}" {% if m.key == method %}selected{% endif %}>{{ m.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% if not pay_methods or not (pay_methods|selectattr('ready')|list) %}
+            <p>No payment method is on yet. <a href="{{ url_for('settings') }}">Set one up</a>.</p>
+            {% else %}
+            <div class="checkout-actions">
+                <button type="submit" class="pay-now" id="pay-now-btn">Pay now</button>
+                <a class="btn-secondary back-btn" href="{{ url_for(back or 'payments') }}">Go back</a>
+            </div>
+            {% endif %}
+        </form>
+        <p id="pay-error" class="pay-error" hidden></p>
+        <p><a href="{{ url_for('legal_licence') }}">Payment terms</a></p>
+    </section>
+
+    <section class="widget checkout-card" id="checkout-embed" hidden>
+        <div class="checkout-actions">
+            <button type="button" class="btn-secondary" id="embed-back">Go back</button>
+            <span class="muted">Payment stays on this KAZE page.</span>
+        </div>
+        <div id="stripe-slot"></div>
+        <div id="paypal-slot"></div>
+        <div id="bank-slot" hidden></div>
+    </section>
+</div>
+<style>
+.kaze-checkout { max-width: 720px; margin: 0 auto; }
+.checkout-actions { display:flex; flex-wrap:wrap; gap:.6rem; align-items:center; margin: .4rem 0 1rem; }
+a.back-btn, button.back-btn { text-decoration:none; padding:8px 14px; }
+.kaze-brand { display:flex; gap:.9rem; align-items:center; margin-bottom:1rem; justify-content:space-between; }
+.kaze-mark { width:52px; height:52px; border-radius:16px; display:grid; place-items:center; background:var(--red-bright); color:#fff; font-weight:800; font-size:1.4rem; }
+.checkout-amount { font-family:var(--mono); font-size:2rem; margin:0.4rem 0 1rem; }
+.checkout-amount span { font-size:.9rem; color:var(--text3); }
+.kicker { margin:0; font-size:.72rem; letter-spacing:.14em; text-transform:uppercase; font-weight:800; color:var(--red-bright); }
+.muted { color:var(--text3); font-size:.85rem; }
+.pay-error { color:#c0392b; font-weight:700; }
+#stripe-slot, #paypal-slot { min-height: 420px; }
+</style>
+<script>
+(function () {
+    var form = document.getElementById('kaze-pay-form');
+    var summary = document.getElementById('checkout-summary');
+    var embed = document.getElementById('checkout-embed');
+    var errBox = document.getElementById('pay-error');
+    var back = document.getElementById('embed-back');
+    if (!form) return;
+    function showError(msg) {
+        errBox.hidden = false;
+        errBox.textContent = msg || 'Payment could not start.';
+    }
+    function showEmbed() {
+        summary.hidden = true;
+        embed.hidden = false;
+    }
+    if (back) back.addEventListener('click', function () {
+        embed.hidden = true;
+        summary.hidden = false;
+        document.getElementById('stripe-slot').innerHTML = '';
+        document.getElementById('paypal-slot').innerHTML = '';
+        document.getElementById('bank-slot').hidden = true;
+    });
+    function loadScript(src) {
+        return new Promise(function (resolve, reject) {
+            var s = document.createElement('script');
+            s.src = src;
+            s.onload = resolve;
+            s.onerror = reject;
+            document.body.appendChild(s);
+        });
+    }
+    form.addEventListener('submit', function (ev) {
+        ev.preventDefault();
+        errBox.hidden = true;
+        var btn = document.getElementById('pay-now-btn');
+        if (btn) btn.disabled = true;
+        var body = new FormData(form);
+        fetch('{{ url_for("kaze_checkout_embed") }}', { method: 'POST', body: body, headers: { 'X-Requested-With': 'fetch' } })
+            .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+            .then(function (res) {
+                if (!res.ok || !res.data.ok) throw new Error((res.data && res.data.error) || 'Payment could not start.');
+                return mount(res.data);
+            })
+            .catch(function (e) { showError(e.message); })
+            .finally(function () { if (btn) btn.disabled = false; });
+    });
+    function mount(data) {
+        showEmbed();
+        if (data.method === 'stripe') {
+            return loadScript('https://js.stripe.com/v3/').then(function () {
+                var stripe = Stripe(data.publishable);
+                return stripe.initEmbeddedCheckout({ clientSecret: data.client_secret });
+            }).then(function (checkout) { checkout.mount('#stripe-slot'); });
+        }
+        if (data.method === 'paypal') {
+            var src = 'https://www.paypal.com/sdk/js?client-id=' + encodeURIComponent(data.client_id) + '&currency=' + encodeURIComponent(data.currency || 'USD');
+            return loadScript(src).then(function () {
+                paypal.Buttons({
+                    createOrder: function () { return data.order_id; },
+                    onApprove: function () {
+                        var fd = new FormData();
+                        fd.append('order_id', data.order_id);
+                        return fetch('{{ url_for("kaze_paypal_capture") }}', { method: 'POST', body: fd })
+                            .then(function (r) { return r.json(); })
+                            .then(function (d) { window.location = d.next || '{{ url_for("payments") }}'; });
+                    },
+                    onCancel: function () { if (back) back.click(); }
+                }).render('#paypal-slot');
+            });
+        }
+        if (data.method === 'flutterwave') {
+            return loadScript('https://checkout.flutterwave.com/v3.js').then(function () {
+                FlutterwaveCheckout({
+                    public_key: data.public_key,
+                    tx_ref: data.tx_ref,
+                    amount: data.amount,
+                    currency: data.currency,
+                    payment_options: 'card,mobilemoney,ussd,banktransfer',
+                    customer: { email: data.email, name: data.name },
+                    customizations: { title: 'KAZE Traders', description: data.title },
+                    callback: function (res) {
+                        window.location = data.redirect + '?tx_ref=' + encodeURIComponent(res.tx_ref || data.tx_ref) + '&transaction_id=' + encodeURIComponent(res.transaction_id || '') + '&status=successful';
+                    },
+                    onclose: function () { if (back) back.click(); }
+                });
+            });
+        }
+        if (data.method === 'bank') {
+            var slot = document.getElementById('bank-slot');
+            var bank = data.bank || {};
+            slot.hidden = false;
+            slot.innerHTML = '<h3>Current account</h3><p>' + (bank.bank_name || 'Bank') + ' · ' + (bank.account_name || '') + '</p><p><code>' + (bank.account_number || '') + '</code></p><p>Reference: <code>' + data.ref + '</code></p><form method="POST" action="' + data.confirm + '"><button class="pay-now" type="submit">I have paid</button></form>';
+        }
+    }
+})();
+</script>
+{% endblock %}
