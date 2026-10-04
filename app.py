@@ -352,7 +352,7 @@ def _fast_headers(resp):
                 data = None
             if data and 800 < len(data) < 2_000_000:
                 import gzip
-                packed = gzip.compress(data, compresslevel=5)
+                packed = gzip.compress(data, compresslevel=1)
                 if len(packed) < len(data) - 120:
                     resp.set_data(packed)
                     resp.headers['Content-Encoding'] = 'gzip'
@@ -923,7 +923,23 @@ def init_db():
     conn.close()
     _schema_ready = True
 
-init_db()
+
+def ensure_db():
+    """Create tables once. A slow database must not stop the process from listening."""
+    if _schema_ready:
+        return True
+    try:
+        init_db()
+        return True
+    except Exception as exc:
+        print('KAZE schema init deferred: %s' % exc)
+        return False
+
+
+try:
+    ensure_db()
+except Exception as exc:
+    print('KAZE boot continued without schema: %s' % exc)
 
 _EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
@@ -2178,14 +2194,35 @@ def module_on(name):
     return name in live
 
 
+def _csrf_token():
+    token = session.get('_csrf')
+    if not token:
+        token = secrets.token_urlsafe(24)
+        session['_csrf'] = token
+    return token
+
+
+def csrf_token():
+    return _csrf_token()
+
+
 @app.before_request
 def _apply_app_mode():
     g.app_mode = 'full'
     g.live_modules = set(ALL_OPTIONAL)
     path = request.path or ''
-    if path.startswith('/static/') or path.startswith('/auth/callback/') or path.startswith('/login/') or path in (
-        '/healthz', '/favicon.ico', '/webhooks/stripe', '/webhooks/flutterwave',
-        '/licence', '/terms', '/signup', '/login',
+    if path.startswith('/static/') or path in ('/healthz', '/favicon.ico'):
+        return
+    if path.startswith('/webhooks/'):
+        return
+    ensure_db()
+    if request.method == 'POST':
+        sent = (request.form.get('csrf_token') or request.headers.get('X-CSRF-Token') or '').strip()
+        expected = session.get('_csrf') or ''
+        if not expected or not sent or not secrets.compare_digest(sent, expected):
+            return _error_body(400, 'Bad request', 'The form expired. Refresh the page and try again.')
+    if path.startswith('/auth/callback/') or path.startswith('/login/') or path in (
+        '/signup', '/login', '/licence', '/terms',
     ):
         return
     if not getattr(current_user, 'is_authenticated', False):
@@ -2533,6 +2570,7 @@ def inject_settings():
             oauth_catalog=oauth_login.PROVIDERS,
             legal_version=LEGAL_VERSION,
             nav_groups=live_nav_groups(live),
+            csrf_token=csrf_token,
         )
     return dict(
         user_settings=None, unread_notifications=0, money=_format_money,
@@ -2548,17 +2586,21 @@ def inject_settings():
         oauth_catalog=oauth_login.PROVIDERS,
         legal_version=LEGAL_VERSION,
         nav_groups=live_nav_groups(set(ALL_OPTIONAL)),
+        csrf_token=csrf_token,
     )
 
 
 @login_manager.user_loader
 def load_user(user_id):
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute('SELECT id, username, email, role, owner_id FROM users WHERE id = %s', (user_id,))
-    user = cur.fetchone()
-    cur.close()
-    conn.close()
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute('SELECT id, username, email, role, owner_id FROM users WHERE id = %s', (user_id,))
+        user = cur.fetchone()
+        cur.close()
+        conn.close()
+    except Exception:
+        return None
     if user:
         return User(user['id'], user['username'], user['email'], user['role'], user['owner_id'])
     return None
@@ -2769,11 +2811,15 @@ def login():
         password = request.form.get('password') or ''
         user = None
         if login_input and password:
-            conn = get_db()
-            cur = conn.cursor()
-            cur.execute('SELECT * FROM users WHERE username = %s OR email = %s', (login_input, login_input))
-            user = cur.fetchone()
-            cur.close(); conn.close()
+            try:
+                conn = get_db()
+                cur = conn.cursor()
+                cur.execute('SELECT * FROM users WHERE username = %s OR email = %s', (login_input, login_input))
+                user = cur.fetchone()
+                cur.close(); conn.close()
+            except Exception:
+                flash('KAZE could not reach the database. Try again in a moment.', 'danger')
+                return render_template('login.html')
         if user and check_password_hash(user['password'], password):
             if _needs_2fa(user):
                 return _begin_2fa(user)
