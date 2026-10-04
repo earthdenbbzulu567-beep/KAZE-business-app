@@ -4,6 +4,7 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, Response, send_file, g, session
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.middleware.proxy_fix import ProxyFix
 import os
 import secrets
 import io
@@ -35,6 +36,16 @@ import oauth_login
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
 _TPL_DIR = os.path.join(_APP_DIR, 'templates') if os.path.isdir(os.path.join(_APP_DIR, 'templates')) else _APP_DIR
 app = Flask(__name__, template_folder=_TPL_DIR)
+
+# --- Reverse-proxy fix ---------------------------------------------------
+# Render, PythonAnywhere, and any other proxy terminate TLS in front of the
+# app, so Flask sees http://internal-host/... unless we trust the forwarded
+# headers. Without this, every url_for(..., _external=True) builds a broken
+# scheme/host: Stripe rejects the success/cancel URLs, OAuth redirect_uri
+# mismatches, and "external links" come back as http://internal/... .
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+# -------------------------------------------------------------------------
+
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 LEGAL_VERSION = '3.3.5'
 LEGAL_DIR = _APP_DIR
