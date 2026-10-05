@@ -8493,12 +8493,23 @@ def kaze_checkout_embed():
     uid = current_user.id
     meta = {'user_id': uid, 'kind': subject['kind'], 'record_id': subject['record_id'], 'tier': subject['tier'], 'title': subject['title']}
     if method == 'stripe':
-        if not stripe_payments.stripe_ready(settings): return {'ok': False, 'error': 'Stripe is not set up yet.'}, 400
+        if not stripe_payments.stripe_ready(settings):
+            return {'ok': False, 'error': 'Stripe is not set up yet. Add your test keys in Settings.'}, 400
         success = url_for('stripe_pay_success', _external=True) + '?session_id={CHECKOUT_SESSION_ID}'
-        sess, err = stripe_payments.create_checkout(settings, amount=subject['amount'], title=subject['title'], success_url=success, cancel_url=url_for('stripe_pay_cancel', _external=True), metadata=meta, embedded=True)
-        if err: return {'ok': False, 'error': err}, 400
+        sess, err = stripe_payments.create_checkout(
+            settings,
+            amount=subject['amount'],
+            title=subject['title'],
+            success_url=success,
+            cancel_url=url_for('stripe_pay_cancel', _external=True),
+            metadata=meta,
+            embedded=False,
+        )
+        if err:
+            return {'ok': False, 'error': err}, 400
         _record_payment(uid, subject['kind'], subject['record_id'], subject['amount'], subject['title'], sess.id, 'stripe')
-        return {'ok': True, 'method': 'stripe', 'publishable': stripe_payments.keys_from(settings)[1], 'client_secret': sess.client_secret}
+        return {'ok': True, 'method': 'stripe', 'redirect': sess.url}
+
     if method == 'paypal':
         if not gateways.paypal_ready(settings): return {'ok': False, 'error': 'PayPal is not set up yet.'}, 400
         order, err = gateways.paypal_create_order(settings, amount=subject['amount'], currency=subject['currency'], title=subject['title'], return_url=url_for('paypal_return', _external=True), cancel_url=url_for('stripe_pay_cancel', _external=True), custom_id='kaze-%s-%s-%s' % (subject['kind'], subject['record_id'], uid))

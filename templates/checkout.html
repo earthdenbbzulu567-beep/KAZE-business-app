@@ -117,6 +117,10 @@ a.back-btn, button.back-btn { text-decoration:none; padding:8px 14px; }
     function mount(data) {
         showEmbed();
         if (data.method === 'stripe') {
+            if (data.redirect) {
+                window.location = data.redirect;
+                return Promise.resolve();
+            }
             return loadScript('https://js.stripe.com/v3/').then(function () {
                 var stripe = Stripe(data.publishable);
                 return stripe.initEmbeddedCheckout({ clientSecret: data.client_secret });
@@ -158,9 +162,18 @@ a.back-btn, button.back-btn { text-decoration:none; padding:8px 14px; }
         if (data.method === 'bank') {
             var slot = document.getElementById('bank-slot');
             var bank = data.bank || {};
+            var csrf = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
             slot.hidden = false;
-            slot.innerHTML = '<h3>Current account</h3><p>' + (bank.bank_name || 'Bank') + ' · ' + (bank.account_name || '') + '</p><p><code>' + (bank.account_number || '') + '</code></p><p>Reference: <code>' + data.ref + '</code></p><form method="POST" action="' + data.confirm + '"><button class="pay-now" type="submit">I have paid</button></form>';
+            slot.innerHTML = '<h3>Current account</h3>'
+                + '<p>' + (bank.bank_name || 'Bank') + ' · ' + (bank.account_name || '') + '</p>'
+                + '<p><code>' + (bank.account_number || '') + '</code></p>'
+                + '<p>Reference: <code>' + data.ref + '</code></p>'
+                + '<form method="POST" action="' + data.confirm + '">'
+                + '<input type="hidden" name="csrf_token" value="' + csrf + '">'
+                + '<button class="pay-now" type="submit">I have paid</button>'
+                + '</form>';
         }
+
     }
 })();
 </script>
