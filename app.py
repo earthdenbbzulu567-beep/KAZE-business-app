@@ -182,7 +182,7 @@ def _get_pool():
             return _pool
         try:
             from psycopg2.pool import SimpleConnectionPool
-            _pool = SimpleConnectionPool(1, 10, _db_url(), cursor_factory=RealDictCursor)
+            _pool = SimpleConnectionPool(1, 10, _db_url(), cursor_factory=RealDictCursor, connect_timeout=5)
         except Exception:
             _pool = False
             return None
@@ -228,12 +228,12 @@ def get_db():
         if pool:
             raw = pool.getconn()
         else:
-            raw = psycopg2.connect(_db_url(), cursor_factory=RealDictCursor)
+            raw = psycopg2.connect(_db_url(), cursor_factory=RealDictCursor, connect_timeout=5)
         wrap = _ReqConn(raw)
         g._kaze_conn = wrap
         g._kaze_raw = raw
         return wrap
-    return psycopg2.connect(_db_url(), cursor_factory=RealDictCursor)
+    return psycopg2.connect(_db_url(), cursor_factory=RealDictCursor, connect_timeout=5)
 
 
 
@@ -947,10 +947,7 @@ def ensure_db():
         return False
 
 
-try:
-    ensure_db()
-except Exception as exc:
-    print('KAZE boot continued without schema: %s' % exc)
+
 
 _EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
