@@ -100,6 +100,7 @@ def create_checkout(settings, *, amount, title, success_url, cancel_url, metadat
                 },
             }],
             'metadata': {str(k): str(v)[:500] for k, v in (metadata or {}).items()},
+            'managed_payments': {'enabled': False},
         }
         if embedded:
             payload['ui_mode'] = 'embedded'
