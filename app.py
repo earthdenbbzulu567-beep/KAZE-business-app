@@ -2869,19 +2869,23 @@ def login_2fa():
         return _complete_local_login(user)
     return render_template('login_2fa.html')
 
-
 @app.route('/settings/2fa/start', methods=['POST'])
 @login_required
 def twofa_start():
+    conn = get_db(); cur = conn.cursor()
+    cur.execute('SELECT totp_enabled FROM users WHERE id=%s', (current_user.db_id,))
+    row = cur.fetchone() or {}
+    if int(row.get('totp_enabled') or 0) == 1:
+        cur.close(); conn.close()
+        flash('Two-factor is already on. Turn it off first if you want to re-enrol.', 'info')
+        return redirect(url_for('settings'))
     secret = _totp_new_secret()
     plain, hashed = _backup_codes()
-    conn = get_db(); cur = conn.cursor()
     cur.execute('UPDATE users SET totp_secret=%s, totp_enabled=0, totp_backup=%s WHERE id=%s', (secret, hashed, current_user.db_id))
     conn.commit(); cur.close(); conn.close()
     session['totp_backup_show'] = plain
     flash('Scan the code, then enter a 6-digit code to turn two-factor on.', 'info')
     return redirect(url_for('settings'))
-
 
 @app.route('/settings/2fa/confirm', methods=['POST'])
 @login_required
