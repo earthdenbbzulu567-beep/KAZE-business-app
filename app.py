@@ -2712,7 +2712,7 @@ def _oauth_find_or_create(provider, profile):
         email = '{}_{}@oauth.kaze.invalid'.format(provider, profile['id'])
     hashed = generate_password_hash(secrets.token_urlsafe(24))
     cur.execute(
-        'INSERT INTO users (username, email, password, oauth_provider, oauth_id, terms_accepted, terms_version, terms_accepted_at) VALUES (%s,%s,%s,%s,%s,1,%s,%s) RETURNING *',
+        'INSERT INTO users (username, email, password, oauth_provider, oauth_id, terms_accepted, terms_version, terms_accepted_at) VALUES (%s,%s,%s,%s,%s,0,%s,%s) RETURNING *',
         (username, email, hashed, provider, profile['id'], LEGAL_VERSION, datetime.now().strftime('%Y-%m-%d %H:%M:%S')),
     )
     user = cur.fetchone()
@@ -2741,7 +2741,7 @@ def legal_accept():
         _stamp_licence(current_user.db_id)
         flash('Licence and terms accepted (version {}).'.format(LEGAL_VERSION), 'success')
         return redirect(url_for('dashboard'))
-    return render_template('legal_accept.html', legal_version=LEGAL_VERSION, legal_text=_legal_text('licence'))
+    return render_template('legal_accept.html', legal_version=LEGAL_VERSION, licence_text=_legal_text('licence'), terms_text=_legal_text('terms'))
 
 
 @app.route('/login/<provider>')

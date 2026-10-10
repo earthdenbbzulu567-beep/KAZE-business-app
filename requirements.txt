@@ -7,3 +7,4 @@ reportlab
 openpyxl
 stripe
 qrcode
+Pillow

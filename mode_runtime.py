@@ -180,7 +180,7 @@ def empty_snapshot(mode='full'):
 # Fetchers — only called by the live pipeline
 # ---------------------------------------------------------------------------
 
-def fetch_sales(cur, user_id, limit=150):
+def fetch_sales(cur, user_id, limit=5000):
     cur.execute(
         '''
         SELECT sales.id, sales.stock_id, sales.quantity_sold, sales.selling_price_at_time,
@@ -208,7 +208,7 @@ def fetch_sales(cur, user_id, limit=150):
     return rows
 
 
-def fetch_income(cur, user_id, limit=200):
+def fetch_income(cur, user_id, limit=5000):
     cur.execute(
         'SELECT id, source, amount, date FROM income WHERE user_id = %s ORDER BY date DESC, id DESC LIMIT %s',
         (user_id, limit),
@@ -222,7 +222,7 @@ def fetch_income(cur, user_id, limit=200):
     return rows
 
 
-def fetch_expenses(cur, user_id, limit=200):
+def fetch_expenses(cur, user_id, limit=5000):
     cur.execute(
         'SELECT id, name, amount, category, date FROM expenses WHERE user_id = %s ORDER BY date DESC, id DESC LIMIT %s',
         (user_id, limit),
