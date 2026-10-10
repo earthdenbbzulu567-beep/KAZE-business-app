@@ -2,9 +2,18 @@
 {% block content %}
 <div class="auth-card" style="max-width:44rem;">
     <p class="home-kicker" style="text-align:center;">KAZE Traders · Ephraim Zulu</p>
-    <h1>Accept the licence</h1>
-    <p style="color:var(--text2);">Version {{ legal_version }}. The desk stays locked until you accept. Ephraim Zulu and KAZE Traders will sue, charge, and — where the law allows — prosecute anyone who violates these terms.</p>
-    <pre style="white-space:pre-wrap;font-size:0.78rem;line-height:1.4;max-height:18rem;overflow:auto;padding:0.85rem;border:1px solid var(--border);border-radius:12px;">{{ legal_text }}</pre>
+    <h1>Accept the licence</h1> <p style="color:var(--text2);">Version {{ legal_version }}. The desk stays locked until you accept. Ephraim Zulu and KAZE Traders will sue, charge, and prosecute where the law allows — anyone who violates these terms.</p>
+        <p style="color:var(--text2);">Version {{ legal_version }}. The desk stays locked until you accept both documents below.</p>
+
+    <details open style="margin:0 0 0.75rem;">
+        <summary style="font-weight:700;">Licence</summary>
+        <pre style="white-space:pre-wrap;font-size:0.78rem;line-height:1.4;max-height:18rem;overflow:auto;padding:0.85rem;border:1px solid var(--border);border-radius:12px;margin-top:0.5rem;">{{ licence_text }}</pre>
+    </details>
+
+    <details style="margin:0 0 1rem;">
+        <summary style="font-weight:700;">Terms of Service</summary>
+        <pre style="white-space:pre-wrap;font-size:0.78rem;line-height:1.4;max-height:18rem;overflow:auto;padding:0.85rem;border:1px solid var(--border);border-radius:12px;margin-top:0.5rem;">{{ terms_text }}</pre>
+    </details>
     <form method="POST" style="margin-top:1rem;">
         <div class="form-group">
             <label style="display:flex;gap:0.55rem;align-items:flex-start;">

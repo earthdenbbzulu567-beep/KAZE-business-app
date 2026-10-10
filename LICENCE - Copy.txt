@@ -1,0 +1,258 @@
+==============================================================================
+KAZE TRADERS BUSINESS MANAGER
+COPYRIGHT NOTICE, END USER LICENCE AGREEMENT, TERMS OF SERVICE,
+FEATURE CONDITIONS, BREACH PENALTIES, AND TERMINATION
+==============================================================================
+
+Product:              KAZE Traders Business Manager ("KAZE", "the App")
+Legal version:        3.3.5
+Brand:                KAZE Traders
+Rightful owner:       Ephraim Zulu
+Licensor:             Ephraim Zulu, rightful owner of KAZE Traders ("we")
+Year:                 2026
+Controlling file:     LICENCE
+
+COPYRIGHT (C) 2026 EPHRAIM ZULU AND KAZE TRADERS. ALL RIGHTS RESERVED.
+
+By creating an account, ticking acceptance, signing in, hosting, paying,
+starting a trial, or using any feature, you agree to this document.
+The App records that acceptance (version and time) against your login.
+
+This is not personal legal, tax, or investment advice.
+
+==============================================================================
+PART A -- COPYRIGHT, LICENCE, SHARES
+==============================================================================
+
+A1. Ephraim Zulu owns KAZE Traders and the Software (source, templates,
+    design, KAZE sounds, docs, this file, names, package names).
+    Third-party libraries keep their own licences. Your typed shop
+    data remains yours.
+
+A2. You receive a limited, personal, non-exclusive, non-transferable,
+    revocable permission to use unlocked features for your own shop
+    records. You do not buy the Software, copyright, or shares.
+
+A3. You may not sell, rent, white-label, or relicense the App; remove
+    notices; claim authorship; scrape or attack a hosted copy; bypass
+    package, trial, mode, or payment locks; use a payment method you
+    have no right to use; or present KAZE as certified accounting,
+    tax, or legal software.
+
+A4. Shares: Ephraim Zulu may grant a percentage of KAZE Traders shares
+    to whoever he chooses, only if he judges it benefits the company.
+    He alone decides whether it is worth it. A grant needs a separate
+    signed writing. Using or paying for the App is not a share purchase.
+
+==============================================================================
+PART B -- ACCOUNTS, TEAM, DATA
+==============================================================================
+
+B1. Keep login details accurate and passwords secret. You are
+    responsible for Staff you invite.
+
+B2. Modes only hide modules. Settings, currency, and keys are your
+    operational choices.
+
+B3. Keep your own backups. Clear data cannot be undone in-app.
+
+B4. The App will refuse use of the desk until you accept this legal
+    version. A later version may require acceptance again.
+
+==============================================================================
+PART C -- FEATURES (CONDITIONS)
+==============================================================================
+
+All shipped features are covered: dashboard; income and expenses;
+stock (including bulk, import, low-stock, valuation, price list);
+sales (including auto-sale, aged sales, invoice, receipt); counter /
+till; customers and statements; services and sessions; book-keeping
+papers (quotation through payslip and later paper types); account
+tracking books (cash book through cash-flow statement and later
+books); standalone cash book; banking; investments; shop listings
+and orders; market value; purchase orders; suppliers; recurring
+items; budgets; reports; statistics and CSV / Excel / PDF export;
+tax estimate; SWOT; business plan; tasks; notes; snippets; calendar;
+reminders; calculator; day close; documents; shortcuts; tutorial;
+payments history; packages; team; search; notifications; activity;
+backup export / import; theme and sound cues; health and job URLs.
+
+Conditions for every feature:
+  - lawful shop records only;
+  - locked modules stay locked without payment or an active trial;
+  - papers and totals are working records, not certified filings
+    unless you confirm the law of your country;
+  - wrong entries make wrong reports -- that is your responsibility.
+
+Markdown: notes, snippets, and legal pages may use simple markdown.
+Raw HTML is escaped. You are responsible for the words you save.
+
+==============================================================================
+PART D -- PACKAGES AND TRIAL
+==============================================================================
+
+One-time prices in Zambian Kwacha (hardcoded):
+    New user K 0.00; New user + K 25.00; Entrepreneur K 50.00;
+    Entrepreneur + K 75.00; Businessman K 100.00;
+    Businessman pro K 150.00; CEO K 300.00;
+    Founder's premium K 500.00.
+
+A paid package unlocks only after Stripe, PayPal, or Flutterwave
+confirms, or a bank transfer is marked paid. One trial per shop
+(7 to 17 days, default 12). Unused trial days are not paid out.
+
+==============================================================================
+PART E -- PAYMENT
+==============================================================================
+
+Only the Account Owner may pay. Opening checkout is not payment.
+Provider and bank fees are yours. Refunds are not routine after a
+successful unlock. Change of mind is not a refund ground. Chargebacks
+after use may relock the package and count as breach.
+
+==============================================================================
+PART F -- SPECIFIC BREACH PENALTIES
+==============================================================================
+
+These penalties apply in addition to any remedy the law allows.
+They are intended as a clear price for breach, not as a permission
+to breach if you "pay the fine".
+
+F1. Schedule
+
+    Breach                              Automated / immediate result     Further penalty we will pursue
+    ----------------------------------  -------------------------------  --------------------------------
+    Using the App without accepting     Access blocked until you         Account may be closed if you
+    this legal version                  accept                           refuse
+    ----------------------------------  -------------------------------  --------------------------------
+    Setting or forcing a paid package   Action refused; attempt logged   Liquidated sum equal to that
+    without completed payment           as a licence breach              package price (see Part D)
+    ----------------------------------  -------------------------------  --------------------------------
+    Chargeback after using unlocked     Package relocked; login may      Package price + provider fees
+    modules                             be suspended                     as a debt
+    ----------------------------------  -------------------------------  --------------------------------
+    Copying, reselling, white-labelling Immediate termination            Damages not less than K 500.00
+    or relicensing the Software                                          (Founder's premium) plus all
+                                                                         proven extra loss and legal costs
+    ----------------------------------  -------------------------------  --------------------------------
+    Removing copyright or owner names   Termination and takedown         Same floor as copying, plus
+                                                                         correction of public copies
+    ----------------------------------  -------------------------------  --------------------------------
+    Attacking the host, scraping other  Immediate ban; keys revoked      Report to the host and, where
+    shops, or breaking into data                                         the law allows, the police
+    ----------------------------------  -------------------------------  --------------------------------
+    Using a card or wallet without      Unlock reversed; login banned    Report as fraud; recovery of
+    authority                                                            the taken amount
+    ----------------------------------  -------------------------------  --------------------------------
+    Sharing an Owner login as a public  Warning, then suspension         Termination if it continues
+    password
+    ----------------------------------  -------------------------------  --------------------------------
+    False papers or tax filings made    Feature may be limited           You bear the fine from any
+    from App figures                                                     authority; we are not your filer
+
+F2. Liquidated amounts
+    Where the table names a Kwacha floor, you agree that amount is a
+    reasonable pre-estimate of harm to Ephraim Zulu and KAZE Traders
+    for that class of breach (lost control of the product, support
+    time, and enforcement). A court may award more if actual loss is
+    higher.
+
+F3. No set-off
+    Paying a penalty does not buy you the right to keep breaching
+    and does not transfer copyright or shares.
+
+==============================================================================
+PART G -- TERMINATION
+==============================================================================
+
+G1. You may end your use at any time. Export your shop data first.
+    Ending use does not create a refund or a share right.
+
+G2. Automatic termination
+    This licence ends at once, without extra notice, if you:
+      (a) copy, sell, or relicense the Software without a signed grant;
+      (b) bypass payment, trial, or mode locks after a recorded warning
+          or logged breach;
+      (c) attack the service or another shop;
+      (d) refuse this legal version after it is shown to you;
+      (e) use a payment method without authority.
+
+G3. Termination on notice
+    We may end or suspend the licence if you seriously or repeatedly
+    break any other clause, including unpaid chargebacks.
+
+G4. After termination
+      (a) permission to use the Software ends;
+      (b) paid modules relock;
+      (c) you must stop using the Software and, after a written demand
+          following a copyright breach, delete copies you control;
+      (d) you may keep exports of your own shop data;
+      (e) Parts A, F, G, H, and the liability limits still apply;
+      (f) money already validly paid is not refunded because of your
+          breach.
+
+G5. Survival
+    Copyright, share policy, payment debts, penalty schedule,
+    termination effects, and liability limits survive termination.
+
+==============================================================================
+PART H -- ENFORCEMENT: SUE, CHARGE, PROSECUTE
+==============================================================================
+
+H1. Notice
+    Ephraim Zulu and KAZE Traders will sue, charge, and -- where the
+    criminal law of the relevant country allows -- prosecute anyone
+    who violates this licence or the Terms of Service.
+
+H2. What that includes
+      (a) civil claims for injunctions (orders to stop and to take
+          copies down);
+      (b) civil claims for damages, liquidated amounts in Part F,
+          provider fees, and legal costs;
+      (c) reports to payment providers, hosts, app stores, and
+          repositories;
+      (d) criminal complaints for fraud, unauthorised access, or
+          copyright offences where those offences exist.
+
+H3. No waiver
+    A delay in suing is not permission to continue. A settlement with
+    one person does not bind Ephraim Zulu as to anyone else.
+
+H4. Who may enforce
+    Only Ephraim Zulu and KAZE Traders (or a lawyer they appoint)
+    enforce this file. A shop user cannot use this file to sue another
+    shop user except about that user's own shop data.
+
+==============================================================================
+PART I -- LIABILITY, PRIVACY, CHANGES
+==============================================================================
+
+I1. THE APP IS PROVIDED "AS IS". No warranty of uptime or correct totals.
+
+I2. To the fullest extent the law allows, Ephraim Zulu and KAZE Traders
+    are not liable for lost profits, lost data, or wrong filings.
+    Where a cap must apply, it is the package fees you paid in the
+    three months before the claim, or zero if you paid none -- except
+    that this cap does not limit our claim against you for your breach.
+
+I3. Passwords are hashed. Full card numbers are not stored in KAZE.
+
+I4. This file may be updated with the App. A new legal version can
+    require a fresh tick. Continued use after a reasonable chance to
+    read it means you accept it.
+
+I5. If one clause fails, the rest stands.
+
+==============================================================================
+PART J -- CONTACT LINE
+==============================================================================
+
+Product:          KAZE Traders Business Manager
+Brand:            KAZE Traders
+Rightful owner:   Ephraim Zulu
+Copyright:        (C) 2026 Ephraim Zulu and KAZE Traders. All rights reserved.
+Legal version:    3.3.5
+Companion file:   TERMS_OF_SERVICE (this LICENCE controls if they differ)
+
+By ticking acceptance or using the App you confirm you have read
+Parts A to J, including the penalty table and the termination clauses.
