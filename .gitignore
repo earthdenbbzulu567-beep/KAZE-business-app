@@ -7,3 +7,12 @@ venv/
 business.db
 *.log
 .DS_Store
+
+
+# KAZE — ignore editor/script backups
+*.bak.*
+*.bak
+__pycache__/
+*.pyc
+.venv/
+venv/
