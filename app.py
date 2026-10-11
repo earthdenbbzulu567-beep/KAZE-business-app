@@ -1947,10 +1947,10 @@ ALL_OPTIONAL = [m[0] for m in MODULE_CATALOG]
 NAV_GROUPS = (
     ('Core', (
         ('Dashboard', 'dashboard', 'layout-dashboard', None, ('dashboard',)),
-        ('Counter', 'counter', 'monitor-smartphone', 'counter', ('counter', 'counter_sale')),
-        ('Sales', 'sales', 'receipt', 'sales', ('sales', 'aged_sales')),
-        ('Stock', 'stock', 'package', 'stock', ('stock', 'edit_stock')),
-        ('Customers', 'customers', 'users', 'customers', ('customers', 'edit_customer')),
+        ('Counter', 'counter', 'monitor-smartphone', 'counter', ('counter', 'counter_sale', 'counter_checkout')),
+        ('Sales', 'sales', 'receipt', 'sales', ('sales', 'aged_sales', 'auto_sale', 'repeat_sale', 'sale_to_invoice', 'sale_receipt')),
+        ('Stock', 'stock', 'package', 'stock', ('stock', 'edit_stock', 'add_stock', 'update_stock', 'stock_bulk', 'check_low_stock', 'reorder_low_stock', 'price_list', 'stock_valuation_pdf')),
+        ('Customers', 'customers', 'users', 'customers', ('customers', 'edit_customer', 'add_customer', 'customers_bulk', 'customer_statement')),
         ('Services', 'services', 'graduation-cap', 'services', ('services',)),
     )),
     ('Money', (
@@ -2805,6 +2805,7 @@ def oauth_callback(provider):
     token, err = oauth_login.exchange_code(provider, code, redirect_uri, session.get('oauth_verifier') or None)
     session.pop('oauth_state', None)
     session.pop('oauth_verifier', None)
+    session.pop('oauth_provider', None)
     if err or not token:
         flash(err or 'Could not finish sign-in.', 'danger')
         return redirect(url_for('login'))
@@ -5509,6 +5510,7 @@ def send_daily_summary():
     cur.execute('SELECT notify_email, email_notifications, business_name FROM settings WHERE user_id = %s', (current_user.id,))
     settings = cur.fetchone() or {}
     cur.close()
+    conn.close()
 
     if not sales_today:
         flash('No sales recorded for today, so there is nothing to send.', 'danger')
@@ -8986,7 +8988,9 @@ def pay_plan(tier):
         return redirect(url_for('plans'))
     settings = _stripe_settings()
     current = plan_info(settings)
-    if PLAN_RANK[wanted] <= PLAN_RANK[current['key']]:
+    # Compare against the paid plan, not the trial-inflated one, so a shop
+    # on trial CEO can still buy Entrepreneur for when the trial ends.
+    if PLAN_RANK[wanted] <= PLAN_RANK[current['stored_key']]:
         flash('You already have this plan or a higher one.', 'info')
         return redirect(url_for('plans'))
     info = PLAN_TIERS[wanted]
