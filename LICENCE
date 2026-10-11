@@ -5,11 +5,12 @@ FEATURE CONDITIONS, BREACH PENALTIES, AND TERMINATION
 ==============================================================================
 
 Product:              KAZE Traders Business Manager ("KAZE", "the App")
-Legal version:        3.3.5
+Legal version:        4.0.0 (beta)
 Brand:                KAZE Traders
 Rightful owner:       Ephraim Zulu
 Licensor:             Ephraim Zulu, rightful owner of KAZE Traders ("we")
 Year:                 2026
+Effective date:       2026-10-11
 Controlling file:     LICENCE
 
 COPYRIGHT (C) 2026 EPHRAIM ZULU AND KAZE TRADERS. ALL RIGHTS RESERVED.
@@ -17,6 +18,9 @@ COPYRIGHT (C) 2026 EPHRAIM ZULU AND KAZE TRADERS. ALL RIGHTS RESERVED.
 By creating an account, ticking acceptance, signing in, hosting, paying,
 starting a trial, or using any feature, you agree to this document.
 The App records that acceptance (version and time) against your login.
+
+Version 4.0.0 is a beta release. Features, prices, and clauses may change
+before the stable release. A new legal version can require a fresh tick.
 
 This is not personal legal, tax, or investment advice.
 
@@ -92,14 +96,20 @@ PART D -- PACKAGES AND TRIAL
 ==============================================================================
 
 One-time prices in Zambian Kwacha (hardcoded):
-    New user K 0.00; New user + K 25.00; Entrepreneur K 50.00;
-    Entrepreneur + K 75.00; Businessman K 100.00;
-    Businessman pro K 150.00; CEO K 300.00;
-    Founder's premium K 500.00.
+
+    New user              K 0.00       (free forever)
+    New user +            K 25.00
+    Entrepreneur          K 75.00
+    Entrepreneur +        K 150.00
+    Businessman           K 300.00
+    Businessman pro       K 350.00
+    Chief Executive
+    Officer (CEO)         K 550.00
+    Founder's premium     K 1,100.00
 
 A paid package unlocks only after Stripe, PayPal, or Flutterwave
 confirms, or a bank transfer is marked paid. One trial per shop
-(7 to 17 days, default 12). Unused trial days are not paid out.
+(7 to 12 days, default 12). Unused trial days are not paid out.
 
 ==============================================================================
 PART E -- PAYMENT
@@ -131,7 +141,7 @@ F1. Schedule
     Chargeback after using unlocked     Package relocked; login may      Package price + provider fees
     modules                             be suspended                     as a debt
     ----------------------------------  -------------------------------  --------------------------------
-    Copying, reselling, white-labelling Immediate termination            Damages not less than K 500.00
+    Copying, reselling, white-labelling Immediate termination            Damages not less than K 1,100
     or relicensing the Software                                          (Founder's premium) plus all
                                                                          proven extra loss and legal costs
     ----------------------------------  -------------------------------  --------------------------------
@@ -149,17 +159,43 @@ F1. Schedule
     ----------------------------------  -------------------------------  --------------------------------
     False papers or tax filings made    Feature may be limited           You bear the fine from any
     from App figures                                                     authority; we are not your filer
+    ----------------------------------  -------------------------------  --------------------------------
+    Vulgar, offensive, or insulting     Warning, then suspension         Heavy fine as set out in F4
+    language about the App or owner                                      below
+    ----------------------------------  -------------------------------  --------------------------------
+    Plagiarism, piracy, or unauthorised Termination and takedown;       USD 10,000 to USD 100,000 as
+    distribution of the Software        keys revoked                     a liquidated sum, plus legal costs
+                                                                         and further charges
 
 F2. Liquidated amounts
-    Where the table names a Kwacha floor, you agree that amount is a
-    reasonable pre-estimate of harm to Ephraim Zulu and KAZE Traders
-    for that class of breach (lost control of the product, support
-    time, and enforcement). A court may award more if actual loss is
-    higher.
+    Where the table names a Kwacha or US Dollar floor, you agree that
+    amount is a reasonable pre-estimate of harm to Ephraim Zulu and
+    KAZE Traders for that class of breach (lost control of the product,
+    support time, and enforcement). A court may award more if actual
+    loss is higher.
 
 F3. No set-off
     Paying a penalty does not buy you the right to keep breaching
     and does not transfer copyright or shares.
+
+F4. Language and reputation
+    Constructive criticism is welcome and will never be penalised.
+    However, anyone who uses vulgar, offensive, or insulting language
+    when discussing the App, its features, or the company -- whether
+    in public posts, reviews, support tickets, social media, or private
+    messages to the owner or staff -- will be heavily fined. The fine
+    is at the owner's reasonable discretion, taking into account the
+    severity and reach of the statement, and may be enforced as a debt
+    where the law allows.
+
+F5. Plagiarism, piracy, and unauthorised distribution
+    Plagiarism, unauthorised distribution, and piracy of the Software
+    will not be tolerated. Anyone caught will pay not less than
+    USD 10,000 (ten thousand United States dollars) and up to
+    USD 100,000 (one hundred thousand United States dollars) as a
+    liquidated sum. Additional charges may apply, including but not
+    limited to legal costs, provider fees, and any statutory damages
+    available under copyright law.
 
 ==============================================================================
 PART G -- TERMINATION
@@ -175,11 +211,14 @@ G2. Automatic termination
           or logged breach;
       (c) attack the service or another shop;
       (d) refuse this legal version after it is shown to you;
-      (e) use a payment method without authority.
+      (e) use a payment method without authority;
+      (f) engage in plagiarism, piracy, or unauthorised distribution of
+          the Software, as described in F5.
 
 G3. Termination on notice
     We may end or suspend the licence if you seriously or repeatedly
-    break any other clause, including unpaid chargebacks.
+    break any other clause, including unpaid chargebacks or repeated
+    vulgar or insulting language as described in F4.
 
 G4. After termination
       (a) permission to use the Software ends;
@@ -251,7 +290,8 @@ Product:          KAZE Traders Business Manager
 Brand:            KAZE Traders
 Rightful owner:   Ephraim Zulu
 Copyright:        (C) 2026 Ephraim Zulu and KAZE Traders. All rights reserved.
-Legal version:    3.3.5
+Legal version:    4.0.0 (beta)
+Effective date:   2026-10-11
 Companion file:   TERMS_OF_SERVICE (this LICENCE controls if they differ)
 
 By ticking acceptance or using the App you confirm you have read

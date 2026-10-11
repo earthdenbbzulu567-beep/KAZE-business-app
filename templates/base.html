@@ -1823,6 +1823,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
                 <button type="button" class="theme-toggle" id="soundToggle" title="Sound cues on / off" aria-label="Sound cues on or off">🔔</button>
                 <span class="live-clock" id="liveClock" title="Local time"></span>
                 {% if current_user.is_authenticated %}
+                {% if current_user.is_authenticated %}
                 <a href="{{ url_for('notifications') }}" class="bell-link" title="Notifications">
                     🔔{% if unread_notifications and unread_notifications > 0 %}<span class="bell-badge">{{ unread_notifications }}</span>{% endif %}
                 </a>

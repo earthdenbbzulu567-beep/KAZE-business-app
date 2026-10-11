@@ -47,7 +47,7 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=2, x_proto=2, x_host=2, x_prefix=1)
 # -------------------------------------------------------------------------
 
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
-LEGAL_VERSION = '3.3.5'
+LEGAL_VERSION = '4.0.0'
 LEGAL_DIR = _APP_DIR
 _LEGAL_CACHE = {}
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 86400
@@ -1670,7 +1670,7 @@ PLAN_TIERS = {
         'key': 'entrepreneur',
         'label': 'Entrepreneur',
         'tagline': 'Till plus a cash ledger for a growing stall.',
-        'price': 50,
+        'price': 75,
         'highlights': [
             'Everything in New user +',
             'Book keeping papers and cash ledger',
@@ -1687,7 +1687,7 @@ PLAN_TIERS = {
         'key': 'entrepreneur_plus',
         'label': 'Entrepreneur +',
         'tagline': 'Suppliers, purchase orders, and extra papers.',
-        'price': 75,
+        'price': 150,
         'highlights': [
             'Everything in Entrepreneur',
             'Suppliers, budgets, and recurring items',
@@ -1704,7 +1704,7 @@ PLAN_TIERS = {
         'key': 'businessman',
         'label': 'Businessman',
         'tagline': 'Shop floor, books, reports, and tax estimate.',
-        'price': 100,
+        'price': 300,
         'highlights': [
             'Everything in Entrepreneur +',
             'Reports, tax summary, SWOT and plan',
@@ -1722,7 +1722,7 @@ PLAN_TIERS = {
         'key': 'businessman_pro',
         'label': 'Businessman pro',
         'tagline': 'Statistics and higher desk limits for a busy shop.',
-        'price': 150,
+        'price': 350,
         'highlights': [
             'Everything in Businessman',
             'Statistics tables and Excel export',
@@ -1740,7 +1740,7 @@ PLAN_TIERS = {
         'key': 'ceo',
         'label': 'CEO',
         'tagline': 'Every module, including account tracking.',
-        'price': 300,
+        'price': 550,
         'highlights': [
             'Every module in KAZE',
             'Banking, investments, shop, and market value',
@@ -1753,7 +1753,7 @@ PLAN_TIERS = {
         'key': 'founder',
         'label': "Founder's premium",
         'tagline': 'The full house with no practical desk limits.',
-        'price': 500,
+        'price': 1100,
         'highlights': [
             'Everything in CEO including supreme desks',
             'No practical stock, sales, or team caps',
@@ -8837,7 +8837,7 @@ def plans():
         flutterwave_ready=integrations.flutterwave_ready(settings),
         bank_ready=gateways.bank_ready(settings),
         trial=trial,
-        trial_day_choices=list(range(7, 18)),
+        trial_day_choices=list(range(7, 13)),
         unlocked_rank=unlocked_rank,
         is_owner=(getattr(current_user, 'role', 'owner') == 'owner'),
     )
@@ -8948,7 +8948,7 @@ def start_trial():
         days = int(request.form.get('trial_days') or 12)
     except (TypeError, ValueError):
         days = 12
-    days = min(17, max(7, days))
+    days = min(12, max(7, days))
     ends = (datetime.today() + timedelta(days=days)).strftime('%Y-%m-%d')
     conn = get_db()
     cur = conn.cursor()

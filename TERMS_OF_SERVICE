@@ -2,11 +2,12 @@
 KAZE TRADERS BUSINESS MANAGER -- TERMS OF SERVICE
 ==============================================================================
 
-Companion to LICENCE version 3.3.5. If they differ, LICENCE controls.
+Companion to LICENCE version 4.0.0 (beta). If they differ, LICENCE controls.
 
 Brand:           KAZE Traders
 Rightful owner:  Ephraim Zulu
 Copyright:       (C) 2026 Ephraim Zulu and KAZE Traders. All rights reserved.
+Effective date:  2026-10-11
 
 1. You accept these terms by ticking the box, signing in, paying,
    starting a trial, or using any feature. The App stores the legal
@@ -16,26 +17,46 @@ Copyright:       (C) 2026 Ephraim Zulu and KAZE Traders. All rights reserved.
    data you type.
 
 3. Locked features stay locked until payment or an active trial.
-   Wrong entries make wrong reports. Notes may use simple markdown. Raw HTML is escaped.
+   Wrong entries make wrong reports. Notes may use simple markdown.
+   Raw HTML is escaped.
 
-4. Prices (Kwacha, one-time): New user K 0; New user + K 25;
-   Entrepreneur K 50; Entrepreneur + K 75; Businessman K 100;
-   Businessman pro K 150; CEO K 300; Founder's premium K 500.
+4. Prices (Kwacha, one-time):
+       New user              K 0       (free forever)
+       New user +            K 25
+       Entrepreneur          K 75
+       Entrepreneur +        K 150
+       Businessman           K 300
+       Businessman pro       K 350
+       Chief Executive
+       Officer (CEO)         K 550
+       Founder's premium     K 1,100
+
+   Free trial: 7 to 12 days. One trial per shop. Unused days are not
+   paid out.
 
 5. Breach penalties (summary)
    - No acceptance: desk blocked.
    - Unpaid package force: refused, logged, debt equal to that price.
    - Chargeback after use: relock + price + provider fees.
    - Copy / resell / strip copyright: termination + damages not less
-     than K 500 plus extra proven loss and costs.
+     than K 1,100 plus extra proven loss and costs.
    - Attack or fraud: ban and report to host and authorities.
+   - Vulgar, offensive, or insulting language about the App or the
+     owner: warning, then suspension, then a heavy fine at the owner's
+     reasonable discretion. Constructive criticism is always welcome
+     and is not covered by this clause.
+   - Plagiarism, piracy, or unauthorised distribution of the Software:
+     termination and takedown, plus a liquidated sum of not less than
+     USD 10,000 and up to USD 100,000, plus legal costs and any other
+     charges that apply.
 
 6. Termination
    The licence ends at once if you copy the Software, bypass locks
    after a logged breach, attack the service, refuse this version,
-   or pay with a method you have no right to use. After that you
-   must stop using the Software. Shop-data exports remain yours.
-   Breach does not create a refund.
+   pay with a method you have no right to use, or engage in plagiarism
+   or unauthorised distribution. After that you must stop using the
+   Software. Shop-data exports remain yours. Breach does not create a
+   refund.
 
 7. Enforcement
    Ephraim Zulu and KAZE Traders will sue, charge, and -- where the
