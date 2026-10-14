@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Business Health Score{% endblock %}
+{% block content %}
+
+<div class="card detail-overlay" style="margin-bottom:1.5rem; background:linear-gradient(135deg, rgba(16,185,129,0.08), transparent);">
+  <h3>Health Score Overview</h3>
+  <p>Overall business health calculated from sales, stock, and activity.</p>
+</div>
+
+<div class="page-header"><h1><i data-lucide="activity"></i> Business Health Score</h1></div>
+<div class="card text-center">
+  <div style="font-size:4rem; font-weight:bold; color:var(--accent);">{{ score }}</div>
+  <h2>{{ status }}</h2>
+  <p>30-day sales: {{ money(sales) }} | Low stock items: {{ low }}</p>
+</div>
+{% endblock %}

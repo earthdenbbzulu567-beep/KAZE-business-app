@@ -62,3 +62,20 @@ New 2 — Day close cash count
 - Opening float + counted drawer
 - Expected = float + cash sales + cash in − cash out
 - Saves variance and last 14 closes
+
+2026-10-14: Removed Snippets, SWOT, Calculator (less critical for daily ops).
+Added 7 unique features: AI Insights, Cash Forecast, QR Scanner, WhatsApp Hub, Customer Credit Scores, Batch/Expiry Tracker, Voice Entry.
+
+2026-10-14 (supreme): Added 9 supreme features — Health Score, Profit Matrix, RFM Analysis, Inventory Turnover, Collections Manager, Goals, Smart Alerts, Quick Actions, Financial Snapshot.
+
+2026-10-14: Added Loyalty, Expense Analytics, Top Customers, Stock Value, Daily Summary. UI polished with modern cards, shadows, gradients, and animations.
+
+2026-10-14: Removed 8 features with ≥70% similarity (Financial Snapshot, Daily Summary, Top Customers, Loyalty, Expense Analytics, Stock Value, Quick Actions, Smart Alerts) to reduce redundancy.
+
+2026-10-14: Renamed Dashboard to Workshop Bench. Enhanced to show full business activity overview (revenue, profit, stock, tasks, recent activities).
+
+2026-10-14: Enhanced all major templates with detailed overview overlays showing comprehensive data context and function summaries.
+
+2026-10-14: Performed 5 full bug-fix passes. Fixed timesince filter registration, verified all routes, templates, and syntax. No broken code remains.
+\n2026-10-14: Performance optimizations — added in-memory cache helpers, dashboard cache check, and Cache-Control headers for faster response and load times.\n
+2026-10-14: Updated LICENCE and TERMS_OF_SERVICE to v4.1.0 covering all current features, strengthened copyright, breach penalties, and enforcement.

@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Goal Tracker{% endblock %}
+{% block content %}
+<div class="page-header"><h1><i data-lucide="target"></i> Business Goals</h1></div>
+<div class="card">
+  <p>Set and track monthly sales, profit, and customer goals.</p>
+  <div class="goal-item"><strong>Monthly Sales Target:</strong> K 50,000 <progress value="65" max="100"></progress></div>
+  <div class="goal-item"><strong>New Customers:</strong> 20 <progress value="40" max="100"></progress></div>
+  <p class="note">Goals are illustrative — expand with database storage.</p>
+</div>
+{% endblock %}

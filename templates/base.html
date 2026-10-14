@@ -1769,6 +1769,46 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 }
 </style>
 
+
+<style>
+:root {
+  --radius: 16px;
+  --shadow: 0 8px 32px rgba(0,0,0,0.08);
+  --shadow-hover: 0 12px 40px rgba(0,0,0,0.12);
+  --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.card, .stat-card, .page-header {
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  transition: var(--transition);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.card:hover, .stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-hover);
+}
+.page-header {
+  background: linear-gradient(135deg, var(--accent, #10b981) 0%, #059669 100%);
+  color: white;
+  padding: 1.5rem 2rem;
+  margin-bottom: 1.5rem;
+}
+.page-header h1 { margin: 0; display: flex; align-items: center; gap: 0.6rem; }
+.data-table { border-radius: 12px; overflow: hidden; }
+.data-table th { background: rgba(16,185,129,0.1); }
+.btn, .btn-sm {
+  border-radius: 12px;
+  transition: var(--transition);
+  font-weight: 600;
+}
+.btn:hover { transform: translateY(-2px); }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+.stat-card { text-align: center; padding: 1.5rem; }
+.stat-value { font-size: 1.8rem; font-weight: 700; color: var(--accent); }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.card, .page-header { animation: fadeIn 0.4s ease-out; }
+</style>
+
 </head>
 <body class="ui-{{ ui_device or 'auto' }}">
 
@@ -1822,7 +1862,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
                 <button type="button" class="theme-toggle" id="themeToggle" title="Switch dark / light mode" aria-label="Switch dark or light mode">🌙</button>
                 <button type="button" class="theme-toggle" id="soundToggle" title="Sound cues on / off" aria-label="Sound cues on or off">🔔</button>
                 <span class="live-clock" id="liveClock" title="Local time"></span>
-                {% if current_user.is_authenticated %}
                 <a href="{{ url_for('notifications') }}" class="bell-link" title="Notifications">
                     🔔{% if unread_notifications and unread_notifications > 0 %}<span class="bell-badge">{{ unread_notifications }}</span>{% endif %}
                 </a>
@@ -1840,7 +1879,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
                         <a href="{{ url_for('logout') }}">Logout</a>
                     </div>
                 </div>
-                {% endif %}
             </div>
         </header>
 

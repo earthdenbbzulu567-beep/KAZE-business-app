@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Loyalty Points{% endblock %}
+{% block content %}
+<div class="page-header"><h1><i data-lucide="award"></i> Customer Loyalty</h1></div>
+<div class="card">
+  <table class="data-table">
+    <thead><tr><th>Customer</th><th>Total Spent</th><th>Points</th></tr></thead>
+    <tbody>
+      {% for m in members %}
+      <tr><td>{{ m.name }}</td><td>{{ money(m.spent) }}</td><td>{{ (m.spent / 10)|round(0) }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

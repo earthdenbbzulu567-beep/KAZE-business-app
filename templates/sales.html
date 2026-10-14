@@ -1,6 +1,18 @@
 {% extends "base.html" %}
 {% block charts_js %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>{% endblock %}
 {% block content %}
+
+<div class="card detail-overlay" style="margin-bottom:1.5rem; background:linear-gradient(135deg, rgba(16,185,129,0.08), transparent);">
+  <h3>Sales Overview</h3>
+  
+<p>Total records shown below. Use filters and bulk actions for deeper analysis.</p>
+<div class="stats-grid" style="margin-top:0.5rem;">
+  <div class="stat-card"><div class="stat-label">View</div><div class="stat-value">Detailed</div></div>
+  <div class="stat-card"><div class="stat-label">Actions</div><div class="stat-value">Export / Edit</div></div>
+</div>
+
+</div>
+
 <div class="page-header">
     <h1>Sales</h1>
     <button type="button" class="btn-secondary popup-trigger-btn" onclick="openModal('salesActionsModal')">⬇️ Export</button>

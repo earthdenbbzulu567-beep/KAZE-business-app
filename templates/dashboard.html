@@ -7,7 +7,7 @@
     </div>
     <div class="dash-hero-copy">
         <p class="dash-kicker">{{ user_settings.business_name if user_settings and user_settings.business_name else 'KAZE Traders' }}</p>
-        <h1>{{ current_user.username }}'s Dashboard</h1>
+        <h1>{{ current_user.username }}'s Workshop Bench</h1>
         <p class="dash-hero-mode">{{ app_modes[app_mode].label if app_mode in app_modes else app_mode }} · live {{ (snap.ran or [])|join(', ') or 'none' }}</p>
     </div>
     <a href="{{ url_for('settings') }}#modes" class="btn-secondary dash-hero-btn">Change colour / mode</a>
@@ -643,4 +643,24 @@ function dismissOnboarding() {
         });
     });
 </script>
+
+<section class="overview-grid" style="margin-top:2rem;">
+  <h2>Business Activity Overview</h2>
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-value">{{ money(month_revenue or 0) }}</div><div class="stat-label">Month Revenue</div></div>
+    <div class="stat-card"><div class="stat-value">{{ money(profit or 0) }}</div><div class="stat-label">Operating Profit</div></div>
+    <div class="stat-card"><div class="stat-value">{{ (low_stock_items|length) if low_stock_items else 0 }}</div><div class="stat-label">Low Stock</div></div>
+    <div class="stat-card"><div class="stat-value">{{ open_tasks or 0 }}</div><div class="stat-label">Open Tasks</div></div>
+  </div>
+  <div class="card" style="margin-top:1rem;">
+    <h3>Recent Activities</h3>
+    <ul>
+      {% for act in activities[:10] %}
+      <li>{{ act.action }} — {{ act.details }} ({{ act.created_date }})</li>
+      {% else %}
+      <li>No recent activity</li>
+      {% endfor %}
+    </ul>
+  </div>
+</section>
 {% endblock %}

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Product Profitability{% endblock %}
+{% block content %}
+<div class="page-header"><h1><i data-lucide="pie-chart"></i> Product Profitability Matrix</h1></div>
+<div class="card">
+  <table class="data-table">
+    <thead><tr><th>Product</th><th>Estimated Profit</th></tr></thead>
+    <tbody>
+      {% for p in products %}
+      <tr><td>{{ p.name }}</td><td>{{ money(p.profit) }}</td></tr>
+      {% else %}
+      <tr><td colspan="2">No sales data yet</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

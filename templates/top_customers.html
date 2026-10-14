@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Top Customers{% endblock %}
+{% block content %}
+<div class="page-header"><h1><i data-lucide="star"></i> Top Customers</h1></div>
+<div class="card">
+  <table class="data-table">
+    <thead><tr><th>Rank</th><th>Customer</th><th>Total</th></tr></thead>
+    <tbody>
+      {% for c in customers %}
+      <tr><td>{{ loop.index }}</td><td>{{ c.name }}</td><td>{{ money(c.total) }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

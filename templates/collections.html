@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Collections Manager{% endblock %}
+{% block content %}
+<div class="page-header"><h1><i data-lucide="alert-circle"></i> Collections Manager</h1></div>
+<div class="card">
+  <table class="data-table">
+    <thead><tr><th>Customer</th><th>Outstanding</th></tr></thead>
+    <tbody>
+      {% for o in owing %}
+      <tr><td>{{ o.name }}</td><td>{{ money(o.outstanding) }}</td></tr>
+      {% else %}
+      <tr><td colspan="2">No outstanding balances</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

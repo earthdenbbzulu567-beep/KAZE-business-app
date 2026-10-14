@@ -35,7 +35,7 @@
         <form method="POST" action="{{ url_for('multi_add', kind='tasks') }}">
             <div class="table-wrapper">
             <table class="multi-table" id="multiTasks">
-                <thead><tr><th>Title</th><th>Priority</th><th>Due</th><th>Notes</th><th></th></tr></thead>
+                <thead><tr><th>Title</th><th>Priority</th><th>Due</th><th>Notes</th><th><input type="checkbox" onclick="kazeToggleAll(this)"></th></tr></thead>
                 <tbody>
                 {% for _ in range(3) %}
                 <tr class="multi-row">

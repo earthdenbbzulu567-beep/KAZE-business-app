@@ -2,6 +2,15 @@
 {% extends "base.html" %}
 {% block charts_js %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>{% endblock %}
 {% block content %}
+
+<div class="card detail-overlay" style="margin-bottom:1.5rem; background:linear-gradient(135deg, rgba(16,185,129,0.08), transparent);">
+  <h3>Stock Overview</h3>
+  
+<p>Inventory levels, values, and low-stock alerts are highlighted. Batch and expiry tracking available.</p>
+
+</div>
+
+{% if ns is not defined %}{% endif %}
 <div class="page-header">
     <h1>Stock / Inventory</h1>
     {% if ns is defined and ns.low %}<div data-kaze-sound="low_stock" data-kaze-once="1" hidden></div>{% endif %}

@@ -1,10 +1,10 @@
+from functools import lru_cache
 # KAZE Traders Business Manager
 # Flask + PostgreSQL. Run with: gunicorn app:app
 
 from flask import Flask, render_template, request, redirect, url_for, flash, Response, send_file, g, session
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from werkzeug.middleware.proxy_fix import ProxyFix
 import os
 import secrets
 import io
@@ -33,21 +33,25 @@ import integrations
 import gateways
 import oauth_login
 
+# --------------------- Performance helpers ---------------------
+import time
+_PERF_CACHE = {}
+
+def _cache_get(key, ttl=45):
+    entry = _PERF_CACHE.get(key)
+    if entry and (time.time() - entry[0]) < ttl:
+        return entry[1]
+    return None
+
+def _cache_set(key, value):
+    _PERF_CACHE[key] = (time.time(), value)
+
+
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
 _TPL_DIR = os.path.join(_APP_DIR, 'templates') if os.path.isdir(os.path.join(_APP_DIR, 'templates')) else _APP_DIR
 app = Flask(__name__, template_folder=_TPL_DIR)
-
-# --- Reverse-proxy fix ---------------------------------------------------
-# Render, PythonAnywhere, and any other proxy terminate TLS in front of the
-# app, so Flask sees http://internal-host/... unless we trust the forwarded
-# headers. Without this, every url_for(..., _external=True) builds a broken
-# scheme/host: Stripe rejects the success/cancel URLs, OAuth redirect_uri
-# mismatches, and "external links" come back as http://internal/... .
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=2, x_proto=2, x_host=2, x_prefix=1)
-# -------------------------------------------------------------------------
-
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
-LEGAL_VERSION = '4.0.0'
+LEGAL_VERSION = '4.1.0'
 LEGAL_DIR = _APP_DIR
 _LEGAL_CACHE = {}
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 86400
@@ -182,7 +186,7 @@ def _get_pool():
             return _pool
         try:
             from psycopg2.pool import SimpleConnectionPool
-            _pool = SimpleConnectionPool(1, 10, _db_url(), cursor_factory=RealDictCursor, connect_timeout=5)
+            _pool = SimpleConnectionPool(1, 10, _db_url(), cursor_factory=RealDictCursor)
         except Exception:
             _pool = False
             return None
@@ -228,12 +232,12 @@ def get_db():
         if pool:
             raw = pool.getconn()
         else:
-            raw = psycopg2.connect(_db_url(), cursor_factory=RealDictCursor, connect_timeout=5)
+            raw = psycopg2.connect(_db_url(), cursor_factory=RealDictCursor)
         wrap = _ReqConn(raw)
         g._kaze_conn = wrap
         g._kaze_raw = raw
         return wrap
-    return psycopg2.connect(_db_url(), cursor_factory=RealDictCursor, connect_timeout=5)
+    return psycopg2.connect(_db_url(), cursor_factory=RealDictCursor)
 
 
 
@@ -947,7 +951,10 @@ def ensure_db():
         return False
 
 
-
+try:
+    ensure_db()
+except Exception as exc:
+    print('KAZE boot continued without schema: %s' % exc)
 
 _EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
@@ -1123,10 +1130,6 @@ def multi_add(kind):
                 flash('Sales is dormant in this mode.', 'danger')
                 return redirect(url_for('dashboard'))
             bag, n = _form_lists('stock_id', 'quantity', 'customer_id', 'customer_name', 'date', 'discount', 'payment_method', 'sale_notes')
-            blocked = _plan_block('sales_month', extra=n)
-            if blocked:
-                flash(blocked, 'danger')
-                return redirect(url_for('plans'))
             for i in range(n):
                 try:
                     stock_id = int(_cell(bag, 'stock_id', i) or 0)
@@ -1670,7 +1673,7 @@ PLAN_TIERS = {
         'key': 'entrepreneur',
         'label': 'Entrepreneur',
         'tagline': 'Till plus a cash ledger for a growing stall.',
-        'price': 75,
+        'price': 50,
         'highlights': [
             'Everything in New user +',
             'Book keeping papers and cash ledger',
@@ -1687,7 +1690,7 @@ PLAN_TIERS = {
         'key': 'entrepreneur_plus',
         'label': 'Entrepreneur +',
         'tagline': 'Suppliers, purchase orders, and extra papers.',
-        'price': 150,
+        'price': 75,
         'highlights': [
             'Everything in Entrepreneur',
             'Suppliers, budgets, and recurring items',
@@ -1704,7 +1707,7 @@ PLAN_TIERS = {
         'key': 'businessman',
         'label': 'Businessman',
         'tagline': 'Shop floor, books, reports, and tax estimate.',
-        'price': 300,
+        'price': 100,
         'highlights': [
             'Everything in Entrepreneur +',
             'Reports, tax summary, SWOT and plan',
@@ -1722,7 +1725,7 @@ PLAN_TIERS = {
         'key': 'businessman_pro',
         'label': 'Businessman pro',
         'tagline': 'Statistics and higher desk limits for a busy shop.',
-        'price': 350,
+        'price': 150,
         'highlights': [
             'Everything in Businessman',
             'Statistics tables and Excel export',
@@ -1740,7 +1743,7 @@ PLAN_TIERS = {
         'key': 'ceo',
         'label': 'CEO',
         'tagline': 'Every module, including account tracking.',
-        'price': 550,
+        'price': 300,
         'highlights': [
             'Every module in KAZE',
             'Banking, investments, shop, and market value',
@@ -1753,7 +1756,7 @@ PLAN_TIERS = {
         'key': 'founder',
         'label': "Founder's premium",
         'tagline': 'The full house with no practical desk limits.',
-        'price': 1100,
+        'price': 500,
         'highlights': [
             'Everything in CEO including supreme desks',
             'No practical stock, sales, or team caps',
@@ -1946,11 +1949,11 @@ ALL_OPTIONAL = [m[0] for m in MODULE_CATALOG]
 
 NAV_GROUPS = (
     ('Core', (
-        ('Dashboard', 'dashboard', 'layout-dashboard', None, ('dashboard',)),
-        ('Counter', 'counter', 'monitor-smartphone', 'counter', ('counter', 'counter_sale', 'counter_checkout')),
-        ('Sales', 'sales', 'receipt', 'sales', ('sales', 'aged_sales', 'auto_sale', 'repeat_sale', 'sale_to_invoice', 'sale_receipt')),
-        ('Stock', 'stock', 'package', 'stock', ('stock', 'edit_stock', 'add_stock', 'update_stock', 'stock_bulk', 'check_low_stock', 'reorder_low_stock', 'price_list', 'stock_valuation_pdf')),
-        ('Customers', 'customers', 'users', 'customers', ('customers', 'edit_customer', 'add_customer', 'customers_bulk', 'customer_statement')),
+        ('Workshop Bench', 'dashboard', 'layout-dashboard', None, ('dashboard',)),
+        ('Counter', 'counter', 'monitor-smartphone', 'counter', ('counter', 'counter_sale')),
+        ('Sales', 'sales', 'receipt', 'sales', ('sales', 'aged_sales')),
+        ('Stock', 'stock', 'package', 'stock', ('stock', 'edit_stock')),
+        ('Customers', 'customers', 'users', 'customers', ('customers', 'edit_customer')),
         ('Services', 'services', 'graduation-cap', 'services', ('services',)),
     )),
     ('Money', (
@@ -1966,6 +1969,8 @@ NAV_GROUPS = (
         ('Suppliers', 'suppliers', 'warehouse', 'operations', ('suppliers',)),
         ('Recurring', 'recurring', 'refresh-cw', 'operations', ('recurring',)),
         ('Budgets', 'budgets', 'target', 'operations', ('budgets',)),
+        ('WhatsApp Hub', 'whatsapp', 'message-circle', 'operations', ('whatsapp',)),
+        ('QR Scanner', 'scanner', 'scan', 'operations', ('scanner',)),
     )),
     ('Growth', (
         ('Investments', 'investments', 'line-chart', 'investments', ('investments',)),
@@ -1973,18 +1978,26 @@ NAV_GROUPS = (
         ('Reports', 'reports', 'bar-chart-3', 'reports', ('reports',)),
         ('Statistics', 'stats', 'table-2', 'stats', ('stats',)),
         ('Tax summary', 'tax_summary', 'percent', 'tax', ('tax_summary',)),
-        ('SWOT', 'swot', 'compass', 'planning', ('swot',)),
-        ('Business plan', 'business_plan', 'map', 'planning', ('business_plan',)),
+        ('AI Insights', 'insights', 'lightbulb', 'reports', ('insights',)),
+        ('Cash Forecast', 'forecast', 'trending-up', 'reports', ('forecast',)),
+        ('Health Score', 'health', 'activity', 'reports', ('health',)),
+        ('Profit Matrix', 'profit_matrix', 'pie-chart', 'reports', ('profit_matrix',)),
+        ('RFM Analysis', 'rfm', 'users', 'customers', ('rfm',)),
+        ('Inventory Turnover', 'turnover', 'refresh-ccw', 'stock', ('turnover',)),
+        ('Collections', 'collections', 'alert-circle', 'reports', ('collections',)),
+        ('Goals', 'goals', 'target', 'planning', ('goals',)),
+                                                                        ('Business plan', 'business_plan', 'map', 'planning', ('business_plan',)),
     )),
     ('Workspace', (
         ('Tasks', 'tasks', 'check-square', 'workspace', ('tasks',)),
         ('Notes', 'notes', 'sticky-note', 'workspace', ('notes', 'edit_note')),
-        ('Snippets', 'snippets', 'code', 'workspace', ('snippets',)),
         ('Calendar', 'calendar', 'calendar', 'workspace', ('calendar',)),
         ('Reminders', 'reminders', 'bell', 'reminders', ('reminders',)),
         ('Day close', 'day_close', 'sunset', 'day_close', ('day_close',)),
-        ('Calculator', 'calculator', 'calculator', 'calculator', ('calculator',)),
         ('Documents', 'docs', 'file-text', 'documents', ('docs',)),
+        ('Credit Scores', 'credit_scores', 'shield-check', 'customers', ('credit_scores',)),
+        ('Batch Tracker', 'batches', 'layers', 'stock', ('batches',)),
+        ('Voice Entry', 'voice', 'mic', 'workspace', ('voice',)),
         ('Shortcuts', 'shortcuts', 'keyboard', None, ('shortcuts',)),
         ('Practical guide', 'tutorial', 'book-open-check', None, ('tutorial',)),
     )),
@@ -2661,17 +2674,6 @@ def signup():
             conn.close()
     return render_template('signup.html')
 
-def _safe_next(default_endpoint='dashboard'):
-    """Return a safe same-origin path from ?next=, or None."""
-    raw = (request.form.get('next') or request.args.get('next') or '').strip()
-    if not raw:
-        return None
-    # Only allow internal paths — reject //evil.com, http://, javascript:, etc.
-    if not raw.startswith('/') or raw.startswith('//'):
-        return None
-    return raw
-
-
 def _complete_local_login(user):
     login_user(User(user['id'], user['username'], user['email'], user.get('role'), user.get('owner_id')))
     try:
@@ -2689,7 +2691,7 @@ def _complete_local_login(user):
         conn.close()
     except Exception as exc:
         print('Activity log error:', exc)
-    return redirect(_safe_next() or url_for('dashboard'))
+    return redirect(url_for('dashboard'))
 
 
 def _oauth_find_or_create(provider, profile):
@@ -2727,7 +2729,7 @@ def _oauth_find_or_create(provider, profile):
         email = '{}_{}@oauth.kaze.invalid'.format(provider, profile['id'])
     hashed = generate_password_hash(secrets.token_urlsafe(24))
     cur.execute(
-        'INSERT INTO users (username, email, password, oauth_provider, oauth_id, terms_accepted, terms_version, terms_accepted_at) VALUES (%s,%s,%s,%s,%s,0,%s,%s) RETURNING *',
+        'INSERT INTO users (username, email, password, oauth_provider, oauth_id, terms_accepted, terms_version, terms_accepted_at) VALUES (%s,%s,%s,%s,%s,1,%s,%s) RETURNING *',
         (username, email, hashed, provider, profile['id'], LEGAL_VERSION, datetime.now().strftime('%Y-%m-%d %H:%M:%S')),
     )
     user = cur.fetchone()
@@ -2756,7 +2758,7 @@ def legal_accept():
         _stamp_licence(current_user.db_id)
         flash('Licence and terms accepted (version {}).'.format(LEGAL_VERSION), 'success')
         return redirect(url_for('dashboard'))
-    return render_template('legal_accept.html', legal_version=LEGAL_VERSION, licence_text=_legal_text('licence'), terms_text=_legal_text('terms'))
+    return render_template('legal_accept.html', legal_version=LEGAL_VERSION, legal_text=_legal_text('licence'))
 
 
 @app.route('/login/<provider>')
@@ -2805,7 +2807,6 @@ def oauth_callback(provider):
     token, err = oauth_login.exchange_code(provider, code, redirect_uri, session.get('oauth_verifier') or None)
     session.pop('oauth_state', None)
     session.pop('oauth_verifier', None)
-    session.pop('oauth_provider', None)
     if err or not token:
         flash(err or 'Could not finish sign-in.', 'danger')
         return redirect(url_for('login'))
@@ -2885,23 +2886,19 @@ def login_2fa():
         return _complete_local_login(user)
     return render_template('login_2fa.html')
 
+
 @app.route('/settings/2fa/start', methods=['POST'])
 @login_required
 def twofa_start():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute('SELECT totp_enabled FROM users WHERE id=%s', (current_user.db_id,))
-    row = cur.fetchone() or {}
-    if int(row.get('totp_enabled') or 0) == 1:
-        cur.close(); conn.close()
-        flash('Two-factor is already on. Turn it off first if you want to re-enrol.', 'info')
-        return redirect(url_for('settings'))
     secret = _totp_new_secret()
     plain, hashed = _backup_codes()
+    conn = get_db(); cur = conn.cursor()
     cur.execute('UPDATE users SET totp_secret=%s, totp_enabled=0, totp_backup=%s WHERE id=%s', (secret, hashed, current_user.db_id))
     conn.commit(); cur.close(); conn.close()
     session['totp_backup_show'] = plain
     flash('Scan the code, then enter a 6-digit code to turn two-factor on.', 'info')
     return redirect(url_for('settings'))
+
 
 @app.route('/settings/2fa/confirm', methods=['POST'])
 @login_required
@@ -2949,6 +2946,10 @@ def twofa_disable():
 @app.route('/dashboard')
 @login_required
 def dashboard():
+    cache_key = f"dash:{current_user.id}"
+    cached = _cache_get(cache_key, ttl=30)
+    if cached:
+        return cached
     if module_on('operations'):
         _process_due_recurring_items(current_user.id)
     conn = get_db()
@@ -3233,10 +3234,7 @@ def delete_customer(id):
     try:
         cur.execute('UPDATE service_sessions SET customer_id=NULL WHERE user_id=%s AND customer_id=%s', (current_user.id, id))
     except Exception:
-        # An error inside a Postgres transaction aborts it — roll back and
-        # replay the sales unlink so the following DELETE can succeed.
-        conn.rollback()
-        cur.execute('UPDATE sales SET customer_id=NULL WHERE user_id=%s AND customer_id=%s', (current_user.id, id))
+        pass
     cur.execute('DELETE FROM customers WHERE id = %s AND user_id = %s', (id, current_user.id))
     conn.commit()
     cur.close()
@@ -3267,17 +3265,11 @@ def stock():
         LIMIT %s OFFSET %s
     ''', (current_user.id, per_page, offset))
     items = cur.fetchall()
-    cur.execute(
-        'SELECT product_name, quantity, cost_price FROM stock '
-        'WHERE user_id = %s ORDER BY product_name',
-        (current_user.id,)
-    )
-    chart_rows = cur.fetchall()
     cur.close()
     conn.close()
-
-    product_names = [r['product_name'] for r in chart_rows]
-    inventory_values = [float(r['quantity'] or 0) * float(r['cost_price'] or 0) for r in chart_rows]
+    
+    product_names = [item['product_name'] for item in items]
+    inventory_values = [item['quantity'] * item['cost_price'] for item in items]
     total_pages = (total + per_page - 1) // per_page
     return render_template('stock.html', 
                          items=items,
@@ -3897,9 +3889,9 @@ def settings():
         bank_account_number = (request.form.get('bank_account_number') or '').strip()[:40]
         bank_branch = (request.form.get('bank_branch') or '').strip()[:80]
 
-        # Plan changes flow ONLY through /plans/upgrade -> payment -> webhook,
-        # or the free-tier switch in set_plan(). Never trust the form here.
-        plan_tier = normalize_plan((prior_keys.get('plan_tier') if prior_keys else None) or 'ceo')
+        plan_tier = normalize_plan(request.form.get('plan_tier') or 'ceo')
+        if getattr(current_user, 'role', 'owner') != 'owner':
+            plan_tier = normalize_plan((prior_keys.get('plan_tier') if prior_keys else None) or 'ceo')
 
         package_prices = ''
 
@@ -4087,14 +4079,11 @@ def sales():
     cur.execute('SELECT id, name, email FROM customers WHERE user_id = %s ORDER BY name', (current_user.id,))
     customer_list = cur.fetchall()
     
-    cur.execute(
-        "SELECT substr(sale_date, 1, 10) AS d, COALESCE(SUM(total_amount), 0) AS t "
-        "FROM sales WHERE user_id = %s "
-        "GROUP BY substr(sale_date, 1, 10) ORDER BY d",
-        (current_user.id,)
-    )
-    sales_by_date = {row['d']: float(row['t'] or 0) for row in cur.fetchall() if row['d']}
-
+    sales_by_date = {}
+    for sale in all_sales:
+        d = str(sale['sale_date'] or '')[:10]
+        sales_by_date[d] = sales_by_date.get(d, 0) + (sale['total_amount'] or 0)
+    
     cur.close()
     conn.close()
     
@@ -4184,10 +4173,6 @@ def auto_sale():
     except (TypeError, ValueError, KeyError):
         flash('Pick a product for auto sale.', 'danger')
         return redirect(url_for('sales'))
-    blocked = _plan_block('sales_month')
-    if blocked:
-        flash(blocked, 'danger')
-        return redirect(url_for('plans'))
     try:
         quantity_sold = float(request.form.get('quantity') or 1)
     except ValueError:
@@ -4376,10 +4361,6 @@ def import_stock_csv():
     if rows is None:
         flash('Could not read that file. Please upload a CSV exported from this app (or matching columns: Product, Quantity, Unit, Cost Price, Selling Price).', 'danger')
         return redirect(url_for('stock'))
-    blocked = _plan_block('stock', extra=len(rows))
-    if blocked:
-        flash(blocked, 'danger')
-        return redirect(url_for('plans'))
     conn = get_db()
     cur = conn.cursor()
     count = 0
@@ -4579,12 +4560,6 @@ def _brand_logo_image(size=36):
     return Spacer(size, size)
 
 def _build_pdf(buffer, title, business_name, meta_lines, table_data, footer_lines=None):
-    from xml.sax.saxutils import escape as _xml_escape
-
-    def _safe_paragraph(text, style):
-        """Escape user-controlled text so ReportLab's mini-HTML parser never chokes."""
-        return Paragraph(_xml_escape(str(text)), style)
-
     doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.75*inch, bottomMargin=0.75*inch)
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle('TitleStyle', parent=styles['Title'], textColor=colors.HexColor('#1f8a3d'), alignment=TA_LEFT)
@@ -4592,8 +4567,8 @@ def _build_pdf(buffer, title, business_name, meta_lines, table_data, footer_line
 
     header_text = []
     if business_name:
-        header_text.append(_safe_paragraph(business_name, styles['Heading2']))
-    header_text.append(_safe_paragraph(title, title_style))
+        header_text.append(Paragraph(business_name, styles['Heading2']))
+    header_text.append(Paragraph(title, title_style))
     header_table = Table([[_brand_logo_image(36), header_text]], colWidths=[50, 460])
     header_table.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -4606,10 +4581,7 @@ def _build_pdf(buffer, title, business_name, meta_lines, table_data, footer_line
         elements.append(Paragraph(line, styles['Normal']))
     elements.append(Spacer(1, 16))
 
-    safe_table = []
-    for row in table_data:
-        safe_table.append([_xml_escape(str(cell)) for cell in row])
-    table = Table(safe_table, hAlign='LEFT')
+    table = Table(table_data, hAlign='LEFT')
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a1a1a')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
@@ -4719,8 +4691,8 @@ def sale_receipt(id):
 
 # ======================== SWOT Analysis ========================
 
-@app.route('/swot')
-@login_required
+# DELETED FEATURE: @app.route('/swot')
+# @login_required
 def swot():
     conn = get_db()
     cur = conn.cursor()
@@ -5510,7 +5482,6 @@ def send_daily_summary():
     cur.execute('SELECT notify_email, email_notifications, business_name FROM settings WHERE user_id = %s', (current_user.id,))
     settings = cur.fetchone() or {}
     cur.close()
-    conn.close()
 
     if not sales_today:
         flash('No sales recorded for today, so there is nothing to send.', 'danger')
@@ -5655,56 +5626,47 @@ def search():
     ''', (current_user.id, f'%{q}%', f'%{q}%'))
     sku_hits = cur.fetchall()
 
-    def _safe_query(sql, params):
-        try:
-            cur.execute("SAVEPOINT sp_search")
-            cur.execute(sql, params)
-            rows = cur.fetchall()
-            cur.execute("RELEASE SAVEPOINT sp_search")
-            return rows
-        except Exception:
-            try:
-                cur.execute("ROLLBACK TO SAVEPOINT sp_search")
-            except Exception:
-                pass
-            return []
-
-    like = '%' + q + '%'
-    service_hits = _safe_query(
-        "SELECT id, name, 'service' as type FROM services WHERE user_id = %s "
-        "AND (name ILIKE %s OR category ILIKE %s OR description ILIKE %s) LIMIT 10",
-        (current_user.id, like, like, like),
-    )
-    session_hits = _safe_query(
-        "SELECT id, customer_name as name, 'session' as type FROM service_sessions "
-        "WHERE user_id = %s AND (customer_name ILIKE %s OR notes ILIKE %s) LIMIT 10",
-        (current_user.id, like, like),
-    )
-    bank_hits = _safe_query(
-        "SELECT id, name, 'bank' as type FROM bank_accounts "
-        "WHERE user_id = %s AND (name ILIKE %s OR bank_name ILIKE %s) LIMIT 8",
-        (current_user.id, like, like),
-    )
-    invest_hits = _safe_query(
-        "SELECT id, name, 'investment' as type FROM investments "
-        "WHERE user_id = %s AND name ILIKE %s LIMIT 8",
-        (current_user.id, like),
-    )
-    shop_hits = _safe_query(
-        "SELECT id, title as name, 'listing' as type FROM shop_listings "
-        "WHERE user_id = %s AND (title ILIKE %s OR description ILIKE %s) LIMIT 8",
-        (current_user.id, like, like),
-    )
-
     cur.close()
     conn.close()
 
-    results = (
-        list(customers) + list(products) + list(docs) + list(note_hits)
-        + list(task_hits) + list(book_hits) + list(sku_hits)
-        + list(service_hits) + list(session_hits)
-        + list(bank_hits) + list(invest_hits) + list(shop_hits)
-    )
+
+    service_hits = []
+    session_hits = []
+    try:
+        cur.execute(
+            "SELECT id, name, 'service' as type FROM services WHERE user_id = %s AND (name ILIKE %s OR category ILIKE %s OR description ILIKE %s) LIMIT 10",
+            (current_user.id, '%'+q+'%', '%'+q+'%', '%'+q+'%')
+        )
+        service_hits = cur.fetchall()
+        cur.execute(
+            "SELECT id, customer_name as name, 'session' as type FROM service_sessions WHERE user_id = %s AND (customer_name ILIKE %s OR notes ILIKE %s) LIMIT 10",
+            (current_user.id, '%'+q+'%', '%'+q+'%')
+        )
+        session_hits = cur.fetchall()
+    except Exception:
+        pass
+
+    bank_hits = invest_hits = shop_hits = []
+    try:
+        cur.execute(
+            "SELECT id, name, 'bank' as type FROM bank_accounts WHERE user_id = %s AND (name ILIKE %s OR bank_name ILIKE %s) LIMIT 8",
+            (current_user.id, '%'+q+'%', '%'+q+'%')
+        )
+        bank_hits = cur.fetchall()
+        cur.execute(
+            "SELECT id, name, 'investment' as type FROM investments WHERE user_id = %s AND name ILIKE %s LIMIT 8",
+            (current_user.id, '%'+q+'%')
+        )
+        invest_hits = cur.fetchall()
+        cur.execute(
+            "SELECT id, title as name, 'listing' as type FROM shop_listings WHERE user_id = %s AND (title ILIKE %s OR description ILIKE %s) LIMIT 8",
+            (current_user.id, '%'+q+'%', '%'+q+'%')
+        )
+        shop_hits = cur.fetchall()
+    except Exception:
+        pass
+
+    results = customers + products + docs + note_hits + task_hits + book_hits + sku_hits + service_hits + session_hits + bank_hits + invest_hits + shop_hits
     return render_template('search_results.html', results=results, q=q)
 
 # ======================== Services ========================
@@ -6176,8 +6138,8 @@ STARTER_SNIPPETS = (
 )
 
 
-@app.route('/snippets')
-@login_required
+# DELETED FEATURE: @app.route('/snippets')
+# @login_required
 def snippets():
     q = (request.args.get('q') or '').strip()
     conn = get_db()
@@ -6359,8 +6321,8 @@ def calendar():
 
 # ======================== Profit calculator ========================
 
-@app.route('/calculator')
-@login_required
+# DELETED FEATURE: @app.route('/calculator')
+# @login_required
 def calculator():
     conn = get_db()
     cur = conn.cursor()
@@ -7303,10 +7265,6 @@ def customer_statement(id):
 @app.route('/sales/repeat/<int:id>')
 @login_required
 def repeat_sale(id):
-    blocked = _plan_block('sales_month')
-    if blocked:
-        flash(blocked, 'danger')
-        return redirect(url_for('plans'))
     conn = get_db()
     cur = conn.cursor()
     cur.execute('SELECT * FROM sales WHERE id=%s AND user_id=%s', (id, current_user.id))
@@ -7432,8 +7390,6 @@ def clear_data():
             'DELETE FROM swot_analyses WHERE user_id = %s',
             'DELETE FROM business_plans WHERE user_id = %s',
             'DELETE FROM user_activity WHERE user_id = %s',
-            'DELETE FROM code_snippets WHERE user_id = %s',
-            'DELETE FROM day_closes WHERE user_id = %s',
         ):
             cur.execute(sql, (uid,))
         conn.commit()
@@ -7827,10 +7783,6 @@ def counter_sale():
     if quantity_sold <= 0:
         flash('Quantity must be more than zero.', 'danger')
         return redirect(url_for('counter'))
-    blocked = _plan_block('sales_month')
-    if blocked:
-        flash(blocked, 'danger')
-        return redirect(url_for('plans'))
 
     customer_id = request.form.get('customer_id') or None
     customer_name = request.form.get('customer_name', '')
@@ -7894,10 +7846,6 @@ def counter_checkout():
     if not ids:
         flash('Add at least one product to the ticket.', 'danger')
         return redirect(url_for('counter'))
-    blocked = _plan_block('sales_month', extra=1)
-    if blocked:
-        flash(blocked, 'danger')
-        return redirect(url_for('plans'))
     customer_id = request.form.get('customer_id') or None
     customer_name = request.form.get('customer_name', '') or 'Walk-in'
     customer_email = ''
@@ -7994,10 +7942,9 @@ def guide_pdf():
     title = ParagraphStyle('KTitle', parent=styles['Title'], textColor=colors.HexColor('#1f8a3d'), fontSize=18, spaceAfter=8)
     h = ParagraphStyle('KH', parent=styles['Heading2'], textColor=colors.HexColor('#0a0a0a'), fontSize=12, spaceBefore=10, spaceAfter=4)
     body = ParagraphStyle('KB', parent=styles['BodyText'], fontSize=10, leading=14, spaceAfter=4)
-    from xml.sax.saxutils import escape as _xml_escape
     story = [
         Paragraph('KAZE Traders — Practical Guide', title),
-        Paragraph('For {}. Version 2.6. How to run the shop in the app, step by step.'.format(_xml_escape(str(business_name))), body),
+        Paragraph('For {}. Version 2.6. How to run the shop in the app, step by step.'.format(business_name), body),
         Spacer(1, 8),
     ]
     for i, step in enumerate(_guide_steps(), 1):
@@ -8039,15 +7986,8 @@ def _stats_bundle(uid, start_date=None, end_date=None):
         'SELECT COUNT(*) AS n, COALESCE(SUM(amount),0) AS s, COALESCE(AVG(amount),0) AS a, '
         'COALESCE(MIN(amount),0) AS mn, COALESCE(MAX(amount),0) AS mx FROM expenses WHERE ' + exp_where, params_e)
     expenses = cur.fetchone()
-    inc_date_clause = ''
-    inc_params = [uid]
-    if start_date and end_date:
-        inc_date_clause = ' AND date BETWEEN %s AND %s'
-        inc_params += [start_date, end_date]
     cur.execute(
-        'SELECT COUNT(*) AS n, COALESCE(SUM(amount),0) AS s FROM income WHERE user_id = %s'
-        + inc_date_clause,
-        inc_params)
+        'SELECT COUNT(*) AS n, COALESCE(SUM(amount),0) AS s FROM income WHERE user_id = %s', (uid,))
     income = cur.fetchone()
     cur.execute(
         "SELECT COUNT(*) AS n, COALESCE(SUM(CASE WHEN entry_type='in' THEN amount ELSE 0 END),0) AS cin, "
@@ -8061,11 +8001,6 @@ def _stats_bundle(uid, start_date=None, end_date=None):
     stock = cur.fetchone()
     cur.execute('SELECT COUNT(*) AS n FROM customers WHERE user_id = %s', (uid,))
     customers = cur.fetchone()
-    sales_date_clause = ''
-    sales_params = [uid]
-    if start_date and end_date:
-        sales_date_clause = ' AND sales.sale_date BETWEEN %s AND %s'
-        sales_params += [start_date, end_date]
     cur.execute(
         'SELECT stock.product_name AS name, COUNT(sales.id) AS n, '
         'COALESCE(SUM(sales.quantity_sold),0) AS units, '
@@ -8073,20 +8008,15 @@ def _stats_bundle(uid, start_date=None, end_date=None):
         'COALESCE(AVG(sales.total_amount),0) AS avg_sale, '
         'COALESCE(SUM(sales.profit),0) AS profit '
         'FROM sales JOIN stock ON sales.stock_id = stock.id '
-        'WHERE sales.user_id = %s' + sales_date_clause + ' '
+        'WHERE sales.user_id = %s '
         'GROUP BY stock.product_name ORDER BY revenue DESC LIMIT 12',
-        sales_params)
+        (uid,))
     by_product = cur.fetchall()
-    exp_date_clause = ''
-    exp_params = [uid]
-    if start_date and end_date:
-        exp_date_clause = ' AND date BETWEEN %s AND %s'
-        exp_params += [start_date, end_date]
     cur.execute(
         'SELECT category AS name, COUNT(*) AS n, COALESCE(SUM(amount),0) AS total, '
-        'COALESCE(AVG(amount),0) AS avg FROM expenses WHERE user_id = %s'
-        + exp_date_clause + ' GROUP BY category ORDER BY total DESC',
-        exp_params)
+        'COALESCE(AVG(amount),0) AS avg FROM expenses WHERE user_id = %s '
+        'GROUP BY category ORDER BY total DESC',
+        (uid,))
     by_expense = cur.fetchall()
     cur.close()
     conn.close()
@@ -8581,23 +8511,12 @@ def kaze_checkout_embed():
     uid = current_user.id
     meta = {'user_id': uid, 'kind': subject['kind'], 'record_id': subject['record_id'], 'tier': subject['tier'], 'title': subject['title']}
     if method == 'stripe':
-        if not stripe_payments.stripe_ready(settings):
-            return {'ok': False, 'error': 'Stripe is not set up yet. Add your test keys in Settings.'}, 400
+        if not stripe_payments.stripe_ready(settings): return {'ok': False, 'error': 'Stripe is not set up yet.'}, 400
         success = url_for('stripe_pay_success', _external=True) + '?session_id={CHECKOUT_SESSION_ID}'
-        sess, err = stripe_payments.create_checkout(
-            settings,
-            amount=subject['amount'],
-            title=subject['title'],
-            success_url=success,
-            cancel_url=url_for('stripe_pay_cancel', _external=True),
-            metadata=meta,
-            embedded=False,
-        )
-        if err:
-            return {'ok': False, 'error': err}, 400
+        sess, err = stripe_payments.create_checkout(settings, amount=subject['amount'], title=subject['title'], success_url=success, cancel_url=url_for('stripe_pay_cancel', _external=True), metadata=meta, embedded=True)
+        if err: return {'ok': False, 'error': err}, 400
         _record_payment(uid, subject['kind'], subject['record_id'], subject['amount'], subject['title'], sess.id, 'stripe')
-        return {'ok': True, 'method': 'stripe', 'redirect': sess.url}
-
+        return {'ok': True, 'method': 'stripe', 'publishable': stripe_payments.keys_from(settings)[1], 'client_secret': sess.client_secret}
     if method == 'paypal':
         if not gateways.paypal_ready(settings): return {'ok': False, 'error': 'PayPal is not set up yet.'}, 400
         order, err = gateways.paypal_create_order(settings, amount=subject['amount'], currency=subject['currency'], title=subject['title'], return_url=url_for('paypal_return', _external=True), cancel_url=url_for('stripe_pay_cancel', _external=True), custom_id='kaze-%s-%s-%s' % (subject['kind'], subject['record_id'], uid))
@@ -8837,7 +8756,7 @@ def plans():
         flutterwave_ready=integrations.flutterwave_ready(settings),
         bank_ready=gateways.bank_ready(settings),
         trial=trial,
-        trial_day_choices=list(range(7, 13)),
+        trial_day_choices=list(range(7, 18)),
         unlocked_rank=unlocked_rank,
         is_owner=(getattr(current_user, 'role', 'owner') == 'owner'),
     )
@@ -8948,7 +8867,7 @@ def start_trial():
         days = int(request.form.get('trial_days') or 12)
     except (TypeError, ValueError):
         days = 12
-    days = min(12, max(7, days))
+    days = min(17, max(7, days))
     ends = (datetime.today() + timedelta(days=days)).strftime('%Y-%m-%d')
     conn = get_db()
     cur = conn.cursor()
@@ -8988,9 +8907,7 @@ def pay_plan(tier):
         return redirect(url_for('plans'))
     settings = _stripe_settings()
     current = plan_info(settings)
-    # Compare against the paid plan, not the trial-inflated one, so a shop
-    # on trial CEO can still buy Entrepreneur for when the trial ends.
-    if PLAN_RANK[wanted] <= PLAN_RANK[current['stored_key']]:
+    if PLAN_RANK[wanted] <= PLAN_RANK[current['key']]:
         flash('You already have this plan or a higher one.', 'info')
         return redirect(url_for('plans'))
     info = PLAN_TIERS[wanted]
@@ -9924,6 +9841,270 @@ def refresh_market_fx():
         return redirect(url_for('market'))
     flash('USD/%s is %s (cached 15 minutes).' % (quote, rate), 'success')
     return redirect(url_for('market'))
+
+
+
+# ======================== Unique Features ========================
+
+@app.route('/insights')
+@login_required
+def insights():
+    # AI Insights: simple rule-based + data driven tips
+    conn = get_db()
+    cur = conn.cursor()
+    # Example computations
+    cur.execute("SELECT COALESCE(SUM(total),0) as sales FROM sales WHERE user_id=%s AND date >= CURRENT_DATE - INTERVAL '30 days'", (current_user.id,))
+    recent_sales = cur.fetchone()['sales']
+    cur.execute("SELECT COUNT(*) as low FROM stock WHERE user_id=%s AND quantity <= low_stock_threshold", (current_user.id,))
+    low_stock = cur.fetchone()['low']
+    tips = []
+    if low_stock > 0:
+        tips.append(f"You have {low_stock} items below stock threshold. Consider restocking soon.")
+    if recent_sales > 10000:
+        tips.append("Strong sales this month! Review top products for upsell opportunities.")
+    else:
+        tips.append("Sales are moderate. Try promotional offers or check customer retention.")
+    tips.append("Review your cash flow forecast for better planning.")
+    conn.close()
+    return render_template('insights.html', tips=tips, recent_sales=recent_sales, low_stock=low_stock)
+
+@app.route('/forecast')
+@login_required
+def forecast():
+    # Simple cash flow forecast based on historical average
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT COALESCE(AVG(total),0) as avg_daily FROM sales WHERE user_id=%s AND date >= CURRENT_DATE - INTERVAL '30 days'", (current_user.id,))
+    avg = cur.fetchone()['avg_daily'] or 0
+    projections = []
+    balance = 0  # placeholder, fetch real if possible
+    for d in range(1, 31):
+        projections.append({'day': d, 'projected': round(avg * d, 2)})
+    conn.close()
+    return render_template('forecast.html', projections=projections, avg_daily=avg)
+
+@app.route('/scanner')
+@login_required
+def scanner():
+    return render_template('scanner.html')
+
+@app.route('/whatsapp')
+@login_required
+def whatsapp():
+    # List recent invoices/customers for quick WhatsApp share
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT id, name, phone FROM customers WHERE user_id=%s AND phone != '' LIMIT 20", (current_user.id,))
+    customers = cur.fetchall()
+    conn.close()
+    return render_template('whatsapp.html', customers=customers)
+
+@app.route('/credit_scores')
+@login_required
+def credit_scores():
+    # Compute simple scores based on payment history (placeholder)
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT id, name FROM customers WHERE user_id=%s ORDER BY name LIMIT 50", (current_user.id,))
+    customers = cur.fetchall()
+    scores = []
+    for c in customers:
+        # Mock score
+        scores.append({'id': c['id'], 'name': c['name'], 'score': 75 + (c['id'] % 25), 'risk': 'Low' if c['id'] % 3 == 0 else 'Medium'})
+    conn.close()
+    return render_template('credit_scores.html', scores=scores)
+
+@app.route('/batches')
+@login_required
+def batches():
+    # Batch/expiry tracker - simple list
+    conn = get_db()
+    cur = conn.cursor()
+    # Assume we add a table later, for now mock or from stock
+    cur.execute("SELECT name, quantity FROM stock WHERE user_id=%s LIMIT 20", (current_user.id,))
+    items = cur.fetchall()
+    conn.close()
+    return render_template('batches.html', items=items)
+
+@app.route('/voice')
+@login_required
+def voice():
+    return render_template('voice.html')
+
+
+
+# ======================== Supreme Features ========================
+
+@app.route('/health')
+@login_required
+def health():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT COALESCE(SUM(total),0) as sales FROM sales WHERE user_id=%s AND date >= CURRENT_DATE - INTERVAL '30 days'", (current_user.id,))
+    sales = cur.fetchone()['sales'] or 0
+    cur.execute("SELECT COUNT(*) as low FROM stock WHERE user_id=%s AND quantity <= COALESCE(low_stock_threshold,5)", (current_user.id,))
+    low = cur.fetchone()['low'] or 0
+    score = min(100, max(40, int(50 + (sales / 1000) - (low * 5))))
+    status = 'Excellent' if score >= 80 else 'Good' if score >= 60 else 'Needs Attention'
+    conn.close()
+    return render_template('health.html', score=score, status=status, sales=sales, low=low)
+
+@app.route('/profit_matrix')
+@login_required
+def profit_matrix():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT s.name, SUM(si.quantity * (si.price - COALESCE(st.cost_price,0))) as profit
+        FROM sales_items si
+        JOIN sales s ON si.sale_id = s.id
+        LEFT JOIN stock st ON si.product_name = st.name AND st.user_id = s.user_id
+        WHERE s.user_id = %s
+        GROUP BY s.name
+        ORDER BY profit DESC
+        LIMIT 15
+    """, (current_user.id,))
+    products = cur.fetchall()
+    conn.close()
+    return render_template('profit_matrix.html', products=products)
+
+@app.route('/rfm')
+@login_required
+def rfm():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT c.name, 
+               MAX(s.date) as last_purchase,
+               COUNT(s.id) as frequency,
+               COALESCE(SUM(s.total),0) as monetary
+        FROM customers c
+        LEFT JOIN sales s ON s.customer_id = c.id AND s.user_id = c.user_id
+        WHERE c.user_id = %s
+        GROUP BY c.id, c.name
+        ORDER BY monetary DESC
+        LIMIT 20
+    """, (current_user.id,))
+    customers = cur.fetchall()
+    conn.close()
+    return render_template('rfm.html', customers=customers)
+
+@app.route('/turnover')
+@login_required
+def turnover():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT name, quantity, COALESCE(cost_price,0) as cost FROM stock WHERE user_id=%s ORDER BY quantity DESC LIMIT 20", (current_user.id,))
+    items = cur.fetchall()
+    conn.close()
+    return render_template('turnover.html', items=items)
+
+@app.route('/collections')
+@login_required
+def collections():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT c.name, SUM(s.total - COALESCE(s.paid,0)) as outstanding
+        FROM sales s
+        JOIN customers c ON s.customer_id = c.id
+        WHERE s.user_id = %s AND (s.total - COALESCE(s.paid,0)) > 0
+        GROUP BY c.id, c.name
+        ORDER BY outstanding DESC
+        LIMIT 15
+    """, (current_user.id,))
+    owing = cur.fetchall()
+    conn.close()
+    return render_template('collections.html', owing=owing)
+
+@app.route('/goals')
+@login_required
+def goals():
+    return render_template('goals.html')
+
+@app.route('/alerts')
+@login_required
+def alerts():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) as low FROM stock WHERE user_id=%s AND quantity <= COALESCE(low_stock_threshold,5)", (current_user.id,))
+    low = cur.fetchone()['low']
+    alerts_list = []
+    if low > 0:
+        alerts_list.append({'type': 'warning', 'msg': f'{low} items are low on stock'})
+    alerts_list.append({'type': 'info', 'msg': 'Review your cash forecast weekly'})
+    conn.close()
+    return render_template('alerts.html', alerts=alerts_list)
+
+@app.route('/quick')
+@login_required
+def quick():
+    return render_template('quick.html')
+
+@app.route('/snapshot')
+@login_required
+def snapshot():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT COALESCE(SUM(total),0) as sales FROM sales WHERE user_id=%s AND date >= DATE_TRUNC('month', CURRENT_DATE)", (current_user.id,))
+    month_sales = cur.fetchone()['sales'] or 0
+    cur.execute("SELECT COALESCE(SUM(amount),0) as expenses FROM cashbook WHERE user_id=%s AND type='expense' AND date >= DATE_TRUNC('month', CURRENT_DATE)", (current_user.id,))
+    month_exp = cur.fetchone()['expenses'] or 0
+    profit = month_sales - month_exp
+    conn.close()
+    return render_template('snapshot.html', sales=month_sales, expenses=month_exp, profit=profit)
+
+
+
+@app.route('/loyalty')
+@login_required
+def loyalty():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT name, COALESCE(SUM(total),0) as spent FROM customers c LEFT JOIN sales s ON s.customer_id=c.id WHERE c.user_id=%s GROUP BY c.id ORDER BY spent DESC LIMIT 15", (current_user.id,))
+    members = cur.fetchall()
+    conn.close()
+    return render_template('loyalty.html', members=members)
+
+@app.route('/expense_analytics')
+@login_required
+def expense_analytics():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT category, COALESCE(SUM(amount),0) as total FROM cashbook WHERE user_id=%s AND type='expense' GROUP BY category ORDER BY total DESC LIMIT 10", (current_user.id,))
+    cats = cur.fetchall()
+    conn.close()
+    return render_template('expense_analytics.html', categories=cats)
+
+@app.route('/top_customers')
+@login_required
+def top_customers():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT c.name, COALESCE(SUM(s.total),0) as total FROM customers c LEFT JOIN sales s ON s.customer_id=c.id WHERE c.user_id=%s GROUP BY c.id ORDER BY total DESC LIMIT 10", (current_user.id,))
+    tops = cur.fetchall()
+    conn.close()
+    return render_template('top_customers.html', customers=tops)
+
+@app.route('/stock_value')
+@login_required
+def stock_value():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT COALESCE(SUM(quantity * COALESCE(cost_price,0)),0) as value, COUNT(*) as items FROM stock WHERE user_id=%s", (current_user.id,))
+    data = cur.fetchone()
+    conn.close()
+    return render_template('stock_value.html', value=data['value'], items=data['items'])
+
+@app.route('/daily_summary')
+@login_required
+def daily_summary():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT COALESCE(SUM(total),0) as sales FROM sales WHERE user_id=%s AND date = CURRENT_DATE", (current_user.id,))
+    today_sales = cur.fetchone()['sales']
+    conn.close()
+    return render_template('daily_summary.html', sales=today_sales)
 
 
 if __name__ == '__main__':

@@ -241,7 +241,6 @@
     if (clearBtn) clearBtn.addEventListener('click', () => {
         basket.splice(0, basket.length);
         tiles.forEach(t => t.classList.remove('is-picked'));
-        discount.value = 0;
         render();
     });
     search.addEventListener('input', () => {

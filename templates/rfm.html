@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}RFM Customer Analysis{% endblock %}
+{% block content %}
+<div class="page-header"><h1><i data-lucide="users"></i> RFM Analysis</h1><p>Recency, Frequency, Monetary value</p></div>
+<div class="card">
+  <table class="data-table">
+    <thead><tr><th>Customer</th><th>Last Purchase</th><th>Frequency</th><th>Monetary</th></tr></thead>
+    <tbody>
+      {% for c in customers %}
+      <tr>
+        <td>{{ c.name }}</td>
+        <td>{{ c.last_purchase or 'Never' }}</td>
+        <td>{{ c.frequency }}</td>
+        <td>{{ money(c.monetary) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}AI Insights{% endblock %}
+{% block content %}
+
+<div class="card detail-overlay" style="margin-bottom:1.5rem; background:linear-gradient(135deg, rgba(16,185,129,0.08), transparent);">
+  <h3>AI Insights Overview</h3>
+  <p>Data-driven recommendations based on your live business activity.</p>
+</div>
+
+<div class="page-header">
+  <h1><i data-lucide="lightbulb"></i> AI Business Insights</h1>
+  <p>Smart recommendations based on your data</p>
+</div>
+<div class="card">
+  <h3>Recent 30-day Sales: {{ money(recent_sales) }}</h3>
+  <p>Low stock items: {{ low_stock }}</p>
+  <ul class="insights-list">
+    {% for tip in tips %}
+    <li>{{ tip }}</li>
+    {% endfor %}
+  </ul>
+</div>
+<style>
+.insights-list li { margin: 0.8rem 0; padding: 0.5rem; background: var(--card); border-radius: 8px; }
+</style>
+{% endblock %}
