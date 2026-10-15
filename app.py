@@ -51,10 +51,10 @@ _APP_DIR = os.path.dirname(os.path.abspath(__file__))
 _TPL_DIR = os.path.join(_APP_DIR, 'templates') if os.path.isdir(os.path.join(_APP_DIR, 'templates')) else _APP_DIR
 app = Flask(__name__, template_folder=_TPL_DIR)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
-LEGAL_VERSION = '4.1.0'
+LEGAL_VERSION = '4.3.0'
 LEGAL_DIR = _APP_DIR
 _LEGAL_CACHE = {}
-app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 86400
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 604800
 app.config['TEMPLATES_AUTO_RELOAD'] = False
 app.config['SESSION_REFRESH_EACH_REQUEST'] = False
 app.config['JSONIFY_PRETTYPRINT_REGULAR'] = False
@@ -5305,7 +5305,7 @@ def budgets():
     month_start = datetime.today().replace(day=1).strftime('%Y-%m-%d')
     spend_by_category = {}
     for b in budget_rows:
-        cur.execute('SELECT COALESCE(SUM(amount),0) as spent FROM expenses WHERE user_id = %s AND category = %s AND date >= %s',
+        cur.execute('SELECT COALESCE(SUM(amount),0) as spent FROM expenses WHERE user_id = %s AND category = %s AND sale_date >= %s',
                     (current_user.id, b['category'], month_start))
         spend_by_category[b['category']] = cur.fetchone()['spent']
     cur.close()
@@ -9853,7 +9853,7 @@ def insights():
     conn = get_db()
     cur = conn.cursor()
     # Example computations
-    cur.execute("SELECT COALESCE(SUM(total),0) as sales FROM sales WHERE user_id=%s AND date >= CURRENT_DATE - INTERVAL '30 days'", (current_user.id,))
+    cur.execute("SELECT COALESCE(SUM(total_amount),0) as sales FROM sales WHERE user_id=%s AND sale_date >= CURRENT_DATE - INTERVAL '30 days'", (current_user.id,))
     recent_sales = cur.fetchone()['sales']
     cur.execute("SELECT COUNT(*) as low FROM stock WHERE user_id=%s AND quantity <= low_stock_threshold", (current_user.id,))
     low_stock = cur.fetchone()['low']
@@ -9874,7 +9874,7 @@ def forecast():
     # Simple cash flow forecast based on historical average
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT COALESCE(AVG(total),0) as avg_daily FROM sales WHERE user_id=%s AND date >= CURRENT_DATE - INTERVAL '30 days'", (current_user.id,))
+    cur.execute("SELECT COALESCE(AVG(total),0) as avg_daily FROM sales WHERE user_id=%s AND sale_date >= CURRENT_DATE - INTERVAL '30 days'", (current_user.id,))
     avg = cur.fetchone()['avg_daily'] or 0
     projections = []
     balance = 0  # placeholder, fetch real if possible
@@ -9940,7 +9940,7 @@ def voice():
 def health():
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT COALESCE(SUM(total),0) as sales FROM sales WHERE user_id=%s AND date >= CURRENT_DATE - INTERVAL '30 days'", (current_user.id,))
+    cur.execute("SELECT COALESCE(SUM(total_amount),0) as sales FROM sales WHERE user_id=%s AND sale_date >= CURRENT_DATE - INTERVAL '30 days'", (current_user.id,))
     sales = cur.fetchone()['sales'] or 0
     cur.execute("SELECT COUNT(*) as low FROM stock WHERE user_id=%s AND quantity <= COALESCE(low_stock_threshold,5)", (current_user.id,))
     low = cur.fetchone()['low'] or 0
@@ -9956,7 +9956,7 @@ def profit_matrix():
     cur = conn.cursor()
     cur.execute("""
         SELECT s.name, SUM(si.quantity * (si.price - COALESCE(st.cost_price,0))) as profit
-        FROM sales_items si
+        FROM sales s
         JOIN sales s ON si.sale_id = s.id
         LEFT JOIN stock st ON si.product_name = st.name AND st.user_id = s.user_id
         WHERE s.user_id = %s
@@ -10046,9 +10046,9 @@ def quick():
 def snapshot():
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT COALESCE(SUM(total),0) as sales FROM sales WHERE user_id=%s AND date >= DATE_TRUNC('month', CURRENT_DATE)", (current_user.id,))
+    cur.execute("SELECT COALESCE(SUM(total_amount),0) as sales FROM sales WHERE user_id=%s AND sale_date >= DATE_TRUNC('month', CURRENT_DATE)", (current_user.id,))
     month_sales = cur.fetchone()['sales'] or 0
-    cur.execute("SELECT COALESCE(SUM(amount),0) as expenses FROM cashbook WHERE user_id=%s AND type='expense' AND date >= DATE_TRUNC('month', CURRENT_DATE)", (current_user.id,))
+    cur.execute("SELECT COALESCE(SUM(amount),0) as expenses FROM expenses WHERE user_id=%s  AND sale_date >= DATE_TRUNC('month', CURRENT_DATE)", (current_user.id,))
     month_exp = cur.fetchone()['expenses'] or 0
     profit = month_sales - month_exp
     conn.close()
@@ -10061,7 +10061,7 @@ def snapshot():
 def loyalty():
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT name, COALESCE(SUM(total),0) as spent FROM customers c LEFT JOIN sales s ON s.customer_id=c.id WHERE c.user_id=%s GROUP BY c.id ORDER BY spent DESC LIMIT 15", (current_user.id,))
+    cur.execute("SELECT name, COALESCE(SUM(total_amount),0) as spent FROM customers c LEFT JOIN sales s ON s.customer_id=c.id WHERE c.user_id=%s GROUP BY c.id ORDER BY spent DESC LIMIT 15", (current_user.id,))
     members = cur.fetchall()
     conn.close()
     return render_template('loyalty.html', members=members)
@@ -10071,7 +10071,7 @@ def loyalty():
 def expense_analytics():
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT category, COALESCE(SUM(amount),0) as total FROM cashbook WHERE user_id=%s AND type='expense' GROUP BY category ORDER BY total DESC LIMIT 10", (current_user.id,))
+    cur.execute("SELECT category, COALESCE(SUM(amount),0) as total FROM expenses WHERE user_id=%s  GROUP BY category ORDER BY total DESC LIMIT 10", (current_user.id,))
     cats = cur.fetchall()
     conn.close()
     return render_template('expense_analytics.html', categories=cats)
@@ -10101,7 +10101,7 @@ def stock_value():
 def daily_summary():
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT COALESCE(SUM(total),0) as sales FROM sales WHERE user_id=%s AND date = CURRENT_DATE", (current_user.id,))
+    cur.execute("SELECT COALESCE(SUM(total_amount),0) as sales FROM sales WHERE user_id=%s AND sale_date = CURRENT_DATE", (current_user.id,))
     today_sales = cur.fetchone()['sales']
     conn.close()
     return render_template('daily_summary.html', sales=today_sales)

@@ -2,12 +2,12 @@
 KAZE TRADERS BUSINESS MANAGER -- TERMS OF SERVICE
 ==============================================================================
 
-Companion to LICENCE version 4.1.0. If they differ, the LICENCE controls.
+Companion to LICENCE version 4.3.0. If they differ, the LICENCE controls.
 
 Brand:           KAZE Traders
 Rightful owner:  Ephraim Zulu
 Copyright:       (C) 2026 Ephraim Zulu and KAZE Traders. All rights reserved.
-Legal version:   4.1.0
+Legal version:   4.3.0
 
 1. Acceptance
    You accept these Terms and the LICENCE by ticking the acceptance box,
@@ -16,51 +16,46 @@ Legal version:   4.1.0
 
 2. Ownership
    Ephraim Zulu owns KAZE Traders and the Software. You own the business
-   data you enter.
+   data you enter. All unique functions, navigation groups, and UI elements
+   are part of the Software.
 
 3. Feature Access
    Locked features remain locked until valid payment or an active trial.
-   The Workshop Bench and all other modules are covered. Incorrect data
-   produces incorrect reports. You are solely responsible for data accuracy.
+   All analytics, documents, payments, and every other module are covered.
+   Incorrect data produces incorrect reports. You are solely responsible
+   for data accuracy and backups.
 
 4. Packages and Pricing
    Packages are sold at the prices shown in the App (hardcoded in Kwacha).
-   Payment is required for payable packages. Monthly or one-time billing
-   applies as displayed. Chargebacks result in relock and additional fees.
+   Free tiers may be selected without payment. Paid packages require
+   successful checkout. Chargebacks result in relock and additional fees.
 
-5. Breach Penalties
-   - No acceptance: access to the desk is blocked.
-   - Unpaid package force: refused, logged, and a debt equal to the package price.
-   - Chargeback after use: immediate relock + package price + provider fees.
-   - Copying, reselling, or removing copyright notices: termination +
-     damages not less than K 500 plus proven losses and costs.
-   - Attack, scraping, or fraud: permanent ban and report to the host
-     and relevant authorities.
+5. Trials
+   Trials last 7–17 days. After expiry, paid features lock until payment.
+   One trial per shop.
 
-6. Termination
-   The licence ends immediately if you copy the Software, bypass locks
-   after a logged breach, attack the service, refuse the current legal
-   version, or use a payment method you have no right to use. You must
-   stop all use. Business-data exports remain yours. Breach does not
-   create a right to refund.
+6. Payments
+   Payments are processed by third parties. KAZE does not store full card
+   numbers. Failed or reversed payments cause feature lock.
 
-7. Enforcement
-   Ephraim Zulu and KAZE Traders will sue, charge, and — where the law
-   allows — prosecute anyone who violates the LICENCE or these Terms of
-   Service.
+7. Acceptable Use
+   You must not attack, scrape, overload, reverse-engineer, share
+   credentials, or use the App for illegal activity.
 
-8. Shares
-   Share grants remain solely at the discretion of Ephraim Zulu and
-   require a separate written agreement. Using or paying for the App
-   does not purchase shares.
+8. Breach and Enforcement
+   Material breach results in immediate termination, feature lock, and
+   recovery of the package price plus fees. Ephraim Zulu and KAZE Traders
+   will pursue civil and, where applicable, criminal remedies against
+   anyone who violates these Terms or the LICENCE.
 
-9. Disclaimer
-   The App is provided "as is". It is not certified accounting, tax,
-   legal, or financial advice software. No warranty of fitness for a
-   particular purpose is given.
+9. Termination
+   The licence ends immediately upon material breach or refusal of the
+   current legal version. You must stop all use. Data exports remain
+   available. No refund is issued for breach.
 
-10. Limitation of Liability
-    Liability is limited to the amount you paid in the twelve (12) months
-    preceding the claim.
+10. General
+    The App is provided "as is". Liability is limited to amounts paid in
+    the preceding 12 months. These Terms are governed by the laws applicable
+    to Ephraim Zulu. Updates take effect upon acceptance of the new version.
 
-Full text and controlling terms: see LICENCE.
+Controlling document: LICENCE.

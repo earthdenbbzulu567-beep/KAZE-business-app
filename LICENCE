@@ -5,7 +5,7 @@ FEATURE CONDITIONS, BREACH PENALTIES, AND TERMINATION
 ==============================================================================
 
 Product:              KAZE Traders Business Manager ("KAZE", "the App")
-Legal version:        4.1.0
+Legal version:        4.3.0
 Brand:                KAZE Traders
 Rightful owner:       Ephraim Zulu
 Licensor:             Ephraim Zulu, rightful owner of KAZE Traders ("we", "us")
@@ -15,10 +15,11 @@ Controlling file:     LICENCE
 COPYRIGHT (C) 2026 EPHRAIM ZULU AND KAZE TRADERS. ALL RIGHTS RESERVED.
 
 By creating an account, ticking acceptance, signing in, hosting, paying,
-starting a trial, or using any feature (including Workshop Bench, AI Insights,
-Cash Forecast, Health Score, Profit Matrix, RFM Analysis, Collections,
-Goals, WhatsApp Hub, QR Scanner, Voice Entry, Batch Tracker, Credit Scores,
-Inventory Turnover, and all other modules), you agree to this document.
+starting a trial, or using any feature (including Workshop Bench, purpose-based
+groups, collapsible navigation, multi-function analytics, AI Insights,
+Cash Forecast, Health Score, Profit Matrix, RFM, Collections, Goals,
+WhatsApp Hub, QR Scanner, Voice Entry, Batch Tracker, Credit Scores,
+and all other modules), you agree to this document.
 The App records that acceptance (version and time) against your login.
 
 This is not personal legal, tax, accounting, or investment advice.
@@ -29,8 +30,8 @@ PART A -- COPYRIGHT, LICENCE, SHARES
 
 A1. Ephraim Zulu owns KAZE Traders and the Software (source code, templates,
     design, logos, sounds, documentation, this file, names, package names,
-    and all features). Third-party libraries keep their own licences.
-    Your entered business data remains yours.
+    navigation, unique functions, and all features). Third-party libraries
+    keep their own licences. Your entered business data remains yours.
 
 A2. You receive a limited, personal, non-exclusive, non-transferable,
     revocable licence to use unlocked features for your own legitimate
@@ -38,66 +39,61 @@ A2. You receive a limited, personal, non-exclusive, non-transferable,
 
 A3. You may not sell, rent, white-label, sublicense, or relicense the App;
     remove or alter notices; claim authorship; scrape, reverse-engineer,
-    or attack a hosted copy; bypass package, trial, mode, or payment locks;
-    use a payment method you have no right to use; or present KAZE as
-    certified accounting, tax, legal, or financial advice software.
+    or bypass package locks, trial gates, or payment requirements.
 
-A4. Shares: Ephraim Zulu may grant a percentage of KAZE Traders shares
-    to whoever he chooses, solely if he determines it benefits the company.
-    He alone decides eligibility and terms. A grant requires a separate
-    signed written agreement. Using or paying for the App does not
-    constitute a share purchase or ownership interest.
+A4. Ephraim Zulu may grant shares or equity in KAZE Traders to any person
+    if and only if he judges it beneficial to the company. Such grants are
+    at his sole discretion and do not transfer ownership of the Software.
 
 ==============================================================================
-PART B -- ACCOUNTS, DATA, AND USE
+PART B -- FEATURE USE CONDITIONS
 ==============================================================================
 
-B1. You must keep login credentials accurate and secure. You are responsible
-    for any team members you invite.
+B1. All features, including the multi-function analytics (margin alerts,
+    reorder optimizers, churn scoring, anomaly detection, scenario forecasts,
+    priority queues, and every other unique function), are covered by this
+    licence. Locked features stay locked until valid payment or an active trial.
 
-B2. Modes and packages control feature access. Settings, currency, and
-    data remain under your control.
+B2. Incorrect or incomplete data produces incorrect reports and scores.
+    You are solely responsible for data accuracy and backups.
 
-B3. You are responsible for the accuracy of all data entered. The App
-    provides tools only; it does not guarantee business outcomes.
-
-==============================================================================
-PART C -- FEATURES COVERED
-==============================================================================
-
-This licence covers every feature in the App, including but not limited to:
-Workshop Bench (overview of all activity), Sales, Stock, Customers,
-Book Keeping, Account Tracking, Banking, Payments, Shop, Purchase Orders,
-Suppliers, Recurring, Budgets, Reports, Statistics, Tax Summary,
-AI Insights, Cash Forecast, Health Score, Profit Matrix, RFM Analysis,
-Inventory Turnover, Collections, Goals, WhatsApp Hub, QR Scanner,
-Voice Entry, Batch Tracker, Credit Scores, Investments, Market Value,
-Services, Tasks, Notes, Calendar, Reminders, Documents, Notifications,
-Settings, Packages, Team, Backup, and all related functions, exports,
-charts, and integrations.
-
-Conditions apply to every feature: data accuracy is your responsibility;
-locked features require valid payment or active trial; misuse may result
-in suspension.
+B3. Payment features process funds through third parties. KAZE does not
+    store full card numbers. Chargebacks after use result in immediate
+    relock and additional fees.
 
 ==============================================================================
-PART D -- PAYMENT AND PACKAGES
+PART C -- PACKAGES, TRIALS, AND PAYMENT
 ==============================================================================
 
-Packages are offered at the prices published in the App (hardcoded Kwacha
-amounts). Payment unlocks the corresponding features for the paid period
-or as specified. Chargebacks or fraudulent payments result in immediate
-relock and may incur additional fees.
+C1. Packages are sold at the hardcoded prices shown in the App (in Kwacha).
+    Free tiers may be selected without payment. Paid packages activate only
+    after successful payment or during an active trial.
+
+C2. Trials last 7–17 days. After expiry, paid features lock until payment.
+    One trial per shop.
+
+C3. Failed payments or chargebacks cause immediate feature lock and recovery
+    of the package price plus provider fees.
+
+==============================================================================
+PART D -- ACCEPTABLE USE
+==============================================================================
+
+D1. You must not attack, scrape, overload, reverse-engineer, or share
+    credentials. You must not use the App for illegal activity.
+
+D2. You must keep your login, 2FA codes, and payment methods secure.
 
 ==============================================================================
 PART E -- BREACH, PENALTIES, AND TERMINATION
 ==============================================================================
 
-E1. Breach includes: using locked features without payment, copying or
-    redistributing the Software, removing copyright notices, attacking
-    the service, or violating any term herein.
+E1. Material breach includes: using paid features without payment after
+    trial expiry, copying or reselling the Software, stripping copyright,
+    bypassing locks, attacking the service, or refusing the current legal
+    version.
 
-E2. Penalties:
+E2. Consequences:
     - No legal acceptance: access blocked.
     - Unpaid package use: access refused, logged, and debt equal to the
       package price.
@@ -107,11 +103,9 @@ E2. Penalties:
     - Attack, fraud, or abuse: permanent ban and report to host and
       authorities.
 
-E3. Termination: The licence ends immediately upon material breach,
-    including copying the Software, bypassing locks, attacking the
-    service, or refusing the current legal version. Upon termination
-    you must stop all use. Your business data exports remain available
-    to you. No refund is issued for breach.
+E3. Termination: The licence ends immediately upon material breach.
+    Upon termination you must stop all use. Data exports remain available.
+    No refund is issued for breach.
 
 E4. Enforcement: Ephraim Zulu and KAZE Traders will pursue all available
     remedies, including civil action, criminal charges where applicable,
