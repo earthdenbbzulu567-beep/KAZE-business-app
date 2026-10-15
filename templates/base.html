@@ -1355,6 +1355,12 @@
     -webkit-box-orient: vertical;
 }
 .sidebar.collapsed .plan-badge, .sidebar.collapsed .wordmark small { display: none; }
+
+        .nav-section-title { cursor: pointer; display: flex; align-items: center; justify-content: space-between; user-select: none; }
+        .nav-section-title::after { content: "▾"; font-size: 0.7rem; opacity: 0.6; transition: transform 0.2s ease; }
+        .nav-section.collapsed .nav-section-title::after { transform: rotate(-90deg); }
+        .nav-section.collapsed .nav-links { display: none; }
+
 </style>
     {% block charts_js %}{% endblock %}
 
@@ -1868,7 +1874,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
                 <div class="user-menu">
                     <button class="dropbtn">{{ current_user.username }} ▼</button>
                     <div class="dropdown-content">
-                        <a href="{{ url_for('dashboard') }}">Dashboard</a>
+                        <a href="{{ url_for('dashboard') }}">Workshop Bench</a>
                         <a href="{{ url_for('team') }}">👥 Team</a>
                         <a href="{{ url_for('activity') }}">Login Activity</a>
                         <a href="{{ url_for('backup_export') }}">Download backup</a>
@@ -1919,6 +1925,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
             <i data-lucide="package" class="icon"></i> Stock
         </a>
         {% endif %}
+        <a href="{{ url_for('business_man') }}" {% if request.endpoint == 'business_man' %}class="active"{% endif %}>
+            <i data-lucide="user-check" class="icon"></i> Business Man
+        </a>
         <a href="{{ url_for('settings') }}" {% if request.endpoint == 'settings' %}class="active"{% endif %}>
             <i data-lucide="settings" class="icon"></i> Setup
         </a>

@@ -51,7 +51,7 @@ _APP_DIR = os.path.dirname(os.path.abspath(__file__))
 _TPL_DIR = os.path.join(_APP_DIR, 'templates') if os.path.isdir(os.path.join(_APP_DIR, 'templates')) else _APP_DIR
 app = Flask(__name__, template_folder=_TPL_DIR)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
-LEGAL_VERSION = '4.1.0'
+LEGAL_VERSION = '4.5.4'
 LEGAL_DIR = _APP_DIR
 _LEGAL_CACHE = {}
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 86400
@@ -2007,6 +2007,7 @@ NAV_GROUPS = (
         ('Settings', 'settings', 'settings', None, ('settings',)),
         ('Backup', 'backup_export', 'download', None, ('backup_export',)),
         ('Login activity', 'activity', 'log-in', None, ('activity',)),
+        ('Business Man', 'business_man', 'user-check', None, ('business_man',)),
     )),
 )
 
@@ -10803,6 +10804,36 @@ def expense_outlier():
 def top_ltv():
     return render_template('top_customers.html', customers=[])
 
+
+
+@app.route('/business-man')
+@login_required
+def business_man():
+    """Business Man assistant — helps with all functions."""
+    return render_template('business_man.html')
+
+@app.route('/business-man/ask', methods=['POST'])
+@login_required
+def business_man_ask():
+    q = (request.form.get('q') or '').strip().lower()
+    answers = {
+        'sale': 'Go to Sales. Use Auto sale for a fast ticket, or the full form for discounts and notes.',
+        'stock': 'Open Stock. Add items with cost and selling price. Low stock is highlighted.',
+        'customer': 'Open Customers. Add name, phone, and email. Lifetime top and churn risk are available.',
+        'dead': 'Supreme → Dead stock shows items with no sales in 60+ days.',
+        'margin': 'Supreme → Margin alert flags products under 15% margin.',
+        'book': 'Book keeping holds quotations, invoices, and papers. Account tracking holds journals.',
+        'service': 'Services is for teaching, coaching, and jobs. Book a session and mark it done.',
+        'report': 'Reports and Statistics show month-over-month change and margins.',
+        'currency': 'Settings → Currency. The symbol you pick is used everywhere.',
+        'mode': 'Settings → App mode. Till, Books, Office, Quiet, or Full.',
+    }
+    answer = 'I can help with sales, stock, customers, books, services, reports, and Supreme tools.'
+    for key, text in answers.items():
+        if key in q:
+            answer = text
+            break
+    return render_template('business_man.html', answer=answer)
 
 if __name__ == '__main__':
     app.run(debug=True)
