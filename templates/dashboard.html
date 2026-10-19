@@ -656,7 +656,7 @@ function dismissOnboarding() {
     <h3>Recent Activities</h3>
     <ul>
       {% for act in activities[:10] %}
-      <li>{{ act.action }} — {{ act.details }} ({{ act.created_date }})</li>
+      <li>{{ act.action }} — {{ act.details }} ({{ act.created_at|timesince if act.created_at else '' }})</li>
       {% else %}
       <li>No recent activity</li>
       {% endfor %}

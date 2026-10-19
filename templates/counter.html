@@ -232,7 +232,10 @@
         } else {
             basket.push({ id, name: tile.dataset.name, price: parseFloat(tile.dataset.price) || 0, qty: 1, max: maxQty });
         }
-        tiles.forEach(t => t.classList.toggle('is-picked', t.dataset.id === id));
+            tiles.forEach(t => t.classList.toggle(
+        'is-picked',
+        basket.some(l => l.id === t.dataset.id)
+    ));
         render();
     }
     tiles.forEach(tile => tile.addEventListener('click', () => add(tile)));

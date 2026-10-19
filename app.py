@@ -4695,8 +4695,8 @@ def sale_receipt(id):
 
 # ======================== SWOT Analysis ========================
 
-# DELETED FEATURE: @app.route('/swot')
-# @login_required
+@app.route('/swot')
+@login_required
 def swot():
     conn = get_db()
     cur = conn.cursor()
@@ -9933,12 +9933,14 @@ def credit_scores():
 @app.route('/batches')
 @login_required
 def batches():
-    # Batch/expiry tracker - simple list
     conn = get_db()
     cur = conn.cursor()
-    # Assume we add a table later, for now mock or from stock
-    cur.execute("SELECT name, quantity FROM stock WHERE user_id=%s LIMIT 20", (current_user.id,))
+    cur.execute(
+        "SELECT product_name AS name, quantity, unit FROM stock "
+        "WHERE user_id=%s ORDER BY product_name LIMIT 50",
+        (current_user.id,))
     items = cur.fetchall()
+    cur.close()
     conn.close()
     return render_template('batches.html', items=items)
 
@@ -10017,8 +10019,12 @@ def rfm():
 def turnover():
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT name, quantity, COALESCE(cost_price,0) as cost FROM stock WHERE user_id=%s ORDER BY quantity DESC LIMIT 20", (current_user.id,))
+    cur.execute(
+        "SELECT product_name AS name, quantity, COALESCE(cost_price,0) AS cost "
+        "FROM stock WHERE user_id=%s ORDER BY quantity DESC LIMIT 20",
+        (current_user.id,))
     items = cur.fetchall()
+    cur.close()
     conn.close()
     return render_template('turnover.html', items=items)
 
@@ -10051,8 +10057,12 @@ def goals():
 def alerts():
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT COUNT(*) as low FROM stock WHERE user_id=%s AND quantity <= COALESCE(low_stock_threshold,5)", (current_user.id,))
-    low = cur.fetchone()['low']
+    cur.execute(
+        "SELECT COUNT(*) AS low FROM stock st "
+        "WHERE st.user_id=%s AND st.quantity <= COALESCE("
+        "(SELECT low_stock_threshold FROM settings WHERE user_id=%s), 5)",
+        (current_user.id, current_user.id))
+    low = (cur.fetchone() or {}).get('low') or 0
     alerts_list = []
     if low > 0:
         alerts_list.append({'type': 'warning', 'msg': f'{low} items are low on stock'})
@@ -10070,14 +10080,20 @@ def quick():
 def snapshot():
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT COALESCE(SUM(total),0) as sales FROM sales WHERE user_id=%s AND date >= DATE_TRUNC('month', CURRENT_DATE)", (current_user.id,))
-    month_sales = cur.fetchone()['sales'] or 0
-    cur.execute("SELECT COALESCE(SUM(amount),0) as expenses FROM cashbook WHERE user_id=%s AND type='expense' AND date >= DATE_TRUNC('month', CURRENT_DATE)", (current_user.id,))
-    month_exp = cur.fetchone()['expenses'] or 0
-    profit = month_sales - month_exp
+    cur.execute(
+        "SELECT COALESCE(SUM(total_amount),0) AS s FROM sales "
+        "WHERE user_id=%s AND sale_date >= to_char(date_trunc('month', CURRENT_DATE),'YYYY-MM-DD')",
+        (current_user.id,))
+    month_sales = (cur.fetchone() or {}).get('s') or 0
+    cur.execute(
+        "SELECT COALESCE(SUM(amount),0) AS e FROM cash_books "
+        "WHERE user_id=%s AND entry_type='out' "
+        "AND date >= to_char(date_trunc('month', CURRENT_DATE),'YYYY-MM-DD')",
+        (current_user.id,))
+    month_exp = (cur.fetchone() or {}).get('e') or 0
+    cur.close()
     conn.close()
-    return render_template('snapshot.html', sales=month_sales, expenses=month_exp, profit=profit)
-
+    return render_template('snapshot.html', sales=month_sales, expenses=month_exp, profit=month_sales - month_exp)
 
 
 @app.route('/loyalty')
@@ -10157,8 +10173,8 @@ def sales_margin_alert():
     cur.execute("""
         SELECT st.product_name, AVG(s.selling_price_at_time) AS avg_sell, AVG(COALESCE(st.cost_price,0)) AS avg_cost
         FROM sales s LEFT JOIN stock st ON s.stock_id = st.id
-        WHERE s.user_id=%s AND s.sale_date >= CURRENT_DATE - INTERVAL '14 days'
-        GROUP BY s.product_name HAVING AVG(s.selling_price_at_time) > 0
+        WHERE s.user_id=%s AND s.sale_date >= to_char(CURRENT_DATE - INTERVAL '14 days','YYYY-MM-DD')
+        GROUP BY st.product_name HAVING AVG(s.selling_price_at_time) > 0
         ORDER BY (AVG(s.selling_price_at_time)-AVG(COALESCE(st.cost_price,0)))/AVG(s.selling_price_at_time) ASC LIMIT 10
     """, (current_user.id,))
     rows = cur.fetchall()
@@ -10210,7 +10226,7 @@ def stock_reorder_optimizer():
     th = float((cur.fetchone() or {}).get('th') or 10)
     cur.execute("""
         SELECT st.product_name, st.quantity, COALESCE(SUM(s.quantity_sold),0)/14.0 as vel
-        FROM stock st LEFT JOIN sales s ON s.stock_id=st.id AND s.sale_date >= CURRENT_DATE - INTERVAL '14 days'
+        FROM stock st LEFT JOIN sales s ON s.stock_id=st.id AND s.sale_date >= to_char(CURRENT_DATE - INTERVAL '14 days','YYYY-MM-DD')
         WHERE st.user_id=%s AND st.quantity <= %s
         GROUP BY st.id, st.product_name, st.quantity ORDER BY vel DESC LIMIT 12
     """, (current_user.id, th))
@@ -10226,7 +10242,7 @@ def stock_aging():
     cur.execute("""
         SELECT st.product_name, st.quantity FROM stock st
         WHERE st.user_id=%s AND NOT EXISTS (
-            SELECT 1 FROM sales s WHERE s.stock_id=st.id AND s.sale_date >= CURRENT_DATE - INTERVAL '60 days'
+            SELECT 1 FROM sales s WHERE s.stock_id=st.id AND s.sale_date >= to_char(CURRENT_DATE - INTERVAL '60 days','YYYY-MM-DD')
         ) LIMIT 12
     """, (current_user.id,))
     rows = cur.fetchall()
@@ -10452,7 +10468,10 @@ def counter_speed():
 @login_required
 def day_close_variance():
     conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT COALESCE(SUM(total_amount),0) as e FROM sales WHERE user_id=%s AND sale_date=CURRENT_DATE", (current_user.id,))
+    cur.execute(
+        "SELECT COALESCE(SUM(total_amount),0) AS e FROM sales "
+        "WHERE user_id=%s AND sale_date = to_char(CURRENT_DATE,'YYYY-MM-DD')",
+        (current_user.id,))
     expected = float((cur.fetchone() or {}).get('e') or 0)
     cur.close(); conn.close()
     return render_template('day_close.html', expected=expected)
@@ -10494,18 +10513,54 @@ def po_status():
 @app.route('/tax/estimate')
 @login_required
 def tax_estimate():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT COALESCE(SUM(total_amount),0) as s FROM sales WHERE user_id=%s AND sale_date >= DATE_TRUNC('month', CURRENT_DATE)", (current_user.id,))
-    sales = float((cur.fetchone() or {}).get('s') or 0)
-    cur.execute("SELECT COALESCE(SUM(amount),0) as e FROM expenses WHERE user_id=%s AND date >= DATE_TRUNC('month', CURRENT_DATE)", (current_user.id,))
-    exp = float((cur.fetchone() or {}).get('e') or 0)
-    cur.close(); conn.close()
-    return render_template('tax.html', estimate=max(0,(sales-exp)*0.22), profit=sales-exp)
+    """Month-to-date tax estimate — same shape as tax_summary."""
+    uid = current_user.id
+    settings_row = _get_settings_row(uid)
+    rate = (settings_row['tax_rate'] if settings_row else 0) or 0
+    symbol = (settings_row['currency_symbol'] if settings_row else '$') or '$'
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT COALESCE(SUM(total_amount),0) AS s FROM sales "
+        "WHERE user_id=%s AND sale_date >= to_char(DATE_TRUNC('month', CURRENT_DATE),'YYYY-MM-DD')",
+        (uid,))
+    sales_rev = float((cur.fetchone() or {}).get('s') or 0)
+    cur.execute(
+        "SELECT COALESCE(SUM(amount),0) AS e FROM income "
+        "WHERE user_id=%s AND date >= to_char(DATE_TRUNC('month', CURRENT_DATE),'YYYY-MM-DD')",
+        (uid,))
+    other_inc = float((cur.fetchone() or {}).get('e') or 0)
+    cur.execute(
+        "SELECT COALESCE(SUM(amount),0) AS e FROM expenses "
+        "WHERE user_id=%s AND date >= to_char(DATE_TRUNC('month', CURRENT_DATE),'YYYY-MM-DD')",
+        (uid,))
+    expenses = float((cur.fetchone() or {}).get('e') or 0)
+    cur.execute(
+        "SELECT COALESCE(SUM(total_cost),0) AS p FROM purchase_orders "
+        "WHERE user_id=%s AND order_date >= to_char(DATE_TRUNC('month', CURRENT_DATE),'YYYY-MM-DD')",
+        (uid,))
+    purchases = float((cur.fetchone() or {}).get('p') or 0)
+    cur.close()
+    conn.close()
+    taxable_out = sales_rev + other_inc
+    output_tax = taxable_out * rate / 100 if rate else 0
+    taxable_in = expenses + purchases
+    input_tax = taxable_in * rate / 100 if rate else 0
+    return render_template(
+        'tax.html',
+        rate=rate, symbol=symbol,
+        sales_rev=sales_rev, other_inc=other_inc,
+        expenses=expenses, purchases=purchases,
+        taxable_out=taxable_out, output_tax=output_tax,
+        taxable_in=taxable_in, input_tax=input_tax,
+        net_tax=output_tax - input_tax,
+    )
 
 @app.route('/tax/calendar')
 @login_required
 def tax_calendar():
-    return render_template('tax.html', deadlines=['VAT return: 21st', 'PAYE: 10th'])
+    """Old route kept for bookmark compatibility."""
+    return redirect(url_for('tax_summary'))
 
 @app.route('/investments/risk')
 @login_required
@@ -10528,7 +10583,10 @@ def investments_performance():
 @login_required
 def goals_velocity():
     conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT COALESCE(SUM(total_amount),0) as m FROM sales WHERE user_id=%s AND sale_date >= DATE_TRUNC('month', CURRENT_DATE)", (current_user.id,))
+    cur.execute(
+        "SELECT COALESCE(SUM(total_amount),0) AS m FROM sales "
+        "WHERE user_id=%s AND sale_date >= to_char(DATE_TRUNC('month', CURRENT_DATE),'YYYY-MM-DD')",
+        (current_user.id,))
     month = float((cur.fetchone() or {}).get('m') or 0)
     cur.close(); conn.close()
     day = max(datetime.today().day, 1)
@@ -10543,7 +10601,10 @@ def goals_milestones():
 @login_required
 def reports_board():
     conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT COALESCE(SUM(total_amount),0) as s FROM sales WHERE user_id=%s AND sale_date >= DATE_TRUNC('month', CURRENT_DATE)", (current_user.id,))
+    cur.execute(
+        "SELECT COALESCE(SUM(total_amount),0) AS s FROM sales "
+        "WHERE user_id=%s AND sale_date >= to_char(DATE_TRUNC('month', CURRENT_DATE),'YYYY-MM-DD')",
+        (current_user.id,))
     sales = float((cur.fetchone() or {}).get('s') or 0)
     cur.close(); conn.close()
     return render_template('reports.html', board={'sales':sales})
@@ -10819,9 +10880,15 @@ def snapshot_export():
 @login_required
 def daily_compare():
     conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT COALESCE(SUM(total_amount),0) as t FROM sales WHERE user_id=%s AND sale_date=CURRENT_DATE", (current_user.id,))
+    cur.execute(
+        "SELECT COALESCE(SUM(total_amount),0) AS t FROM sales "
+        "WHERE user_id=%s AND sale_date = to_char(CURRENT_DATE,'YYYY-MM-DD')",
+        (current_user.id,))
     today = float((cur.fetchone() or {}).get('t') or 0)
-    cur.execute("SELECT COALESCE(SUM(total_amount),0) as t FROM sales WHERE user_id=%s AND sale_date=CURRENT_DATE - INTERVAL '7 days'", (current_user.id,))
+    cur.execute(
+        "SELECT COALESCE(SUM(total_amount),0) AS t FROM sales "
+        "WHERE user_id=%s AND sale_date = to_char(CURRENT_DATE - INTERVAL '7 days','YYYY-MM-DD')",
+        (current_user.id,))
     last = float((cur.fetchone() or {}).get('t') or 0)
     cur.close(); conn.close()
     return render_template('daily_summary.html', sales=today, vs_last=today-last)
