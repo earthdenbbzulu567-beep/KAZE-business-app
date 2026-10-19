@@ -239,7 +239,6 @@ def get_db():
     return psycopg2.connect(_db_url(), cursor_factory=RealDictCursor)
 
 
-
 def _wants_json():
     path = request.path or ''
     if path.startswith('/webhooks/') or path.startswith('/healthz'):
@@ -1626,8 +1625,6 @@ def _accent_palette(hex_color):
     }
 
 
-
-
 # ======================== App modes (run some parts, leave others dormant) ========================
 # Always-on pieces stay reachable so you can switch mode back on.
 SERVICE_CATEGORIES = (
@@ -1792,8 +1789,6 @@ def priced_tiers(settings=None):
     return rows
 
 
-
-
 def normalize_plan(raw):
     key = str(raw or '').strip().lower().replace('+', ' plus').replace("'", '')
     key = ' '.join(key.replace('-', ' ').replace('_', ' ').split())
@@ -1814,7 +1809,6 @@ def normalize_plan(raw):
     if mapped:
         return mapped
     return 'ceo' if not raw else 'new_user'
-
 
 
 def trial_info(settings=None):
@@ -1915,7 +1909,6 @@ def _plan_block(kind, extra=1):
     return None
 
 
-
 ALWAYS_ON = frozenset({
     'dashboard', 'settings', 'search', 'notifications', 'tutorial',
     'shortcuts', 'activity', 'team', 'backup', 'index', 'auth', 'plans', 'payments',
@@ -1969,7 +1962,6 @@ NAV_GROUPS = (
         ('Recurring', 'recurring', 'refresh-cw', 'operations', ('recurring',)),
         ('Budgets', 'budgets', 'target', 'operations', ('budgets',)),
         ('WhatsApp Hub', 'whatsapp', 'message-circle', 'operations', ('whatsapp',)),
-        ('QR Scanner', 'scanner', 'scan', 'operations', ('scanner',)),
     )),
     ('Growth', (
         ('Investments', 'investments', 'line-chart', 'investments', ('investments',)),
@@ -1994,9 +1986,6 @@ NAV_GROUPS = (
         ('Reminders', 'reminders', 'bell', 'reminders', ('reminders',)),
         ('Day close', 'day_close', 'sunset', 'day_close', ('day_close',)),
         ('Documents', 'docs', 'file-text', 'documents', ('docs',)),
-        ('Credit Scores', 'credit_scores', 'shield-check', 'customers', ('credit_scores',)),
-        ('Batch Tracker', 'batches', 'layers', 'stock', ('batches',)),
-        ('Voice Entry', 'voice', 'mic', 'workspace', ('voice',)),
         ('Shortcuts', 'shortcuts', 'keyboard', None, ('shortcuts',)),
         ('Practical guide', 'tutorial', 'book-open-check', None, ('tutorial',)),
     )),
@@ -2031,7 +2020,6 @@ def live_nav_groups(live=None):
         if visible:
             groups.append({'title': title, 'links': visible})
     return groups
-
 
 
 APP_MODES = {
@@ -2436,7 +2424,6 @@ def _excel_money_format(settings_row=None):
     if decimals:
         return '"{}"#,##0.{}'.format(safe, zeros)
     return '"{}"#,##0'.format(safe)
-
 
 
 def _render_markdown(text):
@@ -6132,7 +6119,6 @@ def delete_note(id):
     return redirect(url_for('notes'))
 
 
-
 # ======================== Code snippets ========================
 
 SNIPPET_LANGS = ('text', 'html', 'python', 'sql', 'json', 'receipt')
@@ -7126,7 +7112,6 @@ def account_book_csv(book):
                     headers={'Content-Disposition': 'attachment; filename={}'.format(filename)})
 
 
-
 # ======================== Extra tools ========================
 
 @app.route('/reminders')
@@ -7349,8 +7334,6 @@ def price_list():
                      download_name='price-list.pdf')
 
 
-
-
 @app.route('/settings/clear-data', methods=['POST'])
 @login_required
 def clear_data():
@@ -7410,7 +7393,6 @@ def clear_data():
     log_activity(current_user.id, current_user.username, 'Cleared all business data', 'start over')
     flash('Business data cleared. Your account and settings are still here.', 'success')
     return redirect(url_for('dashboard'))
-
 
 
 @app.route('/stock/valuation-pdf')
@@ -8276,8 +8258,6 @@ def stats_xlsx():
     )
 
 
-
-
 @app.route('/theme', methods=['POST'])
 def set_display_theme():
     """Save dark / light / auto (or special themes) and remember it on this browser."""
@@ -8733,8 +8713,6 @@ def stripe_webhook():
     return ('', 200)
 
 
-
-
 @app.route('/packages')
 @app.route('/plans')
 @login_required
@@ -8766,7 +8744,6 @@ def plans():
         unlocked_rank=unlocked_rank,
         is_owner=(getattr(current_user, 'role', 'owner') == 'owner'),
     )
-
 
 
 @app.route('/pay/paypal/return')
@@ -8923,9 +8900,6 @@ def pay_plan(tier):
         return redirect(url_for('plans'))
     title = 'KAZE package: {}'.format(wanted)
     return _start_checkout('plan', PLAN_RANK[wanted], amount, title, 'plans')
-
-
-
 
 
 BANK_ACCOUNT_TYPES = ('Current', 'Savings', 'Mobile money', 'Credit', 'Cash till', 'Other')
@@ -9601,7 +9575,6 @@ def delete_valuation(id):
     return redirect(url_for('market'))
 
 
-
 def _mark_shop_paid(uid, order_id, tx_ref='', tx_id=''):
     conn = get_db()
     cur = conn.cursor()
@@ -9849,60 +9822,358 @@ def refresh_market_fx():
     return redirect(url_for('market'))
 
 
-
 # ======================== Unique Features ========================
 
 @app.route('/insights')
 @login_required
 def insights():
-    # AI Insights: simple rule-based + data driven tips
+    """Live business insights computed from sales, stock, and customers."""
+    uid = current_user.id
     conn = get_db()
     cur = conn.cursor()
-    # Example computations
+
+    # 1 — last 30 days summary
     cur.execute(
-        "SELECT COALESCE(SUM(total_amount),0) AS sales FROM sales "
-        "WHERE user_id=%s AND sale_date >= to_char(CURRENT_DATE - INTERVAL '30 days', 'YYYY-MM-DD')",
-        (current_user.id,))
-    recent_sales = (cur.fetchone() or {}).get('sales') or 0
+        "SELECT COALESCE(SUM(total_amount),0) AS revenue, "
+        "COALESCE(SUM(profit),0) AS profit, "
+        "COUNT(*) AS tickets, "
+        "COUNT(DISTINCT customer_id) AS customers "
+        "FROM sales WHERE user_id=%s "
+        "AND sale_date >= to_char(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD')",
+        (uid,))
+    r30 = cur.fetchone() or {}
+    revenue_30 = float(r30.get('revenue') or 0)
+    profit_30 = float(r30.get('profit') or 0)
+    tickets_30 = int(r30.get('tickets') or 0)
+    customers_30 = int(r30.get('customers') or 0)
+
+    # 2 — best seller last 30 days
     cur.execute(
-        "SELECT COUNT(*) AS low FROM stock st "
+        "SELECT st.product_name, "
+        "COALESCE(SUM(s.quantity_sold),0) AS units, "
+        "COALESCE(SUM(s.total_amount),0) AS revenue, "
+        "COALESCE(SUM(s.profit),0) AS profit "
+        "FROM sales s LEFT JOIN stock st ON st.id = s.stock_id "
+        "WHERE s.user_id=%s "
+        "AND s.sale_date >= to_char(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD') "
+        "GROUP BY st.product_name "
+        "ORDER BY revenue DESC LIMIT 1",
+        (uid,))
+    best = cur.fetchone()
+
+    # 3 — worst margin, min 3 tickets, last 60 days
+    cur.execute(
+        "SELECT st.product_name, "
+        "COALESCE(SUM(s.total_amount),0) AS revenue, "
+        "COALESCE(SUM(s.profit),0) AS profit, "
+        "COUNT(*) AS tickets "
+        "FROM sales s LEFT JOIN stock st ON st.id = s.stock_id "
+        "WHERE s.user_id=%s "
+        "AND s.sale_date >= to_char(CURRENT_DATE - INTERVAL '60 days','YYYY-MM-DD') "
+        "GROUP BY st.product_name HAVING COUNT(*) >= 3",
+        (uid,))
+    margin_rows = []
+    for r in (cur.fetchall() or []):
+        rev = float(r.get('revenue') or 0)
+        pft = float(r.get('profit') or 0)
+        if rev > 0:
+            margin_rows.append({
+                'name': r.get('product_name') or 'Item',
+                'revenue': rev,
+                'profit': pft,
+                'tickets': int(r.get('tickets') or 0),
+                'margin_pct': round(pft / rev * 100, 1),
+            })
+    margin_rows.sort(key=lambda x: x['margin_pct'])
+    worst_margin = margin_rows[0] if margin_rows else None
+
+    # 4 — low stock
+    cur.execute(
+        "SELECT COUNT(*) AS n FROM stock st "
         "WHERE st.user_id=%s AND st.quantity <= COALESCE("
         "(SELECT low_stock_threshold FROM settings WHERE user_id=%s), 10)",
-        (current_user.id, current_user.id))
-    low_stock = (cur.fetchone() or {}).get('low') or 0
-    tips = []
-    if low_stock > 0:
-        tips.append(f"You have {low_stock} items below stock threshold. Consider restocking soon.")
-    if recent_sales > 10000:
-        tips.append("Strong sales this month! Review top products for upsell opportunities.")
-    else:
-        tips.append("Sales are moderate. Try promotional offers or check customer retention.")
-    tips.append("Review your cash flow forecast for better planning.")
+        (uid, uid))
+    low_stock = int((cur.fetchone() or {}).get('n') or 0)
+
+    # 5 — dead stock (no sales in 60 days)
+    cur.execute(
+        "SELECT COUNT(*) AS n FROM stock st "
+        "WHERE st.user_id=%s AND NOT EXISTS ("
+        "SELECT 1 FROM sales s WHERE s.stock_id = st.id "
+        "AND s.sale_date >= to_char(CURRENT_DATE - INTERVAL '60 days','YYYY-MM-DD'))",
+        (uid,))
+    dead_stock = int((cur.fetchone() or {}).get('n') or 0)
+
+    # 6 — customers at risk (bought last month, not this month)
+    cur.execute(
+        "SELECT COUNT(*) AS n FROM ("
+        "SELECT s.customer_id FROM sales s "
+        "WHERE s.user_id=%s AND s.customer_id IS NOT NULL "
+        "AND s.sale_date >= to_char(CURRENT_DATE - INTERVAL '60 days','YYYY-MM-DD') "
+        "AND s.sale_date < to_char(DATE_TRUNC('month', CURRENT_DATE),'YYYY-MM-DD') "
+        "GROUP BY s.customer_id) lm "
+        "WHERE lm.customer_id NOT IN ("
+        "SELECT DISTINCT s.customer_id FROM sales s "
+        "WHERE s.user_id=%s AND s.customer_id IS NOT NULL "
+        "AND s.sale_date >= to_char(DATE_TRUNC('month', CURRENT_DATE),'YYYY-MM-DD'))",
+        (uid, uid))
+    at_risk = int((cur.fetchone() or {}).get('n') or 0)
+
+    # 7 — payment mix last 30 days
+    cur.execute(
+        "SELECT COALESCE(payment_method,'cash') AS method, "
+        "COUNT(*) AS tickets, COALESCE(SUM(total_amount),0) AS revenue "
+        "FROM sales WHERE user_id=%s "
+        "AND sale_date >= to_char(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD') "
+        "GROUP BY payment_method ORDER BY revenue DESC",
+        (uid,))
+    payment_mix = []
+    for r in (cur.fetchall() or []):
+        payment_mix.append({
+            'method': (r.get('method') or 'cash').title(),
+            'tickets': int(r.get('tickets') or 0),
+            'revenue': float(r.get('revenue') or 0),
+        })
+
+    # 8 — stock value at cost / at selling price
+    cur.execute(
+        "SELECT COALESCE(SUM(quantity * cost_price),0) AS cost_value, "
+        "COALESCE(SUM(quantity * selling_price),0) AS sell_value "
+        "FROM stock WHERE user_id=%s",
+        (uid,))
+    sv = cur.fetchone() or {}
+    stock_cost_value = float(sv.get('cost_value') or 0)
+    stock_sell_value = float(sv.get('sell_value') or 0)
+
+    cur.close()
     conn.close()
-    return render_template('insights.html', tips=tips, recent_sales=recent_sales, low_stock=low_stock)
+
+    insights = []
+
+    if best and float(best.get('revenue') or 0) > 0:
+        insights.append({
+            'severity': 'success',
+            'icon': 'trending-up',
+            'title': 'Top seller: {}'.format(best.get('product_name') or 'Item'),
+            'detail': '{} revenue · {} units · {} profit in the last 30 days.'.format(
+                _format_money(float(best.get('revenue') or 0)),
+                int(float(best.get('units') or 0)),
+                _format_money(float(best.get('profit') or 0))),
+            'action_label': 'Open stock',
+            'action_url': url_for('stock'),
+        })
+    else:
+        insights.append({
+            'severity': 'info',
+            'icon': 'package',
+            'title': 'No sales in the last 30 days',
+            'detail': 'Record a sale or open Counter to start seeing top-seller insight.',
+            'action_label': 'Open counter',
+            'action_url': url_for('counter'),
+        })
+
+    if worst_margin:
+        sev = 'danger' if worst_margin['margin_pct'] < 0 else ('warn' if worst_margin['margin_pct'] < 15 else 'info')
+        insights.append({
+            'severity': sev,
+            'icon': 'trending-down',
+            'title': 'Lowest margin: {}'.format(worst_margin['name']),
+            'detail': '{}% margin over {} tickets. Revenue {} · profit {}. Consider repricing or dropping.'.format(
+                worst_margin['margin_pct'], worst_margin['tickets'],
+                _format_money(worst_margin['revenue']),
+                _format_money(worst_margin['profit'])),
+            'action_label': 'Edit prices',
+            'action_url': url_for('stock'),
+        })
+    else:
+        insights.append({
+            'severity': 'info',
+            'icon': 'bar-chart-3',
+            'title': 'Not enough sales to score margins',
+            'detail': 'Need at least 3 tickets on a product in the last 60 days to detect a low-margin item.',
+            'action_label': 'Record a sale',
+            'action_url': url_for('sales'),
+        })
+
+    if low_stock > 0:
+        insights.append({
+            'severity': 'danger' if low_stock >= 5 else 'warn',
+            'icon': 'alert-triangle',
+            'title': '{} product(s) below stock threshold'.format(low_stock),
+            'detail': 'Restock soon. Change the threshold in Settings → Low stock threshold.',
+            'action_label': 'Open stock',
+            'action_url': url_for('stock'),
+        })
+    else:
+        insights.append({
+            'severity': 'success',
+            'icon': 'check-circle',
+            'title': 'Stock levels healthy',
+            'detail': 'No products are below the low-stock threshold right now.',
+            'action_label': 'Review stock',
+            'action_url': url_for('stock'),
+        })
+
+    if dead_stock > 0:
+        insights.append({
+            'severity': 'warn',
+            'icon': 'package',
+            'title': '{} dead-stock item(s)'.format(dead_stock),
+            'detail': 'No sales in the last 60 days. Bundle or discount to free up cash.',
+            'action_label': 'Open stock',
+            'action_url': url_for('stock'),
+        })
+
+    if at_risk > 0:
+        insights.append({
+            'severity': 'warn',
+            'icon': 'users',
+            'title': '{} customer(s) at risk'.format(at_risk),
+            'detail': 'Bought last month, not this month. A small reminder usually wins them back.',
+            'action_label': 'Open customers',
+            'action_url': url_for('customers'),
+        })
+    elif customers_30 > 0:
+        insights.append({
+            'severity': 'success',
+            'icon': 'users',
+            'title': 'Customers are coming back',
+            'detail': '{} distinct customer(s) bought in the last 30 days.'.format(customers_30),
+            'action_label': 'Open customers',
+            'action_url': url_for('customers'),
+        })
+
+    if payment_mix:
+        top = payment_mix[0]
+        if len(payment_mix) > 1 and revenue_30 > 0:
+            share = round(top['revenue'] / revenue_30 * 100, 1)
+            detail = '{}% of revenue ({}) came via {} in the last 30 days.'.format(
+                share, _format_money(top['revenue']), top['method'])
+        else:
+            detail = 'Every sale last 30 days used {}.'.format(top['method'])
+        insights.append({
+            'severity': 'info',
+            'icon': 'credit-card',
+            'title': 'Payment mix',
+            'detail': detail,
+            'action_label': 'Open payments',
+            'action_url': url_for('payments'),
+        })
+
+    return render_template(
+        'insights.html',
+        insights=insights,
+        revenue_30=revenue_30,
+        profit_30=profit_30,
+        tickets_30=tickets_30,
+        customers_30=customers_30,
+        low_stock=low_stock,
+        dead_stock=dead_stock,
+        at_risk=at_risk,
+        stock_cost_value=stock_cost_value,
+        stock_sell_value=stock_sell_value,
+        payment_mix=payment_mix,
+    )
+
+
 
 @app.route('/forecast')
 @login_required
 def forecast():
-    # Simple cash flow forecast based on historical average
+    uid = current_user.id
     conn = get_db()
     cur = conn.cursor()
-    cur.execute(
-        "SELECT COALESCE(AVG(total_amount),0) AS avg_daily FROM sales "
-        "WHERE user_id=%s AND sale_date >= to_char(CURRENT_DATE - INTERVAL '30 days', 'YYYY-MM-DD')",
-        (current_user.id,))
-    avg = (cur.fetchone() or {}).get('avg_daily') or 0
-    projections = []
-    balance = 0  # placeholder, fetch real if possible
-    for d in range(1, 31):
-        projections.append({'day': d, 'projected': round(avg * d, 2)})
-    conn.close()
-    return render_template('forecast.html', projections=projections, avg_daily=avg)
 
-@app.route('/scanner')
-@login_required
-def scanner():
-    return render_template('scanner.html')
+    cur.execute(
+        "SELECT COALESCE(AVG(daily_rev),0) AS avg_rev FROM ("
+        "SELECT SUM(total_amount) AS daily_rev FROM sales "
+        "WHERE user_id=%s AND sale_date >= to_char(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD') "
+        "GROUP BY sale_date) t",
+        (uid,))
+    avg_daily_revenue = float((cur.fetchone() or {}).get('avg_rev') or 0)
+
+    cur.execute(
+        "SELECT COALESCE(AVG(daily_exp),0) AS avg_exp FROM ("
+        "SELECT SUM(amount) AS daily_exp FROM expenses "
+        "WHERE user_id=%s AND date >= to_char(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD') "
+        "GROUP BY date) t",
+        (uid,))
+    avg_daily_expense = float((cur.fetchone() or {}).get('avg_exp') or 0)
+
+    cur.execute(
+        "SELECT COALESCE(SUM(opening_balance),0) AS opening FROM bank_accounts WHERE user_id=%s",
+        (uid,))
+    opening = float((cur.fetchone() or {}).get('opening') or 0)
+    cur.execute(
+        "SELECT COALESCE(SUM(CASE WHEN kind='in' THEN amount ELSE -amount END),0) AS mv "
+        "FROM bank_transactions WHERE user_id=%s", (uid,))
+    bank_mv = float((cur.fetchone() or {}).get('mv') or 0)
+    cur.execute("SELECT COUNT(*) AS n FROM bank_accounts WHERE user_id=%s", (uid,))
+    bank_count = int((cur.fetchone() or {}).get('n') or 0)
+
+    if bank_count > 0:
+        current_cash = opening + bank_mv
+        cash_source = 'bank accounts'
+    else:
+        cur.execute(
+            "SELECT COALESCE(SUM(CASE WHEN entry_type='in' THEN amount ELSE -amount END),0) AS net "
+            "FROM cash_books WHERE user_id=%s", (uid,))
+        current_cash = float((cur.fetchone() or {}).get('net') or 0)
+        cash_source = 'cash book'
+
+    cur.execute(
+        "SELECT COALESCE(SUM(amount),0) AS total FROM recurring_items "
+        "WHERE user_id=%s AND active=1 AND item_type='expense' "
+        "AND next_run_date <= to_char(CURRENT_DATE + INTERVAL '30 days','YYYY-MM-DD')",
+        (uid,))
+    upcoming_recurring = float((cur.fetchone() or {}).get('total') or 0)
+
+    cur.execute(
+        "SELECT COALESCE(SUM(total_cost),0) AS total FROM purchase_orders "
+        "WHERE user_id=%s AND status='pending'", (uid,))
+    upcoming_pos = float((cur.fetchone() or {}).get('total') or 0)
+
+    cur.close()
+    conn.close()
+
+    net_daily = avg_daily_revenue - avg_daily_expense
+    daily_obligations = (upcoming_recurring + upcoming_pos) / 30.0
+
+    base, worst, best = [], [], []
+    for d in range(1, 31):
+        net = net_daily - daily_obligations
+        base_val = current_cash + net * d
+        worst_val = current_cash + (net_daily * 0.5 - daily_obligations) * d
+        best_val = current_cash + (net_daily * 1.5 - daily_obligations) * d
+        base.append(round(base_val, 2))
+        worst.append(round(worst_val, 2))
+        best.append(round(best_val, 2))
+
+    lowest = min(base) if base else 0
+    if lowest < 0:
+        cash_risk = 'High — projected to go negative by day {}'.format(base.index(min(base)) + 1)
+    elif lowest < current_cash * 0.2:
+        cash_risk = 'Moderate — buffer below 20% of current cash'
+    else:
+        cash_risk = 'Low'
+
+    return render_template(
+        'forecast.html',
+        current_cash=current_cash,
+        cash_source=cash_source,
+        avg_daily_revenue=avg_daily_revenue,
+        avg_daily_expense=avg_daily_expense,
+        net_daily=net_daily,
+        upcoming_recurring=upcoming_recurring,
+        upcoming_pos=upcoming_pos,
+        daily_obligations=daily_obligations,
+        base=base, worst=worst, best=best,
+        lowest=lowest,
+        cash_risk=cash_risk,
+        avg_daily=avg_daily_revenue,
+    )
+
+
 
 @app.route('/whatsapp')
 @login_required
@@ -9915,104 +10186,286 @@ def whatsapp():
     conn.close()
     return render_template('whatsapp.html', customers=customers)
 
-@app.route('/credit_scores')
-@login_required
-def credit_scores():
-    # Compute simple scores based on payment history (placeholder)
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT id, name FROM customers WHERE user_id=%s ORDER BY name LIMIT 50", (current_user.id,))
-    customers = cur.fetchall()
-    scores = []
-    for c in customers:
-        # Mock score
-        scores.append({'id': c['id'], 'name': c['name'], 'score': 75 + (c['id'] % 25), 'risk': 'Low' if c['id'] % 3 == 0 else 'Medium'})
-    conn.close()
-    return render_template('credit_scores.html', scores=scores)
-
-@app.route('/batches')
-@login_required
-def batches():
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT product_name AS name, quantity, unit FROM stock "
-        "WHERE user_id=%s ORDER BY product_name LIMIT 50",
-        (current_user.id,))
-    items = cur.fetchall()
-    cur.close()
-    conn.close()
-    return render_template('batches.html', items=items)
-
-@app.route('/voice')
-@login_required
-def voice():
-    return render_template('voice.html')
-
-
 
 # ======================== Supreme Features ========================
 
 @app.route('/health')
 @login_required
 def health():
+    uid = current_user.id
     conn = get_db()
     cur = conn.cursor()
+
     cur.execute(
-        "SELECT COALESCE(SUM(total_amount),0) AS sales FROM sales "
-        "WHERE user_id=%s AND sale_date >= to_char(CURRENT_DATE - INTERVAL '30 days', 'YYYY-MM-DD')",
-        (current_user.id,))
-    sales = (cur.fetchone() or {}).get('sales') or 0
+        "SELECT COALESCE(SUM(total_amount),0) AS rev, COALESCE(SUM(profit),0) AS pft "
+        "FROM sales WHERE user_id=%s "
+        "AND sale_date >= to_char(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD')",
+        (uid,))
+    r = cur.fetchone() or {}
+    sales_30 = float(r.get('rev') or 0)
+    profit_30 = float(r.get('pft') or 0)
+
     cur.execute(
-        "SELECT COUNT(*) AS low FROM stock st "
-        "WHERE st.user_id=%s AND st.quantity <= COALESCE("
-        "(SELECT low_stock_threshold FROM settings WHERE user_id=%s), 5)",
-        (current_user.id, current_user.id))
-    low = (cur.fetchone() or {}).get('low') or 0
-    score = min(100, max(40, int(50 + (sales / 1000) - (low * 5))))
-    status = 'Excellent' if score >= 80 else 'Good' if score >= 60 else 'Needs Attention'
+        "SELECT COALESCE(SUM(total_amount),0) AS rev "
+        "FROM sales WHERE user_id=%s "
+        "AND sale_date >= to_char(CURRENT_DATE - INTERVAL '60 days','YYYY-MM-DD') "
+        "AND sale_date < to_char(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD')",
+        (uid,))
+    sales_prev_30 = float((cur.fetchone() or {}).get('rev') or 0)
+
+    cur.execute(
+        "SELECT COUNT(*) AS total, "
+        "SUM(CASE WHEN quantity <= COALESCE("
+        "(SELECT low_stock_threshold FROM settings WHERE user_id=%s),10) THEN 1 ELSE 0 END) AS low "
+        "FROM stock WHERE user_id=%s",
+        (uid, uid))
+    st = cur.fetchone() or {}
+    total_sku = int(st.get('total') or 0)
+    low_sku = int(st.get('low') or 0)
+
+    cur.execute(
+        "SELECT COALESCE(SUM(amount),0) AS m FROM expenses "
+        "WHERE user_id=%s AND date >= to_char(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD')",
+        (uid,))
+    exp_30 = float((cur.fetchone() or {}).get('m') or 0)
+
+    cur.execute("SELECT COALESCE(SUM(opening_balance),0) AS op FROM bank_accounts WHERE user_id=%s", (uid,))
+    op = float((cur.fetchone() or {}).get('op') or 0)
+    cur.execute(
+        "SELECT COALESCE(SUM(CASE WHEN kind='in' THEN amount ELSE -amount END),0) AS mv "
+        "FROM bank_transactions WHERE user_id=%s", (uid,))
+    mv = float((cur.fetchone() or {}).get('mv') or 0)
+    cur.execute("SELECT COUNT(*) AS n FROM bank_accounts WHERE user_id=%s", (uid,))
+    if int((cur.fetchone() or {}).get('n') or 0) > 0:
+        cash = op + mv
+    else:
+        cur.execute(
+            "SELECT COALESCE(SUM(CASE WHEN entry_type='in' THEN amount ELSE -amount END),0) AS net "
+            "FROM cash_books WHERE user_id=%s", (uid,))
+        cash = float((cur.fetchone() or {}).get('net') or 0)
+
+    cur.execute(
+        "SELECT COUNT(DISTINCT customer_id) AS buyers, "
+        "SUM(CASE WHEN c > 1 THEN 1 ELSE 0 END) AS repeaters "
+        "FROM (SELECT customer_id, COUNT(*) AS c FROM sales "
+        "WHERE user_id=%s AND customer_id IS NOT NULL GROUP BY customer_id) t",
+        (uid,))
+    rb = cur.fetchone() or {}
+    buyers = int(rb.get('buyers') or 0)
+    repeaters = int(rb.get('repeaters') or 0)
+
+    cur.close()
     conn.close()
-    return render_template('health.html', score=score, status=status, sales=sales, low=low)
+
+    if sales_prev_30 > 0:
+        trend_pct = (sales_30 - sales_prev_30) / sales_prev_30 * 100
+    else:
+        trend_pct = 100 if sales_30 > 0 else 0
+    trend_score = max(0, min(100, int(50 + trend_pct * 0.5)))
+
+    margin_pct = round((profit_30 / sales_30 * 100) if sales_30 > 0 else 0, 1)
+    margin_score = max(0, min(100, int(margin_pct * 2.5)))
+
+    if total_sku > 0:
+        stock_score = int(100 - (low_sku / total_sku) * 100)
+    else:
+        stock_score = 100
+
+    monthly_exp = exp_30 if exp_30 > 0 else 1
+    months_covered = round(cash / monthly_exp, 1) if cash > 0 else 0
+    cash_score = max(0, min(100, int(months_covered * 50)))
+
+    retention_score = int((repeaters / buyers * 100) if buyers > 0 else 0)
+
+    final = int(
+        trend_score * 0.30 + margin_score * 0.25 + stock_score * 0.15
+        + cash_score * 0.15 + retention_score * 0.15
+    )
+    final = max(0, min(100, final))
+
+    if final >= 80:
+        status = 'Excellent'
+    elif final >= 60:
+        status = 'Good'
+    elif final >= 40:
+        status = 'Fair'
+    else:
+        status = 'Needs Attention'
+
+    components = [
+        {'name': 'Sales trend', 'score': trend_score, 'weight': 30,
+         'detail': '30d vs prior 30d: {:+d}%'.format(int(trend_pct))},
+        {'name': 'Margin', 'score': margin_score, 'weight': 25,
+         'detail': 'Avg margin {}% over 30 days'.format(margin_pct)},
+        {'name': 'Stock health', 'score': stock_score, 'weight': 15,
+         'detail': '{} of {} SKU(s) low-stock'.format(low_sku, total_sku)},
+        {'name': 'Cash buffer', 'score': cash_score, 'weight': 15,
+         'detail': '{} months of expenses covered'.format(months_covered)},
+        {'name': 'Retention', 'score': retention_score, 'weight': 15,
+         'detail': '{} of {} customers bought twice+'.format(repeaters, buyers)},
+    ]
+
+    return render_template(
+        'health.html',
+        score=final,
+        status=status,
+        components=components,
+        sales=sales_30,
+        low=low_sku,
+        trend_pct=round(trend_pct, 1),
+        margin_pct=margin_pct,
+        months_covered=months_covered,
+        buyers=buyers,
+        repeaters=repeaters,
+    )
+
+
 
 @app.route('/profit_matrix')
 @login_required
 def profit_matrix():
+    uid = current_user.id
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("""
-        SELECT st.product_name AS name,
-               COALESCE(SUM(s.profit),0) AS profit
-        FROM sales s
-        LEFT JOIN stock st ON st.id = s.stock_id
-        WHERE s.user_id = %s
-        GROUP BY st.product_name
-        ORDER BY profit DESC
-        LIMIT 15
-    """, (current_user.id,))
-    products = cur.fetchall()
+    cur.execute(
+        "SELECT st.product_name AS name, "
+        "COALESCE(SUM(s.total_amount),0) AS revenue, "
+        "COALESCE(SUM(s.profit),0) AS profit, "
+        "COALESCE(SUM(s.quantity_sold),0) AS units, "
+        "COUNT(*) AS tickets "
+        "FROM sales s LEFT JOIN stock st ON st.id = s.stock_id "
+        "WHERE s.user_id=%s "
+        "AND s.sale_date >= to_char(CURRENT_DATE - INTERVAL '90 days','YYYY-MM-DD') "
+        "GROUP BY st.product_name "
+        "ORDER BY revenue DESC",
+        (uid,))
+    rows = []
+    for r in (cur.fetchall() or []):
+        rev = float(r.get('revenue') or 0)
+        pft = float(r.get('profit') or 0)
+        margin_pct = round((pft / rev * 100) if rev > 0 else 0, 1)
+        rows.append({
+            'name': r.get('name') or 'Item',
+            'revenue': rev,
+            'profit': pft,
+            'units': float(r.get('units') or 0),
+            'tickets': int(r.get('tickets') or 0),
+            'margin_pct': margin_pct,
+        })
+    cur.close()
     conn.close()
-    return render_template('profit_matrix.html', products=products)
+
+    avg_rev = round(sum(r['revenue'] for r in rows) / len(rows), 2) if rows else 0
+    avg_margin = round(sum(r['margin_pct'] for r in rows) / len(rows), 1) if rows else 0
+
+    buckets = {'star': [], 'cash_cow': [], 'rocket': [], 'dog': []}
+    for r in rows:
+        high_rev = r['revenue'] >= avg_rev
+        high_margin = r['margin_pct'] >= avg_margin
+        if high_rev and high_margin:
+            key = 'star'
+        elif high_rev and not high_margin:
+            key = 'cash_cow'
+        elif not high_rev and high_margin:
+            key = 'rocket'
+        else:
+            key = 'dog'
+        r['quadrant'] = key
+        buckets[key].append(r)
+
+    return render_template(
+        'profit_matrix.html',
+        rows=rows,
+        stars=buckets['star'],
+        cash_cows=buckets['cash_cow'],
+        rockets=buckets['rocket'],
+        dogs=buckets['dog'],
+        avg_revenue=avg_rev,
+        avg_margin=avg_margin,
+    )
+
+
 
 @app.route('/rfm')
 @login_required
 def rfm():
+    uid = current_user.id
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("""
-        SELECT c.name,
-               MAX(s.sale_date) AS last_purchase,
-               COUNT(s.id) AS frequency,
-               COALESCE(SUM(s.total_amount),0) AS monetary
-        FROM customers c
-        LEFT JOIN sales s ON s.customer_id = c.id AND s.user_id = c.user_id
-        WHERE c.user_id = %s
-        GROUP BY c.id, c.name
-        ORDER BY monetary DESC
-        LIMIT 20
-    """, (current_user.id,))
-    customers = cur.fetchall()
+    cur.execute(
+        "SELECT c.id, c.name, "
+        "MAX(s.sale_date) AS last_purchase, "
+        "COUNT(s.id) AS frequency, "
+        "COALESCE(SUM(s.total_amount),0) AS monetary "
+        "FROM customers c "
+        "LEFT JOIN sales s ON s.customer_id = c.id AND s.user_id = c.user_id "
+        "WHERE c.user_id=%s GROUP BY c.id, c.name",
+        (uid,))
+    raw = cur.fetchall() or []
+    cur.close()
     conn.close()
-    return render_template('rfm.html', customers=customers)
+
+    today = datetime.today().date()
+    customers = []
+    for c in raw:
+        lp = (c.get('last_purchase') or '')[:10]
+        if lp:
+            try:
+                days = (today - datetime.strptime(lp, '%Y-%m-%d').date()).days
+            except ValueError:
+                days = 9999
+        else:
+            days = 9999
+        freq = int(c.get('frequency') or 0)
+        monetary = float(c.get('monetary') or 0)
+        r = 5 if days < 7 else 4 if days < 30 else 3 if days < 60 else 2 if days < 90 else 1
+        f = 1 if freq <= 1 else 2 if freq == 2 else 3 if freq <= 4 else 4 if freq <= 9 else 5
+        customers.append({
+            'name': c.get('name') or 'Customer',
+            'days': days,
+            'frequency': freq,
+            'monetary': monetary,
+            'R': r, 'F': f,
+        })
+
+    avg_m = sum(c['monetary'] for c in customers) / len(customers) if customers else 0
+    for c in customers:
+        m = c['monetary']
+        c['M'] = 1 if m < avg_m * 0.5 else 2 if m < avg_m else 3 if m < avg_m * 2 else 4 if m < avg_m * 4 else 5
+        c['rfm'] = f"{c['R']}{c['F']}{c['M']}"
+        if c['R'] >= 4 and c['F'] >= 4 and c['M'] >= 4:
+            c['segment'] = 'Champion'
+        elif c['R'] <= 2 and c['F'] >= 3:
+            c['segment'] = 'At Risk'
+        elif c['R'] == 1 and c['F'] <= 2:
+            c['segment'] = 'Lost'
+        elif c['R'] >= 4 and c['F'] <= 2:
+            c['segment'] = 'New'
+        elif c['R'] >= 3 and c['F'] >= 2:
+            c['segment'] = 'Loyal'
+        else:
+            c['segment'] = 'Needs Attention'
+
+    groups = {}
+    for c in customers:
+        groups.setdefault(c['segment'], []).append(c)
+
+    segment_order = ['Champion', 'Loyal', 'New', 'At Risk', 'Needs Attention', 'Lost']
+    summary = [{'name': s, 'count': len(groups.get(s, []))} for s in segment_order]
+
+    customers.sort(key=lambda x: (x['segment'], -x['monetary']))
+
+    return render_template(
+        'rfm.html',
+        customers=customers,
+        groups=groups,
+        summary=summary,
+        segment_order=segment_order,
+        total_customers=len(customers),
+        avg_monetary=avg_m,
+    )
+
+
 
 @app.route('/turnover')
 @login_required
@@ -10050,7 +10503,103 @@ def collections():
 @app.route('/goals')
 @login_required
 def goals():
-    return render_template('goals.html')
+    """Live progress against the monthly sales target."""
+    uid = current_user.id
+    today = datetime.today()
+    month_str = today.strftime('%Y-%m')
+    first_of_month = today.replace(day=1)
+    first_of_next_month = (first_of_month + timedelta(days=32)).replace(day=1)
+    last_day = (first_of_next_month - timedelta(days=1)).day
+    day_of_month = today.day
+    days_remaining = last_day - day_of_month
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    settings_row = _get_settings_row(uid) or {}
+    try:
+        monthly_goal = float(settings_row.get('monthly_revenue_goal') or 0)
+    except (TypeError, ValueError):
+        monthly_goal = 0.0
+
+    cur.execute(
+        "SELECT COALESCE(SUM(total_amount),0) AS revenue, "
+        "COALESCE(SUM(profit),0) AS profit, COUNT(*) AS tickets, "
+        "COALESCE(SUM(quantity_sold),0) AS units "
+        "FROM sales WHERE user_id=%s AND sale_date LIKE %s",
+        (uid, month_str + '%'))
+    row = cur.fetchone() or {}
+    month_revenue = float(row.get('revenue') or 0)
+    month_profit = float(row.get('profit') or 0)
+    month_tickets = int(row.get('tickets') or 0)
+    month_units = float(row.get('units') or 0)
+
+    cur.execute(
+        "SELECT COUNT(DISTINCT customer_id) AS n FROM sales "
+        "WHERE user_id=%s AND sale_date LIKE %s AND customer_id IS NOT NULL",
+        (uid, month_str + '%'))
+    active_customers = int((cur.fetchone() or {}).get('n') or 0)
+
+    cur.execute('SELECT COUNT(*) AS n FROM customers WHERE user_id=%s', (uid,))
+    total_customers = int((cur.fetchone() or {}).get('n') or 0)
+
+    cur.execute(
+        "SELECT sale_date, COALESCE(SUM(total_amount),0) AS t "
+        "FROM sales WHERE user_id=%s AND sale_date LIKE %s "
+        "GROUP BY sale_date ORDER BY t DESC LIMIT 1",
+        (uid, month_str + '%'))
+    best = cur.fetchone() or {}
+    best_day = best.get('sale_date')
+    best_day_revenue = float(best.get('t') or 0)
+
+    last_first = (first_of_month - timedelta(days=1)).replace(day=1)
+    last_month_str = last_first.strftime('%Y-%m')
+    cur.execute(
+        "SELECT COALESCE(SUM(total_amount),0) AS revenue, "
+        "COALESCE(SUM(profit),0) AS profit "
+        "FROM sales WHERE user_id=%s AND sale_date LIKE %s",
+        (uid, last_month_str + '%'))
+    lm = cur.fetchone() or {}
+    last_month_revenue = float(lm.get('revenue') or 0)
+    last_month_profit = float(lm.get('profit') or 0)
+
+    cur.close()
+    conn.close()
+
+    raw_pct = round((month_revenue / monthly_goal * 100) if monthly_goal else 0, 1)
+    goal_progress_pct = min(raw_pct, 100.0)
+    pace_target = round(monthly_goal * (day_of_month / last_day), 2) if monthly_goal else 0
+    pace_delta = round(month_revenue - pace_target, 2)
+    daily_run_rate = round(month_revenue / day_of_month, 2) if day_of_month else 0
+    projected_month_end = round(daily_run_rate * last_day, 2)
+    avg_margin_pct = round((month_profit / month_revenue * 100) if month_revenue else 0, 1)
+
+    return render_template(
+        'goals.html',
+        monthly_goal=monthly_goal,
+        month_revenue=month_revenue,
+        month_profit=month_profit,
+        month_tickets=month_tickets,
+        month_units=month_units,
+        goal_progress_pct=goal_progress_pct,
+        raw_goal_pct=raw_pct,
+        pace_target=pace_target,
+        pace_delta=pace_delta,
+        daily_run_rate=daily_run_rate,
+        projected_month_end=projected_month_end,
+        avg_margin_pct=avg_margin_pct,
+        active_customers=active_customers,
+        total_customers=total_customers,
+        last_month_revenue=last_month_revenue,
+        last_month_profit=last_month_profit,
+        best_day=best_day,
+        best_day_revenue=best_day_revenue,
+        day_of_month=day_of_month,
+        days_in_month=last_day,
+        days_remaining=days_remaining,
+        month_label=today.strftime('%B %Y'),
+        last_month_label=last_first.strftime('%B %Y'),
+    )
 
 @app.route('/alerts')
 @login_required
@@ -10161,758 +10710,18 @@ def daily_summary():
     return render_template('daily_summary.html', sales=today_sales)
 
 
-
-
-# ======================== Multi Unique Functions Per Feature ========================
-
-# --- SALES (4 functions) ---
-@app.route('/sales/margin-alert')
-@login_required
-def sales_margin_alert():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("""
-        SELECT st.product_name, AVG(s.selling_price_at_time) AS avg_sell, AVG(COALESCE(st.cost_price,0)) AS avg_cost
-        FROM sales s LEFT JOIN stock st ON s.stock_id = st.id
-        WHERE s.user_id=%s AND s.sale_date >= to_char(CURRENT_DATE - INTERVAL '14 days','YYYY-MM-DD')
-        GROUP BY st.product_name HAVING AVG(s.selling_price_at_time) > 0
-        ORDER BY (AVG(s.selling_price_at_time)-AVG(COALESCE(st.cost_price,0)))/AVG(s.selling_price_at_time) ASC LIMIT 10
-    """, (current_user.id,))
-    rows = cur.fetchall()
-    alerts = []
-    for r in rows:
-        m = ((r['avg_sell'] or 0) - (r['avg_cost'] or 0)) / max(r['avg_sell'] or 1, 0.01)
-        if m < 0.18:
-            alerts.append({'name': r['product_name'], 'margin': round(m*100,1)})
-    cur.close(); conn.close()
-    return render_template('insights.html', tips=[f"{a['name']}: {a['margin']}% margin" for a in alerts] or ["Margins healthy"], recent_sales=0, low_stock=0)
-
-@app.route('/sales/velocity')
-@login_required
-def sales_velocity():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("""
-        SELECT st.product_name, SUM(s.quantity_sold)/14.0 AS vel
-        FROM sales s JOIN stock st ON st.id = s.stock_id
-        WHERE s.user_id=%s AND s.sale_date >= to_char(CURRENT_DATE - INTERVAL '14 days', 'YYYY-MM-DD')
-        GROUP BY st.product_name ORDER BY vel DESC LIMIT 12
-    """, (current_user.id,))
-    rows = cur.fetchall()
-    cur.close(); conn.close()
-    return render_template('sales.html', sales=[], velocity=rows)
-
-@app.route('/sales/repeat-rate')
-@login_required
-def sales_repeat_rate():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT COUNT(DISTINCT customer_id) as c FROM sales WHERE user_id=%s AND customer_id IS NOT NULL", (current_user.id,))
-    total = int((cur.fetchone() or {}).get('c') or 0)
-    cur.execute("SELECT COUNT(*) as r FROM (SELECT customer_id FROM sales WHERE user_id=%s AND customer_id IS NOT NULL GROUP BY customer_id HAVING COUNT(*)>1) t", (current_user.id,))
-    repeats = int((cur.fetchone() or {}).get('r') or 0)
-    cur.close(); conn.close()
-    rate = round(repeats / total * 100, 1) if total else 0
-    return render_template('sales.html', sales=[], repeat_rate=rate)
-
-@app.route('/sales/peak-hours')
-@login_required
-def sales_peak_hours():
-    return render_template('sales.html', sales=[], peak='10:00–12:00 and 16:00–18:00')
-
-# --- STOCK (4 functions) ---
-@app.route('/stock/reorder-optimizer')
-@login_required
-def stock_reorder_optimizer():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT COALESCE(low_stock_threshold,10) as th FROM settings WHERE user_id=%s", (current_user.id,))
-    th = float((cur.fetchone() or {}).get('th') or 10)
-    cur.execute("""
-        SELECT st.product_name, st.quantity, COALESCE(SUM(s.quantity_sold),0)/14.0 as vel
-        FROM stock st LEFT JOIN sales s ON s.stock_id=st.id AND s.sale_date >= to_char(CURRENT_DATE - INTERVAL '14 days','YYYY-MM-DD')
-        WHERE st.user_id=%s AND st.quantity <= %s
-        GROUP BY st.id, st.product_name, st.quantity ORDER BY vel DESC LIMIT 12
-    """, (current_user.id, th))
-    rows = cur.fetchall()
-    suggestions = [{'name': r['product_name'], 'current': r['quantity'], 'reorder': max(0, int((r['vel'] or 0)*21 - r['quantity']))} for r in rows]
-    cur.close(); conn.close()
-    return render_template('stock.html', items=[], suggestions=suggestions)
-
-@app.route('/stock/aging')
-@login_required
-def stock_aging():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("""
-        SELECT st.product_name, st.quantity FROM stock st
-        WHERE st.user_id=%s AND NOT EXISTS (
-            SELECT 1 FROM sales s WHERE s.stock_id=st.id AND s.sale_date >= to_char(CURRENT_DATE - INTERVAL '60 days','YYYY-MM-DD')
-        ) LIMIT 12
-    """, (current_user.id,))
-    rows = cur.fetchall()
-    cur.close(); conn.close()
-    return render_template('stock.html', items=rows, aging=True)
-
-@app.route('/stock/abc')
-@login_required
-def stock_abc():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT product_name as name, quantity*COALESCE(cost_price,0) as value FROM stock WHERE user_id=%s ORDER BY value DESC LIMIT 15", (current_user.id,))
-    rows = cur.fetchall()
-    cur.close(); conn.close()
-    return render_template('turnover.html', items=rows, abc=True)
-
-@app.route('/stock/dead')
-@login_required
-def stock_dead():
-    return render_template('stock.html', items=[], dead_note='Items with zero movement in 90 days')
-
-# --- CUSTOMERS (4 functions) ---
-@app.route('/customers/churn-risk')
-@login_required
-def customers_churn_risk():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("""
-        SELECT c.name, MAX(s.sale_date) as last, COUNT(s.id) as orders
-        FROM customers c LEFT JOIN sales s ON s.customer_id=c.id
-        WHERE c.user_id=%s GROUP BY c.id, c.name HAVING COUNT(s.id)>0
-        ORDER BY MAX(s.sale_date) ASC LIMIT 15
-    """, (current_user.id,))
-    rows = cur.fetchall()
-    today = datetime.today().date()
-    risks = []
-    for r in rows:
-        days = (today - r['last']).days if r['last'] else 999
-        score = min(100, int(days*1.2 + max(0,5-r['orders'])*6))
-        if score > 35:
-            risks.append({'name': r['name'], 'days': days, 'score': score})
-    cur.close(); conn.close()
-    return render_template('customers.html', customers=[], risks=risks)
-
-@app.route('/customers/lifetime')
-@login_required
-def customers_lifetime():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("""
-        SELECT c.name, COALESCE(SUM(s.total_amount),0)*2.1 as ltv
-        FROM customers c LEFT JOIN sales s ON s.customer_id=c.id
-        WHERE c.user_id=%s GROUP BY c.id, c.name ORDER BY ltv DESC LIMIT 10
-    """, (current_user.id,))
-    rows = cur.fetchall()
-    cur.close(); conn.close()
-    return render_template('top_customers.html', customers=rows)
-
-@app.route('/customers/next-offer')
-@login_required
-def customers_next_offer():
-    return render_template('customers.html', customers=[], offers=['Rice → Oil', 'Soap → Detergent'])
-
-@app.route('/customers/segments')
-@login_required
-def customers_segments():
-    return render_template('customers.html', customers=[], segments=['High value: 12', 'At risk: 8', 'New: 5'])
-
-# --- BOOKKEEPING / CASH (3 functions) ---
-@app.route('/bookkeeping/anomaly-scan')
-@login_required
-def bookkeeping_anomaly_scan():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT description, amount, date FROM cash_books WHERE user_id=%s AND date >= CURRENT_DATE - INTERVAL '30 days' ORDER BY ABS(amount) DESC LIMIT 20", (current_user.id,))
-    rows = cur.fetchall()
-    amounts = [abs(float(r['amount'] or 0)) for r in rows]
-    avg = sum(amounts)/len(amounts) if amounts else 0
-    anomalies = [{'desc': r['description'], 'amount': r['amount']} for r in rows if abs(float(r['amount'] or 0)) > avg*2.5 and avg>0]
-    cur.close(); conn.close()
-    return render_template('cashbook.html', entries=[], anomalies=anomalies)
-
-@app.route('/bookkeeping/categorize')
-@login_required
-def bookkeeping_categorize():
-    return render_template('cashbook.html', entries=[], suggestions=['Fuel → Transport', 'Supplies → COGS'])
-
-@app.route('/bookkeeping/duplicate-check')
-@login_required
-def bookkeeping_duplicate_check():
-    return render_template('cashbook.html', entries=[], duplicates=0)
-
-# --- ACCOUNTS (3 functions) ---
-@app.route('/accounts/integrity')
-@login_required
-def accounts_integrity():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT COALESCE(SUM(CASE WHEN entry_type='debit' THEN amount ELSE -amount END),0) as net FROM cash_books WHERE user_id=%s", (current_user.id,))
-    net = float((cur.fetchone() or {}).get('net') or 0)
-    cur.close(); conn.close()
-    return render_template('accounts.html', books=[], integrity={'balanced': abs(net)<0.5, 'net': net})
-
-@app.route('/accounts/closing')
-@login_required
-def accounts_closing():
-    return render_template('accounts.html', books=[], closing=['Transfer profit to equity', 'Accrue expenses'])
-
-@app.route('/accounts/trial-balance')
-@login_required
-def accounts_trial_balance():
-    return render_template('accounts.html', books=[], trial_balanced=True)
-
-# --- FORECAST (3 functions) ---
-@app.route('/forecast/scenarios')
-@login_required
-def forecast_scenarios():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT COALESCE(AVG(total_amount),0) as avg FROM sales WHERE user_id=%s AND sale_date >= CURRENT_DATE - INTERVAL '30 days'", (current_user.id,))
-    avg = float((cur.fetchone() or {}).get('avg') or 0)
-    cur.close(); conn.close()
-    scenarios = [
-        {'name':'Worst','daily':round(avg*0.55,2),'month':round(avg*0.55*30,2)},
-        {'name':'Base','daily':round(avg,2),'month':round(avg*30,2)},
-        {'name':'Best','daily':round(avg*1.45,2),'month':round(avg*1.45*30,2)},
-    ]
-    return render_template('forecast.html', projections=[], scenarios=scenarios)
-
-@app.route('/forecast/accuracy')
-@login_required
-def forecast_accuracy():
-    return render_template('forecast.html', projections=[], accuracy=84)
-
-@app.route('/forecast/drivers')
-@login_required
-def forecast_drivers():
-    return render_template('forecast.html', projections=[], drivers=['Promotions +18%', 'Seasonality +9%'])
-
-# --- HEALTH (3 functions) ---
-@app.route('/health/priority')
-@login_required
-def health_priority():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT COUNT(*) as low FROM stock WHERE user_id=%s AND quantity <= COALESCE((SELECT low_stock_threshold FROM settings WHERE user_id=%s),10)", (current_user.id, current_user.id))
-    low = int((cur.fetchone() or {}).get('low') or 0)
-    cur.close(); conn.close()
-    actions = []
-    if low: actions.append({'action': f'Restock {low} items', 'impact': '+7'})
-    actions.append({'action': 'Review top margins', 'impact': '+4'})
-    return render_template('health.html', score=71, actions=actions)
-
-@app.route('/health/history')
-@login_required
-def health_history():
-    return render_template('health.html', score=71, history=[66,68,70,71])
-
-@app.route('/health/benchmark')
-@login_required
-def health_benchmark():
-    return render_template('health.html', score=71, benchmark='Above average for similar shops')
-
-# --- COLLECTIONS / RFM / LOYALTY (3 each) ---
-@app.route('/collections/schedule')
-@login_required
-def collections_schedule():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("""
-        SELECT c.name, COALESCE(SUM(s.total_amount),0) as out
-        FROM customers c LEFT JOIN sales s ON s.customer_id=c.id
-        WHERE c.user_id=%s GROUP BY c.id, c.name HAVING COALESCE(SUM(s.total_amount),0)>40
-        ORDER BY out DESC LIMIT 8
-    """, (current_user.id,))
-    rows = cur.fetchall()
-    schedule = [{'name': r['name'], 'amount': r['out'], 'due': (datetime.today()+timedelta(days=2+i)).strftime('%Y-%m-%d')} for i,r in enumerate(rows)]
-    cur.close(); conn.close()
-    return render_template('collections.html', owing=[], schedule=schedule)
-
-@app.route('/collections/aging')
-@login_required
-def collections_aging():
-    return render_template('collections.html', owing=[], aging={'0-30': 1200, '31-60': 450})
-
-@app.route('/rfm/actions')
-@login_required
-def rfm_actions():
-    return render_template('rfm.html', customers=[], actions=['VIP: early access', 'At risk: 15% off'])
-
-@app.route('/loyalty/expiry')
-@login_required
-def loyalty_expiry():
-    return render_template('loyalty.html', members=[], expiry='Points >12 months expire month-end')
-
-@app.route('/loyalty/liability')
-@login_required
-def loyalty_liability():
-    return render_template('loyalty.html', members=[], liability=340)
-
-# --- SERVICES / COUNTER / DAY CLOSE (3 each) ---
-@app.route('/services/utilization')
-@login_required
-def services_utilization():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT sv.name, COUNT(ss.id) as booked FROM services sv LEFT JOIN service_sessions ss ON ss.service_id=sv.id WHERE sv.user_id=%s GROUP BY sv.id, sv.name LIMIT 8", (current_user.id,))
-    rows = cur.fetchall()
-    cur.close(); conn.close()
-    return render_template('services.html', services=[{'name':r['name'],'booked':r['booked'],'idle':max(0,15-r['booked'])} for r in rows], sessions=[])
-
-@app.route('/services/yield')
-@login_required
-def services_yield():
-    return render_template('services.html', services=[], yield_note='Coaching highest revenue per hour')
-
-@app.route('/counter/upsell')
-@login_required
-def counter_upsell():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT product_name FROM stock WHERE user_id=%s ORDER BY quantity DESC LIMIT 5", (current_user.id,))
-    rows = cur.fetchall()
-    cur.close(); conn.close()
-    return render_template('counter.html', upsell=[r['product_name'] for r in rows])
-
-@app.route('/counter/speed')
-@login_required
-def counter_speed():
-    return render_template('counter.html', avg_seconds=38)
-
-@app.route('/day-close/variance')
-@login_required
-def day_close_variance():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute(
-        "SELECT COALESCE(SUM(total_amount),0) AS e FROM sales "
-        "WHERE user_id=%s AND sale_date = to_char(CURRENT_DATE,'YYYY-MM-DD')",
-        (current_user.id,))
-    expected = float((cur.fetchone() or {}).get('e') or 0)
-    cur.close(); conn.close()
-    return render_template('day_close.html', expected=expected)
-
-@app.route('/day-close/checklist')
-@login_required
-def day_close_checklist():
-    return render_template('day_close.html', checklist=['Count cash','Match sales total','Lock drawer','Send summary'])
-
-# --- SUPPLIERS / PO / TAX / INVESTMENTS (3 each) ---
-@app.route('/suppliers/reliability')
-@login_required
-def suppliers_reliability():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT name FROM suppliers WHERE user_id=%s LIMIT 8", (current_user.id,))
-    rows = cur.fetchall()
-    cur.close(); conn.close()
-    return render_template('suppliers.html', suppliers=[{'name':r['name'],'score':80+(hash(r['name'])%15)} for r in rows])
-
-@app.route('/suppliers/lead-time')
-@login_required
-def suppliers_lead_time():
-    return render_template('suppliers.html', suppliers=[], lead='Average 3.5 days')
-
-@app.route('/purchase-orders/autofill')
-@login_required
-def po_autofill():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT product_name, quantity FROM stock WHERE user_id=%s AND quantity <= COALESCE((SELECT low_stock_threshold FROM settings WHERE user_id=%s),10) LIMIT 8", (current_user.id, current_user.id))
-    rows = cur.fetchall()
-    cur.close(); conn.close()
-    return render_template('purchase_orders.html', draft=rows)
-
-@app.route('/purchase-orders/status')
-@login_required
-def po_status():
-    return render_template('purchase_orders.html', open_count=2)
-
 @app.route('/tax/estimate')
 @login_required
 def tax_estimate():
-    """Month-to-date tax estimate — same shape as tax_summary."""
-    uid = current_user.id
-    settings_row = _get_settings_row(uid)
-    rate = (settings_row['tax_rate'] if settings_row else 0) or 0
-    symbol = (settings_row['currency_symbol'] if settings_row else '$') or '$'
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT COALESCE(SUM(total_amount),0) AS s FROM sales "
-        "WHERE user_id=%s AND sale_date >= to_char(DATE_TRUNC('month', CURRENT_DATE),'YYYY-MM-DD')",
-        (uid,))
-    sales_rev = float((cur.fetchone() or {}).get('s') or 0)
-    cur.execute(
-        "SELECT COALESCE(SUM(amount),0) AS e FROM income "
-        "WHERE user_id=%s AND date >= to_char(DATE_TRUNC('month', CURRENT_DATE),'YYYY-MM-DD')",
-        (uid,))
-    other_inc = float((cur.fetchone() or {}).get('e') or 0)
-    cur.execute(
-        "SELECT COALESCE(SUM(amount),0) AS e FROM expenses "
-        "WHERE user_id=%s AND date >= to_char(DATE_TRUNC('month', CURRENT_DATE),'YYYY-MM-DD')",
-        (uid,))
-    expenses = float((cur.fetchone() or {}).get('e') or 0)
-    cur.execute(
-        "SELECT COALESCE(SUM(total_cost),0) AS p FROM purchase_orders "
-        "WHERE user_id=%s AND order_date >= to_char(DATE_TRUNC('month', CURRENT_DATE),'YYYY-MM-DD')",
-        (uid,))
-    purchases = float((cur.fetchone() or {}).get('p') or 0)
-    cur.close()
-    conn.close()
-    taxable_out = sales_rev + other_inc
-    output_tax = taxable_out * rate / 100 if rate else 0
-    taxable_in = expenses + purchases
-    input_tax = taxable_in * rate / 100 if rate else 0
-    return render_template(
-        'tax.html',
-        rate=rate, symbol=symbol,
-        sales_rev=sales_rev, other_inc=other_inc,
-        expenses=expenses, purchases=purchases,
-        taxable_out=taxable_out, output_tax=output_tax,
-        taxable_in=taxable_in, input_tax=input_tax,
-        net_tax=output_tax - input_tax,
-    )
+    """Alias for /tax — kept for old bookmarks."""
+    return redirect(url_for('tax_summary'))
+
 
 @app.route('/tax/calendar')
 @login_required
 def tax_calendar():
-    """Old route kept for bookmark compatibility."""
+    """Alias for /tax — kept for old bookmarks."""
     return redirect(url_for('tax_summary'))
-
-@app.route('/investments/risk')
-@login_required
-def investments_risk():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT name, amount FROM investments WHERE user_id=%s", (current_user.id,))
-    rows = cur.fetchall()
-    total = sum(float(r['amount'] or 0) for r in rows) or 1
-    conc = max((float(r['amount'] or 0)/total for r in rows), default=0)
-    cur.close(); conn.close()
-    return render_template('investments.html', holdings=rows, concentration=round(conc*100,1))
-
-@app.route('/investments/performance')
-@login_required
-def investments_performance():
-    return render_template('investments.html', holdings=[], return_pct=3.8)
-
-# --- GOALS / REPORTS / STATS / INSIGHTS (3 each) ---
-@app.route('/goals/velocity')
-@login_required
-def goals_velocity():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute(
-        "SELECT COALESCE(SUM(total_amount),0) AS m FROM sales "
-        "WHERE user_id=%s AND sale_date >= to_char(DATE_TRUNC('month', CURRENT_DATE),'YYYY-MM-DD')",
-        (current_user.id,))
-    month = float((cur.fetchone() or {}).get('m') or 0)
-    cur.close(); conn.close()
-    day = max(datetime.today().day, 1)
-    return render_template('goals.html', month_so_far=month, projected=round(month/day*30,2))
-
-@app.route('/goals/milestones')
-@login_required
-def goals_milestones():
-    return render_template('goals.html', milestones=['25% by day 7','50% by day 14','75% by day 21'])
-
-@app.route('/reports/board')
-@login_required
-def reports_board():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute(
-        "SELECT COALESCE(SUM(total_amount),0) AS s FROM sales "
-        "WHERE user_id=%s AND sale_date >= to_char(DATE_TRUNC('month', CURRENT_DATE),'YYYY-MM-DD')",
-        (current_user.id,))
-    sales = float((cur.fetchone() or {}).get('s') or 0)
-    cur.close(); conn.close()
-    return render_template('reports.html', board={'sales':sales})
-
-@app.route('/reports/variance')
-@login_required
-def reports_variance():
-    return render_template('reports.html', variance='Sales +9% vs prior month')
-
-@app.route('/stats/cohort')
-@login_required
-def stats_cohort():
-    return render_template('stats.html', cohort={'30d':71,'60d':44})
-
-@app.route('/stats/seasonality')
-@login_required
-def stats_seasonality():
-    return render_template('stats.html', seasonality='Weekends +28%')
-
-@app.route('/insights/opportunities')
-@login_required
-def insights_opportunities():
-    return render_template('insights.html', tips=['Bundle slow movers','Re-engage 30-day dormant','Raise price on 3 high-demand items'], recent_sales=0, low_stock=0)
-
-@app.route('/insights/risks')
-@login_required
-def insights_risks():
-    return render_template('insights.html', tips=['2 suppliers late','Cash cover under 10 days'], recent_sales=0, low_stock=0)
-
-# --- WHATSAPP / SCANNER / VOICE / BATCHES / CREDIT (2-3 each) ---
-@app.route('/whatsapp/templates')
-@login_required
-def whatsapp_templates():
-    templates = [
-        {'name':'Reminder','body':'Hi {name}, balance {amount} is due.'},
-        {'name':'Restock','body':'{product} is back. Reply YES to reserve.'},
-        {'name':'Thanks','body':'Thank you {name} for {amount}.'},
-    ]
-    return render_template('whatsapp.html', customers=[], templates=templates)
-
-@app.route('/whatsapp/log')
-@login_required
-def whatsapp_log():
-    return render_template('whatsapp.html', customers=[], log=[])
-
-@app.route('/scanner/batch')
-@login_required
-def scanner_batch():
-    return render_template('scanner.html', mode='batch')
-
-@app.route('/scanner/history')
-@login_required
-def scanner_history():
-    return render_template('scanner.html', history=[])
-
-@app.route('/voice/intents')
-@login_required
-def voice_intents():
-    return render_template('voice.html', intents=[{'phrase':'add sale','action':'Create sale'},{'phrase':'low stock','action':'Show low'}])
-
-@app.route('/voice/history')
-@login_required
-def voice_history():
-    return render_template('voice.html', history=[])
-
-@app.route('/batches/fefo')
-@login_required
-def batches_fefo():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT product_name as name, quantity FROM stock WHERE user_id=%s ORDER BY quantity ASC LIMIT 8", (current_user.id,))
-    rows = cur.fetchall()
-    cur.close(); conn.close()
-    return render_template('batches.html', items=rows, fefo=True)
-
-@app.route('/batches/risk')
-@login_required
-def batches_risk():
-    return render_template('batches.html', items=[], risk='1 item near expiry')
-
-@app.route('/credit/limits')
-@login_required
-def credit_limits():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT name FROM customers WHERE user_id=%s LIMIT 10", (current_user.id,))
-    rows = cur.fetchall()
-    cur.close(); conn.close()
-    return render_template('credit_scores.html', scores=[{'name':r['name'],'limit':400+(hash(r['name'])%300)} for r in rows])
-
-@app.route('/credit/trend')
-@login_required
-def credit_trend():
-    return render_template('credit_scores.html', scores=[], trend='improving')
-
-# --- TASKS / NOTES / CALENDAR / REMINDERS / TEAM / SETTINGS (2-3 each) ---
-@app.route('/tasks/blockers')
-@login_required
-def tasks_blockers():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT title, status FROM tasks WHERE user_id=%s AND status!='done' LIMIT 8", (current_user.id,))
-    rows = cur.fetchall()
-    cur.close(); conn.close()
-    return render_template('tasks.html', tasks=rows)
-
-@app.route('/tasks/priority')
-@login_required
-def tasks_priority():
-    return render_template('tasks.html', tasks=[], scored=True)
-
-@app.route('/notes/actions')
-@login_required
-def notes_actions():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT content FROM notes WHERE user_id=%s ORDER BY id DESC LIMIT 6", (current_user.id,))
-    rows = cur.fetchall()
-    actions = [r['content'][:70] for r in rows if any(w in (r.get('content') or '').lower() for w in ['todo','action','call','send','follow'])]
-    cur.close(); conn.close()
-    return render_template('notes.html', notes=[], actions=actions)
-
-@app.route('/notes/clusters')
-@login_required
-def notes_clusters():
-    return render_template('notes.html', notes=[], clusters=['Suppliers','Marketing','Cash'])
-
-@app.route('/calendar/conflicts')
-@login_required
-def calendar_conflicts():
-    return render_template('calendar.html', conflicts=[])
-
-@app.route('/calendar/free')
-@login_required
-def calendar_free():
-    return render_template('calendar.html', free_slots=9)
-
-@app.route('/reminders/context')
-@login_required
-def reminders_context():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute(
-        "SELECT title, due_date FROM tasks WHERE user_id=%s AND done=0 LIMIT 8",
-        (current_user.id,))
-    rows = cur.fetchall()
-    cur.close(); conn.close()
-    return render_template('reminders.html', reminders=rows)
-
-@app.route('/reminders/escalation')
-@login_required
-def reminders_escalation():
-    return render_template('reminders.html', reminders=[], escalated=0)
-
-@app.route('/team/permissions')
-@login_required
-def team_permissions():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute(
-        "SELECT username, role FROM users WHERE id=%s OR owner_id=%s",
-        (current_user.id, current_user.id))
-    rows = cur.fetchall()
-    cur.close(); conn.close()
-    return render_template('team.html', members=rows)
-
-@app.route('/team/activity')
-@login_required
-def team_activity():
-    return render_template('team.html', members=[], activity='Owner active today')
-
-@app.route('/settings/health')
-@login_required
-def settings_health():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT currency_code, low_stock_threshold FROM settings WHERE user_id=%s", (current_user.id,))
-    row = cur.fetchone() or {}
-    issues = []
-    if not row.get('currency_code'): issues.append('Currency missing')
-    if not row.get('low_stock_threshold'): issues.append('Threshold missing')
-    cur.close(); conn.close()
-    return render_template('settings.html', config_issues=issues)
-
-@app.route('/settings/audit')
-@login_required
-def settings_audit():
-    return render_template('settings.html', audit=['Threshold updated','Currency set'])
-
-# --- PAYMENTS / SHOP / MARKET / DOCUMENTS / BUDGETS / RECURRING / BANKING (2-3 each) ---
-@app.route('/payments/timeline')
-@login_required
-def payments_timeline():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT title, amount, status, created_date FROM stripe_payments WHERE user_id=%s ORDER BY id DESC LIMIT 6", (current_user.id,))
-    rows = cur.fetchall()
-    cur.close(); conn.close()
-    return render_template('payments.html', rows=rows)
-
-@app.route('/payments/fees')
-@login_required
-def payments_fees():
-    return render_template('payments.html', rows=[], fees=8.4)
-
-@app.route('/shop/abandon')
-@login_required
-def shop_abandon():
-    return render_template('shop.html', abandon_estimate=120)
-
-@app.route('/shop/conversion')
-@login_required
-def shop_conversion():
-    return render_template('shop.html', conversion=16)
-
-@app.route('/market/position')
-@login_required
-def market_position():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT AVG(selling_price) as a FROM stock WHERE user_id=%s AND selling_price>0", (current_user.id,))
-    avg = float((cur.fetchone() or {}).get('a') or 0)
-    cur.close(); conn.close()
-    return render_template('market.html', your_avg=avg)
-
-@app.route('/market/trend')
-@login_required
-def market_trend():
-    return render_template('market.html', trend='+1.8%')
-
-@app.route('/documents/approval')
-@login_required
-def documents_approval():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT title, status FROM bookkeeping_docs WHERE user_id=%s AND status!='paid' LIMIT 6", (current_user.id,))
-    rows = cur.fetchall()
-    cur.close(); conn.close()
-    return render_template('docs.html', docs=rows)
-
-@app.route('/documents/versions')
-@login_required
-def documents_versions():
-    return render_template('docs.html', docs=[], versions=3)
-
-@app.route('/budgets/variance')
-@login_required
-def budgets_variance():
-    return render_template('budgets.html', variance_alert=False)
-
-@app.route('/budgets/alert')
-@login_required
-def budgets_alert():
-    return render_template('budgets.html', alert='Marketing at 82%')
-
-@app.route('/recurring/pause')
-@login_required
-def recurring_pause():
-    return render_template('recurring.html', pause_mode=True)
-
-@app.route('/recurring/next')
-@login_required
-def recurring_next():
-    return render_template('recurring.html', next_due=[])
-
-@app.route('/banking/reconcile')
-@login_required
-def banking_reconcile():
-    return render_template('banking.html', reconcile_mode=True)
-
-@app.route('/banking/forecast')
-@login_required
-def banking_forecast():
-    return render_template('banking.html', projected=0)
-
-# --- SNAPSHOT / DAILY / PROFIT / TURNOVER / EXPENSE / TOP (2 each) ---
-@app.route('/snapshot/export')
-@login_required
-def snapshot_export():
-    return render_template('snapshot.html', export_ready=True)
-
-@app.route('/daily/compare')
-@login_required
-def daily_compare():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute(
-        "SELECT COALESCE(SUM(total_amount),0) AS t FROM sales "
-        "WHERE user_id=%s AND sale_date = to_char(CURRENT_DATE,'YYYY-MM-DD')",
-        (current_user.id,))
-    today = float((cur.fetchone() or {}).get('t') or 0)
-    cur.execute(
-        "SELECT COALESCE(SUM(total_amount),0) AS t FROM sales "
-        "WHERE user_id=%s AND sale_date = to_char(CURRENT_DATE - INTERVAL '7 days','YYYY-MM-DD')",
-        (current_user.id,))
-    last = float((cur.fetchone() or {}).get('t') or 0)
-    cur.close(); conn.close()
-    return render_template('daily_summary.html', sales=today, vs_last=today-last)
-
-@app.route('/profit/elasticity')
-@login_required
-def profit_elasticity():
-    return render_template('profit_matrix.html', products=[], note='Price rise cut volume on 2 SKUs')
-
-@app.route('/turnover/abc-view')
-@login_required
-def turnover_abc_view():
-    return render_template('turnover.html', items=[], abc=True)
-
-@app.route('/expense/outlier')
-@login_required
-def expense_outlier():
-    return render_template('expense_analytics.html', categories=[], outlier='Transport +35%')
-
-@app.route('/top/ltv')
-@login_required
-def top_ltv():
-    return render_template('top_customers.html', customers=[])
-
 
 
 @app.route('/business-man')

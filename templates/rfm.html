@@ -1,20 +1,68 @@
 {% extends "base.html" %}
-{% block title %}RFM Customer Analysis{% endblock %}
+{% block title %}RFM Analysis{% endblock %}
 {% block content %}
-<div class="page-header"><h1><i data-lucide="users"></i> RFM Analysis</h1><p>Recency, Frequency, Monetary value</p></div>
-<div class="card">
-  <table class="data-table">
-    <thead><tr><th>Customer</th><th>Last Purchase</th><th>Frequency</th><th>Monetary</th></tr></thead>
-    <tbody>
-      {% for c in customers %}
-      <tr>
-        <td>{{ c.name }}</td>
-        <td>{{ c.last_purchase or 'Never' }}</td>
-        <td>{{ c.frequency }}</td>
-        <td>{{ money(c.monetary) }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<div class="page-header">
+  <div>
+    <h1><i data-lucide="users"></i> RFM Analysis</h1>
+    <p>Recency, Frequency, Monetary value — scored 1–5 per customer and grouped into segments.</p>
+  </div>
 </div>
+
+<div class="stat-grid">
+  <div class="stat-chip"><span>Customers</span><strong>{{ total_customers }}</strong></div>
+  <div class="stat-chip"><span>Avg lifetime spend</span><strong>{{ money(avg_monetary) }}</strong></div>
+</div>
+
+<h2>Segments</h2>
+<div class="rfm-grid">
+{% for s in summary %}
+  <div class="rfm-card rfm-{{ s.name|lower|replace(' ','-') }}">
+    <strong>{{ s.name }}</strong>
+    <div class="rfm-count">{{ s.count }}</div>
+    <small>customer{{ '' if s.count == 1 else 's' }}</small>
+  </div>
+{% endfor %}
+</div>
+
+<h2>All customers</h2>
+<div class="table-wrapper">
+<table>
+<thead><tr><th>Customer</th><th>Segment</th><th>R</th><th>F</th><th>M</th><th>RFM</th><th>Days since last</th><th>Orders</th><th>Lifetime spend</th></tr></thead>
+<tbody>
+{% for c in customers %}
+<tr>
+  <td>{{ c.name }}</td>
+  <td><span class="status-pill rfm-pill-{{ c.segment|lower|replace(' ','-') }}">{{ c.segment }}</span></td>
+  <td>{{ c.R }}</td><td>{{ c.F }}</td><td>{{ c.M }}</td>
+  <td><code>{{ c.rfm }}</code></td>
+  <td>{% if c.days > 9000 %}never{% else %}{{ c.days }}d{% endif %}</td>
+  <td>{{ c.frequency }}</td>
+  <td>{{ money(c.monetary) }}</td>
+</tr>
+{% else %}
+<tr><td colspan="9">No customers yet.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+
+<style>
+.rfm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; margin: 0 0 1.5rem; }
+.rfm-card { padding: 1rem; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); border-left: 4px solid var(--text3); }
+.rfm-card strong { font-size: 0.9rem; }
+.rfm-count { font-size: 2rem; font-weight: 800; font-family: var(--mono); margin: 0.3rem 0; }
+.rfm-card small { color: var(--text3); font-size: 0.78rem; }
+.rfm-champion { border-left-color: var(--green); }
+.rfm-loyal { border-left-color: #3498db; }
+.rfm-new { border-left-color: #9b59b6; }
+.rfm-at-risk { border-left-color: #e0a030; }
+.rfm-needs-attention { border-left-color: #e67e22; }
+.rfm-lost { border-left-color: #e74c3c; }
+.rfm-pill-champion { background: var(--green-dim); color: var(--green); }
+.rfm-pill-loyal { background: rgba(52,152,219,0.15); color: #3498db; }
+.rfm-pill-new { background: rgba(155,89,182,0.15); color: #9b59b6; }
+.rfm-pill-at-risk { background: rgba(224,160,48,0.15); color: #e0a030; }
+.rfm-pill-needs-attention { background: rgba(230,126,34,0.15); color: #e67e22; }
+.rfm-pill-lost { background: rgba(231,76,60,0.15); color: #e74c3c; }
+</style>
 {% endblock %}

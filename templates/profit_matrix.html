@@ -1,17 +1,84 @@
 {% extends "base.html" %}
 {% block title %}Product Profitability{% endblock %}
+{% block charts_js %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>{% endblock %}
 {% block content %}
-<div class="page-header"><h1><i data-lucide="pie-chart"></i> Product Profitability Matrix</h1></div>
-<div class="card">
-  <table class="data-table">
-    <thead><tr><th>Product</th><th>Estimated Profit</th></tr></thead>
-    <tbody>
-      {% for p in products %}
-      <tr><td>{{ p.name }}</td><td>{{ money(p.profit) }}</td></tr>
-      {% else %}
-      <tr><td colspan="2">No sales data yet</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<div class="page-header">
+  <div>
+    <h1><i data-lucide="pie-chart"></i> Profitability Matrix</h1>
+    <p>Revenue vs margin over the last 90 days. Average revenue: {{ money(avg_revenue) }} · average margin: {{ avg_margin }}%.</p>
+  </div>
+</div>
+
+<div class="stat-grid">
+  <div class="stat-chip"><span>Products</span><strong>{{ rows|length }}</strong></div>
+  <div class="stat-chip"><span>Stars</span><strong>{{ stars|length }}</strong></div>
+  <div class="stat-chip"><span>Cash cows</span><strong>{{ cash_cows|length }}</strong></div>
+  <div class="stat-chip"><span>Rockets</span><strong>{{ rockets|length }}</strong></div>
+  <div class="stat-chip"><span>Dogs</span><strong>{{ dogs|length }}</strong></div>
+</div>
+
+{% if rows %}
+<div class="chart-container">
+  <canvas id="pmChart"></canvas>
+</div>
+<script>
+(function(){
+  const data = {{ rows | tojson }};
+  const colors = {star:'#2ecc71', cash_cow:'#3498db', rocket:'#e0a030', dog:'#e74c3c'};
+  const groups = {star:[], cash_cow:[], rocket:[], dog:[]};
+  data.forEach(r => groups[r.quadrant].push({x: r.revenue, y: r.margin_pct, name: r.name}));
+  const ctx = document.getElementById('pmChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'scatter',
+    data: {
+      datasets: [
+        {label: 'Stars', data: groups.star, backgroundColor: colors.star, pointRadius: 8},
+        {label: 'Cash cows', data: groups.cash_cow, backgroundColor: colors.cash_cow, pointRadius: 8},
+        {label: 'Rockets', data: groups.rocket, backgroundColor: colors.rocket, pointRadius: 8},
+        {label: 'Dogs', data: groups.dog, backgroundColor: colors.dog, pointRadius: 8},
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        title: {display: true, text: 'Revenue vs margin · last 90 days'},
+        tooltip: {
+          callbacks: {
+            label: c => `${c.raw.name} · ${window.kazeMoney(c.raw.x)} · ${c.raw.y}%`
+          }
+        }
+      },
+      scales: {
+        x: {title: {display: true, text: 'Revenue'}, ticks: {callback: v => window.kazeMoney(v)}},
+        y: {title: {display: true, text: 'Margin %'}, beginAtZero: true}
+      }
+    }
+  });
+})();
+</script>
+{% else %}
+<div class="widget"><p style="color:var(--text3);">No sales in the last 90 days. Record a sale to populate the matrix.</p></div>
+{% endif %}
+
+<h2>Leaderboard</h2>
+<div class="table-wrapper">
+<table>
+<thead><tr><th>Product</th><th>Quadrant</th><th>Revenue</th><th>Profit</th><th>Margin</th><th>Units</th><th>Tickets</th></tr></thead>
+<tbody>
+{% for r in rows %}
+<tr>
+  <td>{{ r.name }}</td>
+  <td><span class="status-pill" style="background:{% if r.quadrant=='star' %}var(--green-dim){% elif r.quadrant=='cash_cow' %}rgba(52,152,219,0.15){% elif r.quadrant=='rocket' %}rgba(224,160,48,0.15){% else %}rgba(231,76,60,0.15){% endif %};color:{% if r.quadrant=='star' %}var(--green){% elif r.quadrant=='cash_cow' %}#3498db{% elif r.quadrant=='rocket' %}#e0a030{% else %}#e74c3c{% endif %};">{{ r.quadrant|replace('_',' ')|title }}</span></td>
+  <td>{{ money(r.revenue) }}</td>
+  <td>{{ money(r.profit) }}</td>
+  <td>{{ r.margin_pct }}%</td>
+  <td>{{ r.units|round(1) }}</td>
+  <td>{{ r.tickets }}</td>
+</tr>
+{% else %}
+<tr><td colspan="7">No data.</td></tr>
+{% endfor %}
+</tbody>
+</table>
 </div>
 {% endblock %}
