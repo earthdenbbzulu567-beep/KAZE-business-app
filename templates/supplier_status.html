@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Supplier Status{% endblock %}
+{% block content %}
+<div class="page-header"><h1><i data-lucide="truck"></i> Suppliers</h1></div>
+<div class="table-wrapper">
+<table>
+<thead><tr><th>Name</th><th>Phone</th><th>Email</th></tr></thead>
+<tbody>
+{% for s in suppliers %}
+<tr><td>{{ s.name }}</td><td>{{ s.phone or '—' }}</td><td>{{ s.email or '—' }}</td></tr>
+{% else %}
+<tr><td colspan="3">No suppliers.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endblock %}

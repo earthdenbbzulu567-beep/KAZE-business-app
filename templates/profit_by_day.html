@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Profit by Day{% endblock %}
+{% block content %}
+<div class="page-header"><h1><i data-lucide="calendar"></i> Profit by Day</h1><p>Last 21 days</p></div>
+<div class="table-wrapper">
+<table>
+<thead><tr><th>Date</th><th>Tickets</th><th>Units</th><th>Revenue</th><th>Profit</th></tr></thead>
+<tbody>
+{% for d in days %}
+<tr>
+    <td>{{ d.sale_date }}</td>
+    <td>{{ d.tickets }}</td>
+    <td>{{ d.units }}</td>
+    <td>{{ money(d.revenue) }}</td>
+    <td class="{% if d.profit >= 0 %}income-amount{% else %}expense-amount{% endif %}">{{ money(d.profit) }}</td>
+</tr>
+{% else %}
+<tr><td colspan="5">No recent sales.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endblock %}

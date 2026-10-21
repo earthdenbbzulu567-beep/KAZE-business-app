@@ -1,17 +1,54 @@
 {% extends "base.html" %}
 {% block title %}Collections Manager{% endblock %}
 {% block content %}
-<div class="page-header"><h1><i data-lucide="alert-circle"></i> Collections Manager</h1></div>
-<div class="card">
-  <table class="data-table">
-    <thead><tr><th>Customer</th><th>Outstanding</th></tr></thead>
-    <tbody>
-      {% for o in owing %}
-      <tr><td>{{ o.name }}</td><td>{{ money(o.outstanding) }}</td></tr>
-      {% else %}
-      <tr><td colspan="2">No outstanding balances</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<div class="page-header">
+    <div>
+        <h1><i data-lucide="alert-circle"></i> Collections Manager</h1>
+        <p>Customers with outstanding balances and suggested follow-up schedule.</p>
+    </div>
 </div>
+
+<div class="stat-grid">
+    <div class="stat-chip"><span>Owing customers</span><strong>{{ owing|length }}</strong></div>
+    <div class="stat-chip"><span>Total outstanding</span><strong>{{ money(total_owing) }}</strong></div>
+</div>
+
+{% if owing %}
+<div class="table-wrapper" style="margin-top:1.2rem;">
+    <table>
+        <thead><tr><th>Customer</th><th>Outstanding</th><th>Action</th></tr></thead>
+        <tbody>
+            {% for o in owing %}
+            <tr>
+                <td>{{ o.name }}</td>
+                <td>{{ money(o.outstanding) }}</td>
+                <td><a href="https://wa.me/?text=Hi%20{{ o.name|urlencode }},%20you%20have%20an%20outstanding%20balance%20of%20{{ money(o.outstanding) }}." target="_blank">Remind</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p style="color:var(--text3); margin-top:1rem;">No outstanding balances right now.</p>
+{% endif %}
+
+{% if schedule %}
+<div class="widget" style="margin-top:1.2rem;">
+    <h2>Suggested collection schedule</h2>
+    <div class="table-wrapper">
+        <table>
+            <thead><tr><th>Customer</th><th>Amount</th><th>Due</th></tr></thead>
+            <tbody>
+                {% for s in schedule %}
+                <tr>
+                    <td>{{ s.name }}</td>
+                    <td>{{ money(s.amount) }}</td>
+                    <td>{{ s.due }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
 {% endblock %}

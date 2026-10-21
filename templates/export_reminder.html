@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Export Reminder{% endblock %}
+{% block content %}
+<div class="page-header"><h1><i data-lucide="download"></i> Export Reminder</h1></div>
+<div class="widget">
+<p>Regularly export your data for safety.</p>
+<ul>
+<li><a href="{{ url_for('export_income_csv') }}">Export income</a></li>
+<li><a href="{{ url_for('export_expenses_csv') }}">Export expenses</a></li>
+<li><a href="{{ url_for('stats') }}">View stats & export</a></li>
+</ul>
+<p style="color:var(--text3); font-size:0.85rem; margin-top:1rem;">Set a weekly reminder to download backups.</p>
+</div>
+{% endblock %}

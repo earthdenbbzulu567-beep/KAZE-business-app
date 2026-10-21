@@ -1,9 +1,28 @@
 {% extends "base.html" %}
 {% block title %}Daily Summary{% endblock %}
 {% block content %}
-<div class="page-header"><h1><i data-lucide="calendar-check"></i> Today's Summary</h1></div>
-<div class="card text-center">
-  <h2>Sales Today</h2>
-  <div style="font-size:2.5rem; color:var(--accent);">{{ money(sales) }}</div>
+<div class="page-header">
+    <div>
+        <h1><i data-lucide="calendar-check"></i> Today's Summary</h1>
+        <p>Quick view of today's performance versus last week.</p>
+    </div>
+</div>
+
+<div class="stat-grid">
+    <div class="stat-chip" style="text-align:center; padding:1.2rem;">
+        <span>Sales Today</span>
+        <strong style="font-size:2.4rem; color:var(--red-bright);">{{ money(sales) }}</strong>
+    </div>
+    <div class="stat-chip"><span>vs same day last week</span><strong>{{ money(vs_last) }}</strong></div>
+    <div class="stat-chip"><span>Tickets</span><strong>{{ tickets }}</strong></div>
+    <div class="stat-chip"><span>Profit today</span><strong>{{ money(profit) }}</strong></div>
+</div>
+
+<div class="widget" style="margin-top:1.2rem; text-align:center;">
+    <p style="color:var(--text3);">Open Counter or Sales to add more tickets. Day close is available under Operations.</p>
+    <p style="margin-top:0.8rem;">
+        <a href="{{ url_for('counter') }}" class="btn-secondary" style="text-decoration:none; padding:10px 18px;">Open till</a>
+        <a href="{{ url_for('day_close') }}" class="btn-secondary" style="text-decoration:none; padding:10px 18px; margin-left:0.5rem;">Day close</a>
+    </p>
 </div>
 {% endblock %}

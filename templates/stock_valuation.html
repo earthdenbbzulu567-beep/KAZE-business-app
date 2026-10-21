@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Stock Valuation{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i data-lucide="package"></i> Stock Valuation</h1>
+        <p>Total value: {{ money(total_value) }} · Low items: {{ low }}</p>
+    </div>
+</div>
+<div class="table-wrapper">
+<table>
+<thead><tr><th>Product</th><th>Qty</th><th>Cost</th><th>Sell</th><th>Value</th><th>Threshold</th></tr></thead>
+<tbody>
+{% for i in items %}
+<tr {% if i.quantity <= i.threshold %}style="background:var(--danger-dim);"{% endif %}>
+    <td>{{ i.product_name }}</td>
+    <td>{{ i.quantity }}</td>
+    <td>{{ money(i.cost) }}</td>
+    <td>{{ money(i.sell) }}</td>
+    <td>{{ money(i.value) }}</td>
+    <td>{{ i.threshold }}</td>
+</tr>
+{% else %}
+<tr><td colspan="6">No stock.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endblock %}

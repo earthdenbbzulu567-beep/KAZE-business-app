@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Customer Count{% endblock %}
+{% block content %}
+<div class="page-header"><h1><i data-lucide="users"></i> Customers</h1></div>
+<div class="stat-grid"><div class="stat-chip"><span>Total customers</span><strong>{{ count }}</strong></div></div>
+<p><a href="{{ url_for('customers') }}">Manage customers</a></p>
+{% endblock %}

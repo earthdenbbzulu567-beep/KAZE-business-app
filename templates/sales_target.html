@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Sales Target{% endblock %}
+{% block content %}
+<div class="page-header"><h1><i data-lucide="target"></i> Sales Target</h1></div>
+<div class="stat-grid">
+    <div class="stat-chip"><span>This month revenue</span><strong>{{ money(month) }}</strong></div>
+    <div class="stat-chip"><span>This month profit</span><strong>{{ money(profit) }}</strong></div>
+    <div class="stat-chip"><span>Goal</span><strong>{{ money(goal) }}</strong></div>
+    <div class="stat-chip"><span>Progress</span><strong>{{ pct }}%</strong></div>
+</div>
+{% if goal %}
+<div style="background:var(--surface2); border-radius:8px; height:16px; margin-top:1rem; overflow:hidden;">
+    <div style="background:var(--red-bright); height:100%; width:{{ pct }}%; transition:width 0.6s;"></div>
+</div>
+<p style="margin-top:0.5rem; color:var(--text3); font-size:0.85rem;">Set the goal in Settings → monthly revenue goal.</p>
+{% else %}
+<p style="margin-top:1rem; color:var(--text3);">No monthly goal set yet. Add one in Settings.</p>
+{% endif %}
+{% endblock %}

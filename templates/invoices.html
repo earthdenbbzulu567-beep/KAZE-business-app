@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Invoices{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i data-lucide="file-text"></i> Recent Invoices</h1>
+        <p>Last 60 sales · Total shown: {{ money(total) }}</p>
+    </div>
+</div>
+<div class="table-wrapper">
+<table>
+<thead><tr><th>Date</th><th>Customer</th><th>Product</th><th>Qty</th><th>Amount</th><th>Profit</th><th>Method</th></tr></thead>
+<tbody>
+{% for i in invoices %}
+<tr>
+    <td>{{ i.sale_date }}</td>
+    <td>{{ i.customer_name or '—' }}{% if i.customer_email %}<br><small style="color:var(--text3);">{{ i.customer_email }}</small>{% endif %}</td>
+    <td>{{ i.product_name }}</td>
+    <td>{{ i.quantity_sold }}</td>
+    <td>{{ money(i.total_amount) }}</td>
+    <td class="{% if i.profit >= 0 %}income-amount{% else %}expense-amount{% endif %}">{{ money(i.profit) }}</td>
+    <td>{{ i.payment_method or 'cash' }}</td>
+</tr>
+{% else %}
+<tr><td colspan="7">No sales yet.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endblock %}

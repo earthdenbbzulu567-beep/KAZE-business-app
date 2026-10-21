@@ -1,84 +1,64 @@
 {% extends "base.html" %}
-{% block title %}Product Profitability{% endblock %}
+{% block title %}Product Profitability Matrix{% endblock %}
 {% block charts_js %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>{% endblock %}
 {% block content %}
 <div class="page-header">
-  <div>
-    <h1><i data-lucide="pie-chart"></i> Profitability Matrix</h1>
-    <p>Revenue vs margin over the last 90 days. Average revenue: {{ money(avg_revenue) }} · average margin: {{ avg_margin }}%.</p>
-  </div>
+    <div>
+        <h1><i data-lucide="pie-chart"></i> Product Profitability Matrix</h1>
+        <p>See which products drive the most profit and which need attention.</p>
+    </div>
 </div>
 
-<div class="stat-grid">
-  <div class="stat-chip"><span>Products</span><strong>{{ rows|length }}</strong></div>
-  <div class="stat-chip"><span>Stars</span><strong>{{ stars|length }}</strong></div>
-  <div class="stat-chip"><span>Cash cows</span><strong>{{ cash_cows|length }}</strong></div>
-  <div class="stat-chip"><span>Rockets</span><strong>{{ rockets|length }}</strong></div>
-  <div class="stat-chip"><span>Dogs</span><strong>{{ dogs|length }}</strong></div>
-</div>
-
-{% if rows %}
-<div class="chart-container">
-  <canvas id="pmChart"></canvas>
+{% if products %}
+<div class="chart-container" style="max-width:640px; margin:1rem 0 1.5rem;">
+    <canvas id="profitChart"></canvas>
 </div>
 <script>
-(function(){
-  const data = {{ rows | tojson }};
-  const colors = {star:'#2ecc71', cash_cow:'#3498db', rocket:'#e0a030', dog:'#e74c3c'};
-  const groups = {star:[], cash_cow:[], rocket:[], dog:[]};
-  data.forEach(r => groups[r.quadrant].push({x: r.revenue, y: r.margin_pct, name: r.name}));
-  const ctx = document.getElementById('pmChart').getContext('2d');
-  new Chart(ctx, {
-    type: 'scatter',
+new Chart(document.getElementById('profitChart'), {
+    type: 'bar',
     data: {
-      datasets: [
-        {label: 'Stars', data: groups.star, backgroundColor: colors.star, pointRadius: 8},
-        {label: 'Cash cows', data: groups.cash_cow, backgroundColor: colors.cash_cow, pointRadius: 8},
-        {label: 'Rockets', data: groups.rocket, backgroundColor: colors.rocket, pointRadius: 8},
-        {label: 'Dogs', data: groups.dog, backgroundColor: colors.dog, pointRadius: 8},
-      ]
+        labels: [{% for p in products[:10] %}'{{ p.name|e }}'{% if not loop.last %},{% endif %}{% endfor %}],
+        datasets: [{
+            label: 'Profit',
+            data: [{% for p in products[:10] %}{{ p.profit }}{% if not loop.last %},{% endif %}{% endfor %}],
+            backgroundColor: 'rgba(46,204,113,0.7)',
+            borderRadius: 6
+        }]
     },
     options: {
-      responsive: true,
-      plugins: {
-        title: {display: true, text: 'Revenue vs margin · last 90 days'},
-        tooltip: {
-          callbacks: {
-            label: c => `${c.raw.name} · ${window.kazeMoney(c.raw.x)} · ${c.raw.y}%`
-          }
-        }
-      },
-      scales: {
-        x: {title: {display: true, text: 'Revenue'}, ticks: {callback: v => window.kazeMoney(v)}},
-        y: {title: {display: true, text: 'Margin %'}, beginAtZero: true}
-      }
+        indexAxis: 'y',
+        responsive: true,
+        plugins: { title: { display: true, text: 'Top products by profit' } },
+        scales: { x: { ticks: { callback: v => window.kazeMoney(v) } } }
     }
-  });
-})();
+});
 </script>
-{% else %}
-<div class="widget"><p style="color:var(--text3);">No sales in the last 90 days. Record a sale to populate the matrix.</p></div>
 {% endif %}
 
-<h2>Leaderboard</h2>
 <div class="table-wrapper">
-<table>
-<thead><tr><th>Product</th><th>Quadrant</th><th>Revenue</th><th>Profit</th><th>Margin</th><th>Units</th><th>Tickets</th></tr></thead>
-<tbody>
-{% for r in rows %}
-<tr>
-  <td>{{ r.name }}</td>
-  <td><span class="status-pill" style="background:{% if r.quadrant=='star' %}var(--green-dim){% elif r.quadrant=='cash_cow' %}rgba(52,152,219,0.15){% elif r.quadrant=='rocket' %}rgba(224,160,48,0.15){% else %}rgba(231,76,60,0.15){% endif %};color:{% if r.quadrant=='star' %}var(--green){% elif r.quadrant=='cash_cow' %}#3498db{% elif r.quadrant=='rocket' %}#e0a030{% else %}#e74c3c{% endif %};">{{ r.quadrant|replace('_',' ')|title }}</span></td>
-  <td>{{ money(r.revenue) }}</td>
-  <td>{{ money(r.profit) }}</td>
-  <td>{{ r.margin_pct }}%</td>
-  <td>{{ r.units|round(1) }}</td>
-  <td>{{ r.tickets }}</td>
-</tr>
-{% else %}
-<tr><td colspan="7">No data.</td></tr>
-{% endfor %}
-</tbody>
-</table>
+    <table>
+        <thead>
+            <tr>
+                <th>Product</th>
+                <th>Units sold</th>
+                <th>Revenue</th>
+                <th>Profit</th>
+                <th>Margin</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in products %}
+            <tr>
+                <td>{{ p.name }}</td>
+                <td>{{ p.units }}</td>
+                <td>{{ money(p.revenue) }}</td>
+                <td class="{% if p.profit >= 0 %}income-amount{% else %}expense-amount{% endif %}">{{ money(p.profit) }}</td>
+                <td>{{ p.margin }}%</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5">No sales data yet. Record some sales to see profitability.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </div>
 {% endblock %}

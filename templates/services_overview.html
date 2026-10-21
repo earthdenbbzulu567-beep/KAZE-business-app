@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Services Overview{% endblock %}
+{% block content %}
+<div class="page-header"><h1><i data-lucide="briefcase"></i> Services</h1></div>
+<div class="table-wrapper">
+<table>
+<thead><tr><th>Name</th><th>Price</th></tr></thead>
+<tbody>
+{% for s in services %}
+<tr><td>{{ s.name }}</td><td>{{ money(s.price) }}</td></tr>
+{% else %}
+<tr><td colspan="2">No services defined.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endblock %}

@@ -1,35 +1,50 @@
 {% extends "base.html" %}
+{% block title %}Payments{% endblock %}
 {% block content %}
 <div class="page-header">
     <div>
-        <h1>Payments</h1>
-        <p>Collect card payments with Stripe Checkout. Card numbers never pass through KAZE.</p>
+        <h1><i data-lucide="credit-card"></i> Payments</h1>
+        <p>Collect payments with Stripe, PayPal, Flutterwave, or bank transfer. Card details never touch KAZE.</p>
     </div>
 </div>
 
 <div class="stat-grid">
-    <div class="stat-chip"><span>Stripe</span><strong>{% if stripe_ready %}Ready{% else %}Not set{% endif %}</strong></div>
-    <div class="stat-chip"><span>Records</span><strong>{{ rows|length }}</strong></div>
+    <div class="stat-chip"><span>Methods ready</span><strong>{{ pay_methods|selectattr('ready')|list|length }}</strong></div>
+    <div class="stat-chip"><span>Payments logged</span><strong>{{ rows|length }}</strong></div>
+    <div class="stat-chip"><span>Paid</span><strong>{{ rows|selectattr('status','equalto','paid')|list|length }}</strong></div>
 </div>
 
 <div class="widget">
     <h2>Accepted methods</h2>
-    <p style="color:var(--text2);max-width:40rem;">Visa and Mastercard run through Stripe or Flutterwave. PayPal is its own checkout. Current-account transfers use the bank details in Settings. Card numbers never touch KAZE.</p>
-    <ul class="pay-ready">
+    <div style="display:grid; gap:0.6rem;">
         {% for m in pay_methods %}
-        <li>{% if m.ready %}<span class="status-pill status-ok">On</span>{% else %}<span class="status-pill status-warn">Off</span>{% endif %} {{ m.label }} — {{ m.hint }}</li>
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.8rem 1rem; background:var(--surface2); border-radius:10px;">
+            <div>
+                <strong>{{ m.label }}</strong>
+                <p style="margin:2px 0 0; font-size:0.82rem; color:var(--text3);">{{ m.hint }}</p>
+            </div>
+            {% if m.ready %}<span class="status-pill status-ok">Ready</span>
+            {% else %}<span class="status-pill status-warn">Off</span>{% endif %}
+        </div>
         {% endfor %}
-    </ul>
-    <p><a href="{{ url_for('settings') }}">Open payment settings</a></p>
+    </div>
+    <p style="margin-top:0.8rem;"><a href="{{ url_for('settings') }}">Open payment settings</a></p>
 </div>
 
 <div class="widget">
     <h2>Take a custom payment</h2>
-    <form method="POST" action="{{ url_for('pay_custom') }}">
-        <div class="form-group"><label>Title</label><input type="text" name="title" placeholder="Coaching package"></div>
-        <div class="form-group"><label>Amount</label><input type="number" name="amount" step="0.01" min="0.01" required></div>
-        <div class="form-group"><label>Method</label>
-            <select name="method">
+    <form method="POST" action="{{ url_for('pay_custom') }}" style="max-width:480px;">
+        <div class="form-group">
+            <label>Title</label>
+            <input type="text" name="title" placeholder="e.g. Coaching package, Deposit" required>
+        </div>
+        <div class="form-group">
+            <label>Amount</label>
+            <input type="number" name="amount" step="0.01" min="0.01" required>
+        </div>
+        <div class="form-group">
+            <label>Method</label>
+            <select name="method" required>
                 {% for m in pay_methods if m.ready %}
                 <option value="{{ m.key }}">{{ m.label }}</option>
                 {% endfor %}
@@ -39,26 +54,45 @@
     </form>
 </div>
 
-<h2>Payment log</h2>
+<h2 style="margin-top:1.5rem;">Payment log</h2>
 <div class="table-wrapper">
-<table>
-<thead><tr><th>When</th><th>What</th><th>Amount</th><th>Status</th><th>Ref</th></tr></thead>
-<tbody>
-{% for r in rows %}
-<tr>
-    <td>{{ r.created_date }}{% if r.paid_date %} · paid {{ r.paid_date }}{% endif %}</td>
-    <td>{{ r.title or r.kind }} <span style="color:var(--text3);font-size:0.8rem;">({{ r.kind }}{% if r.record_id %} #{{ r.record_id }}{% endif %})</span></td>
-    <td>{{ money(r.amount) }} {{ r.currency }}</td>
-    <td>
-        {% if r.status == 'paid' %}<span class="status-pill status-ok">Paid</span>
-        {% else %}<span class="status-pill status-warn">{{ r.status }}</span>{% endif %}
-    </td>
-    <td style="font-size:0.78rem;color:var(--text3);">{{ (r.checkout_id or '')[:18] }}</td>
-</tr>
-{% else %}
-<tr><td colspan="5">No payments yet.</td></tr>
-{% endfor %}
-</tbody>
-</table>
+    <table>
+        <thead>
+            <tr>
+                <th>When</th>
+                <th>What</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Reference</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in rows %}
+            <tr>
+                <td>
+                    {{ r.created_date }}
+                    {% if r.paid_date %}<br><span style="font-size:0.75rem; color:var(--text3);">paid {{ r.paid_date }}</span>{% endif %}
+                </td>
+                <td>
+                    {{ r.title or r.kind|title }}
+                    <br><span style="font-size:0.75rem; color:var(--text3);">{{ r.kind }}{% if r.record_id %} #{{ r.record_id }}{% endif %}</span>
+                </td>
+                <td>{{ money(r.amount) }} <span style="font-size:0.75rem; color:var(--text3);">{{ r.currency }}</span></td>
+                <td>
+                    {% if r.status == 'paid' %}
+                    <span class="status-pill status-ok">Paid</span>
+                    {% elif r.status == 'pending' %}
+                    <span class="status-pill status-warn">Pending</span>
+                    {% else %}
+                    <span class="status-pill">{{ r.status }}</span>
+                    {% endif %}
+                </td>
+                <td style="font-size:0.75rem; color:var(--text3); font-family:var(--mono);">{{ (r.checkout_id or '')[:20] }}{% if (r.checkout_id or '')|length > 20 %}…{% endif %}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" style="text-align:center; color:var(--text3);">No payments yet. Start a custom payment above or collect from a sale.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </div>
 {% endblock %}

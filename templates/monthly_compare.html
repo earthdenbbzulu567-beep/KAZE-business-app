@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Monthly Comparison{% endblock %}
+{% block content %}
+<div class="page-header"><h1><i data-lucide="trending-up"></i> Monthly Comparison</h1></div>
+<div class="table-wrapper">
+<table>
+<thead><tr><th>Month</th><th>Revenue</th><th>Profit</th></tr></thead>
+<tbody>
+{% for m in months %}
+<tr><td>{{ m.m }}</td><td>{{ money(m.revenue) }}</td><td>{{ money(m.profit) }}</td></tr>
+{% else %}
+<tr><td colspan="3">No data.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endblock %}

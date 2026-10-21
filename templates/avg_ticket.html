@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Average Ticket{% endblock %}
+{% block content %}
+<div class="page-header"><h1><i data-lucide="receipt"></i> Average Ticket (14 days)</h1></div>
+<div class="table-wrapper">
+<table>
+<thead><tr><th>Date</th><th>Tickets</th><th>Avg</th></tr></thead>
+<tbody>
+{% for d in days %}
+<tr><td>{{ d.sale_date }}</td><td>{{ d.n }}</td><td>{{ money(d.avg_t) }}</td></tr>
+{% else %}
+<tr><td colspan="3">No data.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endblock %}

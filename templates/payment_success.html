@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Payment Confirmed{% endblock %}
+{% block content %}
+<div class="page-header" style="text-align:center; margin-bottom:1.5rem;">
+    <div style="width:72px; height:72px; border-radius:50%; background:var(--red-bright); display:grid; place-items:center; margin:0 auto 1rem; box-shadow:0 0 0 6px var(--red-glow);">
+        <i data-lucide="check" style="width:36px; height:36px; color:#fff;"></i>
+    </div>
+    <h1>Payment received</h1>
+    <p style="color:var(--text2);">Thank you. Your payment has been recorded.</p>
+</div>
+
+<div class="widget" style="max-width:520px; margin:0 auto;">
+    <div class="stat-grid" style="grid-template-columns:1fr 1fr;">
+        <div class="stat-chip"><span>Amount</span><strong>{{ money(amount) }}</strong></div>
+        <div class="stat-chip"><span>Status</span><strong>Paid</strong></div>
+        <div class="stat-chip"><span>Reference</span><strong style="font-size:0.9rem;">{{ session_id[:18] }}…</strong></div>
+        <div class="stat-chip"><span>Type</span><strong>{{ kind|title }}</strong></div>
+    </div>
+
+    {% if title %}
+    <p style="margin:1rem 0 0.4rem; font-weight:600;">{{ title }}</p>
+    {% endif %}
+    {% if party %}
+    <p style="margin:0; color:var(--text2);">{{ party }}</p>
+    {% endif %}
+
+    <div style="margin-top:1.4rem; display:flex; gap:0.6rem; flex-wrap:wrap; justify-content:center;">
+        {% if kind == 'sale' %}
+        <a href="{{ url_for('sales') }}" class="btn-secondary" style="text-decoration:none; padding:10px 18px;">View sales</a>
+        {% elif kind == 'session' %}
+        <a href="{{ url_for('services') }}" class="btn-secondary" style="text-decoration:none; padding:10px 18px;">View services</a>
+        {% elif kind == 'book' %}
+        <a href="{{ url_for('bookkeeping') }}" class="btn-secondary" style="text-decoration:none; padding:10px 18px;">View books</a>
+        {% elif kind == 'plan' %}
+        <a href="{{ url_for('plans') }}" class="btn-secondary" style="text-decoration:none; padding:10px 18px;">View plans</a>
+        {% endif %}
+        <a href="{{ url_for('payments') }}" class="btn-secondary" style="text-decoration:none; padding:10px 18px;">Payment log</a>
+        <a href="{{ url_for('dashboard') }}" class="btn-secondary" style="text-decoration:none; padding:10px 18px;">Dashboard</a>
+    </div>
+</div>
+
+<p style="text-align:center; margin-top:1.5rem; color:var(--text3); font-size:0.85rem;">
+    A record of this payment is stored in your payment log. Card details never touched KAZE.
+</p>
+{% endblock %}

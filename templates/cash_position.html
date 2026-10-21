@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Cash Position{% endblock %}
+{% block content %}
+<div class="page-header"><h1><i data-lucide="wallet"></i> Cash Position</h1></div>
+<div class="stat-grid">
+    <div class="stat-chip"><span>Cash in</span><strong>{{ money(cash_in) }}</strong></div>
+    <div class="stat-chip"><span>Cash out</span><strong>{{ money(cash_out) }}</strong></div>
+    <div class="stat-chip"><span>Net cash books</span><strong>{{ money(net) }}</strong></div>
+    <div class="stat-chip"><span>All-time sales</span><strong>{{ money(sales_total) }}</strong></div>
+    <div class="stat-chip"><span>All-time profit</span><strong>{{ money(sales_profit) }}</strong></div>
+</div>
+{% endblock %}

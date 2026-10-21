@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Sales by Product{% endblock %}
+{% block content %}
+<div class="page-header"><h1><i data-lucide="bar-chart-3"></i> Sales by Product</h1></div>
+<div class="table-wrapper">
+<table>
+<thead><tr><th>Product</th><th>Tickets</th><th>Units</th><th>Revenue</th><th>Profit</th><th>Margin</th></tr></thead>
+<tbody>
+{% for p in products %}
+{% set m = (p.profit / p.revenue * 100) if p.revenue else 0 %}
+<tr>
+    <td>{{ p.name }}</td>
+    <td>{{ p.tickets }}</td>
+    <td>{{ p.units }}</td>
+    <td>{{ money(p.revenue) }}</td>
+    <td class="{% if p.profit >= 0 %}income-amount{% else %}expense-amount{% endif %}">{{ money(p.profit) }}</td>
+    <td>{{ m|round(1) }}%</td>
+</tr>
+{% else %}
+<tr><td colspan="6">No data.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endblock %}
