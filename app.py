@@ -10883,29 +10883,6 @@ def invoices():
     cur.close(); conn.close()
     return render_template('invoices.html', invoices=rows, total=total)
 
-@app.route('/customer_statement/<int:cid>')
-@login_required
-def customer_statement(cid):
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT id, name, phone, email, address FROM customers WHERE id=%s AND user_id=%s", (cid, current_user.id))
-    cust = cur.fetchone()
-    if not cust:
-        cur.close(); conn.close()
-        flash('Customer not found.', 'warning')
-        return redirect(url_for('customers'))
-    cur.execute("""
-        SELECT sale_date, COALESCE(st.product_name, 'Item') as product_name,
-               quantity_sold, total_amount, profit, payment_method
-        FROM sales s
-        LEFT JOIN stock st ON s.stock_id = st.id
-        WHERE s.user_id=%s AND s.customer_id=%s
-        ORDER BY sale_date DESC LIMIT 50
-    """, (current_user.id, cid))
-    sales = cur.fetchall()
-    total = sum(float(s.get('total_amount') or 0) for s in sales)
-    profit = sum(float(s.get('profit') or 0) for s in sales)
-    cur.close(); conn.close()
-    return render_template('customer_statement.html', customer=cust, sales=sales, total=total, profit=profit)
 
 @app.route('/stock_valuation')
 @login_required
