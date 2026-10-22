@@ -1,11 +1,145 @@
 {% extends "base.html" %}
-{% block title %}Goal Tracker{% endblock %}
+{% block title %}Business Goals{% endblock %}
+{% block charts_js %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>{% endblock %}
 {% block content %}
-<div class="page-header"><h1><i data-lucide="target"></i> Business Goals</h1></div>
-<div class="card">
-  <p>Set and track monthly sales, profit, and customer goals.</p>
-  <div class="goal-item"><strong>Monthly Sales Target:</strong> K 50,000 <progress value="65" max="100"></progress></div>
-  <div class="goal-item"><strong>New Customers:</strong> 20 <progress value="40" max="100"></progress></div>
-  <p class="note">Goals are illustrative — expand with database storage.</p>
+<div class="page-header">
+  <div>
+    <h1><i data-lucide="target"></i> Business Goals</h1>
+    <p>Live progress against your monthly sales target, with pace tracking and weekday patterns.</p>
+  </div>
 </div>
+
+<div class="stat-grid">
+  <div class="stat-chip"><span>Month</span><strong>{{ month_label }}</strong></div>
+  <div class="stat-chip"><span>Revenue</span><strong>{{ money(month_revenue) }}</strong></div>
+  <div class="stat-chip"><span>Profit</span><strong>{{ money(month_profit) }}</strong></div>
+  <div class="stat-chip"><span>Margin</span><strong>{{ avg_margin_pct }}%</strong></div>
+  <div class="stat-chip"><span>Tickets</span><strong>{{ month_tickets }}</strong></div>
+  <div class="stat-chip"><span>Customers</span><strong>{{ active_customers }}/{{ total_customers }}</strong></div>
+</div>
+
+{% if monthly_goal > 0 %}
+<div class="widget">
+  <div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;flex-wrap:wrap;">
+    <div>
+      <h2 style="margin:0;">Monthly sales target</h2>
+      <p style="margin:0.35rem 0 0;color:var(--text2);font-size:0.9rem;">
+        {{ money(month_revenue) }} of {{ money(monthly_goal) }} — {{ raw_goal_pct }}%
+      </p>
+    </div>
+    <div style="text-align:right;">
+      <div style="font-size:2rem;font-family:var(--mono);color:var(--red-bright);">{{ raw_goal_pct }}%</div>
+      <div style="font-size:0.8rem;color:var(--text3);">Day {{ day_of_month }} of {{ days_in_month }}</div>
+    </div>
+  </div>
+  <div style="background:var(--surface2);border-radius:10px;height:18px;overflow:hidden;margin:1rem 0 0.75rem;">
+    <div style="background:{% if goal_progress_pct >= 100 %}var(--green){% elif pace_delta >= 0 %}var(--red-bright){% else %}#e0a030{% endif %};height:100%;width:{{ goal_progress_pct }}%;transition:width 0.8s var(--ease-out);"></div>
+  </div>
+  <div class="goal-metrics">
+    <div><span>Pace target</span><strong>{{ money(pace_target) }}</strong></div>
+    <div><span>{% if pace_delta >= 0 %}Ahead of pace{% else %}Behind pace{% endif %}</span>
+      <strong class="{% if pace_delta >= 0 %}profit-positive{% else %}profit-negative{% endif %}">{{ money(pace_delta) }}</strong></div>
+    <div><span>Daily run rate</span><strong>{{ money(daily_run_rate) }}</strong></div>
+    <div><span>Projected month-end</span>
+      <strong class="{% if projected_month_end >= monthly_goal %}profit-positive{% else %}profit-negative{% endif %}">{{ money(projected_month_end) }}</strong></div>
+    <div><span>Days remaining</span><strong>{{ days_remaining }}</strong></div>
+    <div><span>Days hitting target</span><strong>{{ days_hit }}/{{ days_active }}</strong></div>
+  </div>
+</div>
+
+<h2>Cumulative sales vs pace</h2>
+<div class="chart-container">
+  <canvas id="goalsChart" height="140"></canvas>
+</div>
+{% else %}
+<div class="widget">
+  <h2 style="margin-top:0;">Set your monthly target</h2>
+  <p style="color:var(--text2);max-width:40rem;">No monthly sales target yet. Add one in Settings to unlock pace tracking, projections, and target-hit counting.</p>
+  <p><a href="{{ url_for('settings') }}" class="btn-secondary" style="text-decoration:none;padding:10px 16px;">Open Settings</a></p>
+</div>
+{% endif %}
+
+{% if best_weekday %}
+<h2>Best days of the week</h2>
+<div class="widget">
+  <p style="margin:0 0 0.8rem;color:var(--text2);font-size:0.9rem;">
+    Your strongest day is <strong>{{ best_weekday.name }}</strong> averaging {{ money(best_weekday.avg) }} per occurrence.
+  </p>
+  <div class="weekday-bars">
+    {% for w in weekday_avg %}
+    {% set pct = (w.avg / best_weekday.avg * 100) if best_weekday.avg else 0 %}
+    <div class="weekday-row">
+      <span class="wd-label">{{ w.name }}</span>
+      <div class="wd-bar-wrap"><div class="wd-bar" style="width:{{ pct }}%;"></div></div>
+      <span class="wd-value">{{ money(w.avg) }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="widget">
+  <h2>{{ month_label }} vs {{ last_month_label }}</h2>
+  <div class="stat-grid" style="margin:0;">
+    <div class="stat-chip">
+      <span>Revenue this month</span>
+      <strong>{{ money(month_revenue) }}</strong>
+      {% if last_month_revenue > 0 %}
+      {% set rev_pct = ((month_revenue - last_month_revenue) / last_month_revenue * 100)|round(1) %}
+      <small style="color:{% if rev_pct >= 0 %}var(--green){% else %}#e74c3c{% endif %};font-size:0.75rem;">{{ '+' if rev_pct >= 0 else '' }}{{ rev_pct }}% vs last month</small>
+      {% endif %}
+    </div>
+    <div class="stat-chip">
+      <span>Profit this month</span>
+      <strong>{{ money(month_profit) }}</strong>
+      {% if last_month_profit > 0 %}
+      {% set pft_pct = ((month_profit - last_month_profit) / last_month_profit * 100)|round(1) %}
+      <small style="color:{% if pft_pct >= 0 %}var(--green){% else %}#e74c3c{% endif %};font-size:0.75rem;">{{ '+' if pft_pct >= 0 else '' }}{{ pft_pct }}% vs last month</small>
+      {% endif %}
+    </div>
+    <div class="stat-chip">
+      <span>Best day</span>
+      <strong>{{ best_day or '—' }}</strong>
+      {% if best_day_revenue %}<small style="color:var(--text3);font-size:0.75rem;">{{ money(best_day_revenue) }}</small>{% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+{% if monthly_goal > 0 %}
+(function(){
+  new Chart(document.getElementById('goalsChart'), {
+    type: 'line',
+    data: {
+      labels: {{ daily_labels|tojson }},
+      datasets: [
+        { label: 'Actual cumulative', data: {{ daily_actual|tojson }}, borderColor: '#2ecc71', backgroundColor: 'rgba(46,204,113,0.12)', fill: true, tension: 0.25, borderWidth: 3 },
+        { label: 'Pace to target', data: {{ daily_pace|tojson }}, borderColor: '#3498db', borderDash: [6,4], fill: false, tension: 0, borderWidth: 2 }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: { title: { display: true, text: 'Running total vs target pace' },
+                 tooltip: { callbacks: { label: c => c.dataset.label + ': ' + window.kazeMoney(c.raw) } } },
+      scales: { y: { ticks: { callback: v => window.kazeMoney(v) } } }
+    }
+  });
+})();
+{% endif %}
+</script>
+
+<style>
+.goal-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.7rem; margin-top: 1rem; }
+.goal-metrics > div { padding: 0.7rem 0.85rem; background: var(--surface2); border-radius: 10px; }
+.goal-metrics span { display: block; font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text3); margin-bottom: 0.25rem; }
+.goal-metrics strong { font-family: var(--mono); font-size: 1.05rem; }
+.profit-positive { color: var(--green); }
+.profit-negative { color: #e74c3c; }
+.weekday-bars { display: flex; flex-direction: column; gap: 0.4rem; }
+.weekday-row { display: grid; grid-template-columns: 44px 1fr 90px; align-items: center; gap: 0.6rem; font-size: 0.88rem; }
+.wd-label { font-weight: 700; color: var(--text2); }
+.wd-bar-wrap { height: 10px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+.wd-bar { height: 100%; background: linear-gradient(90deg, var(--red-bright), var(--green)); border-radius: 4px; }
+.wd-value { font-family: var(--mono); font-size: 0.82rem; text-align: right; }
+</style>
 {% endblock %}

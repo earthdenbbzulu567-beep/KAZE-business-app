@@ -1,17 +1,134 @@
 {% extends "base.html" %}
 {% block title %}Product Profitability{% endblock %}
+{% block charts_js %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>{% endblock %}
 {% block content %}
-<div class="page-header"><h1><i data-lucide="pie-chart"></i> Product Profitability Matrix</h1></div>
-<div class="card">
-  <table class="data-table">
-    <thead><tr><th>Product</th><th>Estimated Profit</th></tr></thead>
-    <tbody>
-      {% for p in products %}
-      <tr><td>{{ p.name }}</td><td>{{ money(p.profit) }}</td></tr>
-      {% else %}
-      <tr><td colspan="2">No sales data yet</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<div class="page-header">
+  <div>
+    <h1><i data-lucide="pie-chart"></i> Profitability Matrix</h1>
+    <p>Revenue vs margin over the last 90 days. Avg revenue: {{ money(avg_revenue) }} · Avg margin: {{ avg_margin }}%.</p>
+  </div>
 </div>
+
+<div class="stat-grid">
+  <div class="stat-chip"><span>Products</span><strong>{{ rows|length }}</strong></div>
+  <div class="stat-chip"><span>Stars</span><strong>{{ stars|length }}</strong></div>
+  <div class="stat-chip"><span>Cash cows</span><strong>{{ cash_cows|length }}</strong></div>
+  <div class="stat-chip"><span>Rockets</span><strong>{{ rockets|length }}</strong></div>
+  <div class="stat-chip"><span>Dogs</span><strong>{{ dogs|length }}</strong></div>
+  <div class="stat-chip"><span>Total revenue</span><strong>{{ money(total_revenue) }}</strong></div>
+</div>
+
+{% if rows %}
+<h2>Positioning</h2>
+<div class="chart-container">
+  <canvas id="pmChart" height="160"></canvas>
+</div>
+
+<h2>What to do, by quadrant</h2>
+<div class="action-grid">
+  {% for key in ['star','cash_cow','rocket','dog'] %}
+  {% set a = actions[key] %}
+  <div class="action-card action-{{ key }}">
+    <div class="action-head">
+      <strong>{{ a.title }}</strong>
+      <span class="action-count">{{ a.count }}</span>
+    </div>
+    <p class="action-advice">{{ a.advice }}</p>
+    <div class="action-rev">{{ money(a.total_revenue) }} revenue</div>
+  </div>
+  {% endfor %}
+</div>
+
+<h2>Pareto — which products make your money</h2>
+<div class="chart-container">
+  <canvas id="paretoChart" height="150"></canvas>
+</div>
+<p style="margin:-0.5rem 0 1rem;font-size:0.85rem;color:var(--text3);">
+  The bars are revenue per product. The line shows cumulative %. If the top {{ top15_count }} products hit 80% before the end, you have concentration risk — a small number of products you cannot afford to lose.
+</p>
+
+<h2>Leaderboard</h2>
+<div class="table-wrapper">
+<table>
+<thead><tr><th>Product</th><th>Quadrant</th><th>Revenue</th><th>Profit</th><th>Margin</th><th>Units</th><th>Tickets</th></tr></thead>
+<tbody>
+{% for r in rows %}
+<tr>
+  <td>{{ r.name }}</td>
+  <td><span class="status-pill" style="background:{% if r.quadrant=='star' %}var(--green-dim){% elif r.quadrant=='cash_cow' %}rgba(52,152,219,0.15){% elif r.quadrant=='rocket' %}rgba(224,160,48,0.15){% else %}rgba(231,76,60,0.15){% endif %};color:{% if r.quadrant=='star' %}var(--green){% elif r.quadrant=='cash_cow' %}#3498db{% elif r.quadrant=='rocket' %}#e0a030{% else %}#e74c3c{% endif %};">{{ r.quadrant|replace('_',' ')|title }}</span></td>
+  <td>{{ money(r.revenue) }}</td>
+  <td>{{ money(r.profit) }}</td>
+  <td>{{ r.margin_pct }}%</td>
+  <td>{{ r.units|round(1) }}</td>
+  <td>{{ r.tickets }}</td>
+</tr>
+{% else %}
+<tr><td colspan="7">No data.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% else %}
+<div class="widget"><p style="color:var(--text3);">No sales in the last 90 days. Record a sale to populate the matrix.</p></div>
+{% endif %}
+
+<script>
+{% if rows %}
+(function(){
+  const data = {{ rows|tojson }};
+  const colors = {star:'#2ecc71', cash_cow:'#3498db', rocket:'#e0a030', dog:'#e74c3c'};
+  const groups = {star:[], cash_cow:[], rocket:[], dog:[]};
+  data.forEach(r => groups[r.quadrant].push({x: r.revenue, y: r.margin_pct, name: r.name}));
+  new Chart(document.getElementById('pmChart'), {
+    type: 'scatter',
+    data: { datasets: [
+      {label: 'Stars', data: groups.star, backgroundColor: colors.star, pointRadius: 8},
+      {label: 'Cash cows', data: groups.cash_cow, backgroundColor: colors.cash_cow, pointRadius: 8},
+      {label: 'Rockets', data: groups.rocket, backgroundColor: colors.rocket, pointRadius: 8},
+      {label: 'Dogs', data: groups.dog, backgroundColor: colors.dog, pointRadius: 8}
+    ]},
+    options: { responsive: true,
+      plugins: { title: { display: true, text: 'Revenue vs margin (last 90 days)' },
+                 tooltip: { callbacks: { label: c => `${c.raw.name} · ${window.kazeMoney(c.raw.x)} · ${c.raw.y}%` } } },
+      scales: { x: { title: { display: true, text: 'Revenue' }, ticks: { callback: v => window.kazeMoney(v) } },
+                y: { title: { display: true, text: 'Margin %' }, beginAtZero: true } } }
+  });
+
+  new Chart(document.getElementById('paretoChart'), {
+    type: 'bar',
+    data: {
+      labels: {{ pareto_labels|tojson }},
+      datasets: [
+        { type: 'bar', label: 'Revenue', data: {{ pareto_values|tojson }},
+          backgroundColor: 'rgba(46,204,113,0.7)', yAxisID: 'y' },
+        { type: 'line', label: 'Cumulative %', data: {{ pareto_cumulative|tojson }},
+          borderColor: '#3498db', backgroundColor: 'rgba(52,152,219,0.1)',
+          yAxisID: 'y1', tension: 0.2, borderWidth: 2 }
+      ]
+    },
+    options: { responsive: true,
+      plugins: { title: { display: true, text: 'Revenue concentration (Pareto)' } },
+      scales: {
+        x: { ticks: { autoSkip: true, maxRotation: 45 } },
+        y: { title: { display: true, text: 'Revenue' }, ticks: { callback: v => window.kazeMoney(v) } },
+        y1: { position: 'right', title: { display: true, text: 'Cumulative %' }, min: 0, max: 100, grid: { drawOnChartArea: false } }
+      } }
+  });
+})();
+{% endif %}
+</script>
+
+<style>
+.action-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.9rem; margin: 0 0 1.5rem; }
+.action-card { padding: 1.1rem 1.2rem; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); border-left-width: 4px; }
+.action-card.action-star { border-left-color: #2ecc71; }
+.action-card.action-cash_cow { border-left-color: #3498db; }
+.action-card.action-rocket { border-left-color: #e0a030; }
+.action-card.action-dog { border-left-color: #e74c3c; }
+.action-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.4rem; }
+.action-head strong { font-size: 1rem; }
+.action-count { font-family: var(--mono); font-size: 1.3rem; font-weight: 800; }
+.action-advice { font-size: 0.85rem; color: var(--text2); margin: 0 0 0.5rem; line-height: 1.5; }
+.action-rev { font-size: 0.78rem; color: var(--text3); font-family: var(--mono); }
+</style>
 {% endblock %}

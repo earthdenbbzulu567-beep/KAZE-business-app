@@ -1,26 +1,144 @@
 {% extends "base.html" %}
-{% block title %}AI Insights{% endblock %}
+{% block title %}Business Insights{% endblock %}
+{% block charts_js %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>{% endblock %}
 {% block content %}
-
-<div class="card detail-overlay" style="margin-bottom:1.5rem; background:linear-gradient(135deg, rgba(16,185,129,0.08), transparent);">
-  <h3>AI Insights Overview</h3>
-  <p>Data-driven recommendations based on your live business activity.</p>
-</div>
-
 <div class="page-header">
-  <h1><i data-lucide="lightbulb"></i> AI Business Insights</h1>
-  <p>Smart recommendations based on your data</p>
+  <div>
+    <h1><i data-lucide="lightbulb"></i> Business Insights</h1>
+    <p>Live facts computed from your last 30-60 days of sales, stock, and customers.</p>
+  </div>
 </div>
-<div class="card">
-  <h3>Recent 30-day Sales: {{ money(recent_sales) }}</h3>
-  <p>Low stock items: {{ low_stock }}</p>
-  <ul class="insights-list">
-    {% for tip in tips %}
-    <li>{{ tip }}</li>
-    {% endfor %}
-  </ul>
+
+<div class="stat-grid">
+  <div class="stat-chip"><span>Revenue (30d)</span><strong>{{ money(revenue_30) }}</strong>
+    {% if revenue_prev > 0 %}<small style="color:{% if revenue_change_pct >= 0 %}var(--green){% else %}#e74c3c{% endif %};font-size:0.72rem;">{{ '+' if revenue_change_pct >= 0 else '' }}{{ revenue_change_pct }}% vs prior</small>{% endif %}
+  </div>
+  <div class="stat-chip"><span>Profit (30d)</span><strong>{{ money(profit_30) }}</strong></div>
+  <div class="stat-chip"><span>Tickets (30d)</span><strong>{{ tickets_30 }}</strong></div>
+  <div class="stat-chip"><span>Customers (30d)</span><strong>{{ customers_30 }}</strong></div>
+  <div class="stat-chip"><span>Low stock</span><strong>{{ low_stock }}</strong></div>
+  <div class="stat-chip"><span>Dead stock</span><strong>{{ dead_stock }}</strong></div>
 </div>
+
+<h2>Revenue trend</h2>
+<div class="chart-container">
+  <canvas id="insightsChart" height="140"></canvas>
+</div>
+
+<h2>Recommendations</h2>
+<div class="insight-grid">
+{% for ins in insight_cards %}
+  <div class="insight-card insight-{{ ins.severity }}">
+    <div class="insight-icon"><i data-lucide="{{ ins.icon }}"></i></div>
+    <div class="insight-body">
+      <h3>{{ ins.title }}</h3>
+      <p>{{ ins.detail }}</p>
+      <a href="{{ ins.action_url }}" class="insight-action">{{ ins.action_label }} →</a>
+    </div>
+  </div>
+{% endfor %}
+</div>
+
+{% if top_gainers or top_decliners %}
+<h2>Moving products</h2>
+<div class="insight-cols">
+  {% if top_gainers %}
+  <div class="widget">
+    <h3 style="margin-top:0;">Top gainers (30d vs prior 30d)</h3>
+    <table class="data-table">
+      <thead><tr><th>Product</th><th>Current</th><th>Change</th></tr></thead>
+      <tbody>
+      {% for g in top_gainers %}
+        <tr><td>{{ g.name }}</td><td>{{ money(g.current) }}</td>
+          <td style="color:var(--green);">+{{ money(g.delta) }} ({{ g.pct }}%)</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+  {% if top_decliners %}
+  <div class="widget">
+    <h3 style="margin-top:0;">Top decliners</h3>
+    <table class="data-table">
+      <thead><tr><th>Product</th><th>Current</th><th>Change</th></tr></thead>
+      <tbody>
+      {% for d in top_decliners %}
+        <tr><td>{{ d.name }}</td><td>{{ money(d.current) }}</td>
+          <td style="color:#e74c3c;">{{ money(d.delta) }} ({{ d.pct }}%)</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if payment_mix %}
+<h2>Payment mix (30 days)</h2>
+<div class="table-wrapper">
+<table>
+<thead><tr><th>Method</th><th>Tickets</th><th>Revenue</th><th>% of total</th></tr></thead>
+<tbody>
+{% for p in payment_mix %}
+<tr><td>{{ p.method }}</td><td>{{ p.tickets }}</td><td>{{ money(p.revenue) }}</td>
+  <td>{% if revenue_30 > 0 %}{{ ((p.revenue / revenue_30) * 100)|round(1) }}%{% else %}—{% endif %}</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endif %}
+
+<div class="widget">
+  <h2>Stock value</h2>
+  <div class="stat-grid" style="margin:0;">
+    <div class="stat-chip"><span>At cost</span><strong>{{ money(stock_cost_value) }}</strong></div>
+    <div class="stat-chip"><span>At selling price</span><strong>{{ money(stock_sell_value) }}</strong></div>
+    <div class="stat-chip"><span>Potential margin</span><strong>{{ money(stock_sell_value - stock_cost_value) }}</strong></div>
+    <div class="stat-chip"><span>Dead capital</span><strong>{{ money(dead_capital) }}</strong></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  new Chart(document.getElementById('insightsChart'), {
+    type: 'line',
+    data: {
+      labels: {{ trend_labels|tojson }},
+      datasets: [{
+        label: 'Daily revenue (30d)', data: {{ trend_values|tojson }},
+        borderColor: '#2ecc71', backgroundColor: 'rgba(46,204,113,0.12)',
+        fill: true, tension: 0.25, borderWidth: 2
+      }]
+    },
+    options: { responsive: true,
+      plugins: { title: { display: true, text: 'Daily revenue · last 30 days' },
+                 tooltip: { callbacks: { label: c => window.kazeMoney(c.raw) } } },
+      scales: { y: { ticks: { callback: v => window.kazeMoney(v) }, beginAtZero: true } } }
+  });
+})();
+</script>
+
 <style>
-.insights-list li { margin: 0.8rem 0; padding: 0.5rem; background: var(--card); border-radius: 8px; }
+.insight-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem; margin: 1rem 0 1.5rem; }
+.insight-card { display: flex; gap: 0.9rem; padding: 1.1rem 1.2rem; border-radius: 14px; border: 1px solid var(--border);
+  background: var(--surface); border-left-width: 4px; transition: transform .16s ease; }
+.insight-card:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(0,0,0,0.18); }
+.insight-card.insight-success { border-left-color: var(--green); }
+.insight-card.insight-info { border-left-color: #3498db; }
+.insight-card.insight-warn { border-left-color: #e0a030; }
+.insight-card.insight-danger { border-left-color: #e74c3c; }
+.insight-icon { width: 40px; height: 40px; flex-shrink: 0; display: grid; place-items: center; border-radius: 10px; background: var(--surface2); }
+.insight-success .insight-icon { background: var(--green-dim); color: var(--green); }
+.insight-info .insight-icon { background: rgba(52,152,219,0.12); color: #3498db; }
+.insight-warn .insight-icon { background: rgba(224,160,48,0.12); color: #e0a030; }
+.insight-danger .insight-icon { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.insight-icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.75; }
+.insight-body { flex: 1; min-width: 0; }
+.insight-body h3 { margin: 0 0 0.35rem; font-size: 1rem; font-weight: 700; }
+.insight-body p { margin: 0 0 0.55rem; font-size: 0.88rem; color: var(--text2); line-height: 1.5; }
+.insight-action { font-size: 0.82rem; font-weight: 700; color: var(--red-bright); text-decoration: none; }
+.insight-action:hover { text-decoration: underline; }
+.insight-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 0 0 1rem; }
+@media (max-width: 800px) { .insight-cols { grid-template-columns: 1fr; } }
 </style>
 {% endblock %}
