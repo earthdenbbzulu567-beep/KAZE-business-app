@@ -1980,6 +1980,7 @@ NAV_GROUPS = (
         ('Collections', 'collections', 'alert-circle', 'reports', ('collections',)),
         ('Goals', 'goals', 'target', 'planning', ('goals',)),
                                                                         ('Business plan', 'business_plan', 'map', 'planning', ('business_plan',)),
+        ('SWOT', 'swot', 'compass', 'planning', ('swot',)),
     )),
     ('Workspace', (
         ('Tasks', 'tasks', 'check-square', 'workspace', ('tasks',)),
@@ -10284,7 +10285,7 @@ def rfm():
 def turnover():
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT name, quantity, COALESCE(cost_price,0) as cost FROM stock WHERE user_id=%s ORDER BY quantity DESC LIMIT 20", (current_user.id,))
+    cur.execute("SELECT product_name AS name, quantity, COALESCE(cost_price,0) AS cost FROM stock WHERE user_id=%s ORDER BY quantity DESC LIMIT 20", (current_user.id,))
     items = cur.fetchall()
     conn.close()
     return render_template('turnover.html', items=items)
@@ -10447,9 +10448,9 @@ def quick():
 def snapshot():
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT COALESCE(SUM(total),0) as sales FROM sales WHERE user_id=%s AND date >= DATE_TRUNC('month', CURRENT_DATE)", (current_user.id,))
+    cur.execute("SELECT COALESCE(SUM(total_amount),0) AS sales FROM sales WHERE user_id=%s AND sale_date >= to_char(DATE_TRUNC('month', CURRENT_DATE),'YYYY-MM-DD')", (current_user.id,))
     month_sales = cur.fetchone()['sales'] or 0
-    cur.execute("SELECT COALESCE(SUM(amount),0) as expenses FROM cashbook WHERE user_id=%s AND type='expense' AND date >= DATE_TRUNC('month', CURRENT_DATE)", (current_user.id,))
+    cur.execute("SELECT COALESCE(SUM(amount),0) AS expenses FROM cash_books WHERE user_id=%s AND entry_type='out' AND date >= to_char(DATE_TRUNC('month', CURRENT_DATE),'YYYY-MM-DD')", (current_user.id,))
     month_exp = cur.fetchone()['expenses'] or 0
     profit = month_sales - month_exp
     conn.close()
