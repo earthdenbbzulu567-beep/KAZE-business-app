@@ -4692,8 +4692,8 @@ def sale_receipt(id):
 
 # ======================== SWOT Analysis ========================
 
-# DELETED FEATURE: @app.route('/swot')
-# @login_required
+@app.route('/swot')
+@login_required
 def swot():
     conn = get_db()
     cur = conn.cursor()

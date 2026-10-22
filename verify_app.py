@@ -31,7 +31,7 @@ REQUIRED = [
     '/banking', '/investments', '/shop', '/market', '/payments',
     '/purchase-orders', '/suppliers', '/recurring', '/budgets',
     '/docs', '/calendar', '/tasks', '/notes', '/reminders',
-    '/team', '/activity', '/tutorial', '/shortcuts',
+    '/team', '/activity', '/tutorial', '/tools/shortcuts',
     '/plans', '/notifications', '/healthz',
 ]
 
