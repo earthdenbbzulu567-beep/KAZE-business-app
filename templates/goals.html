@@ -1,42 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Goal Tracker{% endblock %}
 {% block content %}
-<div class="page-header">
-    <div>
-        <h1><i data-lucide="target"></i> Business Goals</h1>
-        <p>Track progress toward monthly sales and other targets.</p>
-    </div>
-</div>
-
-<div class="stat-grid">
-    <div class="stat-chip"><span>Month so far</span><strong>{{ money(month_so_far) }}</strong></div>
-    <div class="stat-chip"><span>Projected month</span><strong>{{ money(projected) }}</strong></div>
-    {% if monthly_goal %}
-    <div class="stat-chip"><span>Goal</span><strong>{{ money(monthly_goal) }}</strong></div>
-    <div class="stat-chip"><span>Progress</span><strong>{{ goal_pct }}%</strong></div>
-    {% endif %}
-</div>
-
-{% if monthly_goal and monthly_goal > 0 %}
-<div class="widget" style="margin-top:1.2rem;">
-    <h3 style="margin:0 0 0.6rem;">Monthly sales goal</h3>
-    <div style="background:var(--surface2); border-radius:8px; height:16px; overflow:hidden;">
-        <div style="background:var(--red-bright); height:100%; width:{{ [goal_pct, 100]|min }}%; transition:width 0.6s;"></div>
-    </div>
-    <p style="margin-top:0.5rem; font-size:0.9rem;">{{ money(month_so_far) }} of {{ money(monthly_goal) }}</p>
-</div>
-{% endif %}
-
-{% if milestones %}
-<div class="widget">
-    <h2>Milestones</h2>
-    <ul>
-        {% for m in milestones %}<li>{{ m }}</li>{% endfor %}
-    </ul>
-</div>
-{% endif %}
-
-<div class="widget" style="margin-top:1rem;">
-    <p style="color:var(--text3); font-size:0.85rem;">Set your monthly revenue goal in Settings. Progress updates automatically from recorded sales.</p>
+<div class="page-header"><h1><i data-lucide="target"></i> Business Goals</h1></div>
+<div class="card">
+  <p>Set and track monthly sales, profit, and customer goals.</p>
+  <div class="goal-item"><strong>Monthly Sales Target:</strong> K 50,000 <progress value="65" max="100"></progress></div>
+  <div class="goal-item"><strong>New Customers:</strong> 20 <progress value="40" max="100"></progress></div>
+  <p class="note">Goals are illustrative — expand with database storage.</p>
 </div>
 {% endblock %}

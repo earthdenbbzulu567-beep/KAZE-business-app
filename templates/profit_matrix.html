@@ -1,64 +1,17 @@
 {% extends "base.html" %}
-{% block title %}Product Profitability Matrix{% endblock %}
-{% block charts_js %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>{% endblock %}
+{% block title %}Product Profitability{% endblock %}
 {% block content %}
-<div class="page-header">
-    <div>
-        <h1><i data-lucide="pie-chart"></i> Product Profitability Matrix</h1>
-        <p>See which products drive the most profit and which need attention.</p>
-    </div>
-</div>
-
-{% if products %}
-<div class="chart-container" style="max-width:640px; margin:1rem 0 1.5rem;">
-    <canvas id="profitChart"></canvas>
-</div>
-<script>
-new Chart(document.getElementById('profitChart'), {
-    type: 'bar',
-    data: {
-        labels: [{% for p in products[:10] %}'{{ p.name|e }}'{% if not loop.last %},{% endif %}{% endfor %}],
-        datasets: [{
-            label: 'Profit',
-            data: [{% for p in products[:10] %}{{ p.profit }}{% if not loop.last %},{% endif %}{% endfor %}],
-            backgroundColor: 'rgba(46,204,113,0.7)',
-            borderRadius: 6
-        }]
-    },
-    options: {
-        indexAxis: 'y',
-        responsive: true,
-        plugins: { title: { display: true, text: 'Top products by profit' } },
-        scales: { x: { ticks: { callback: v => window.kazeMoney(v) } } }
-    }
-});
-</script>
-{% endif %}
-
-<div class="table-wrapper">
-    <table>
-        <thead>
-            <tr>
-                <th>Product</th>
-                <th>Units sold</th>
-                <th>Revenue</th>
-                <th>Profit</th>
-                <th>Margin</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for p in products %}
-            <tr>
-                <td>{{ p.name }}</td>
-                <td>{{ p.units }}</td>
-                <td>{{ money(p.revenue) }}</td>
-                <td class="{% if p.profit >= 0 %}income-amount{% else %}expense-amount{% endif %}">{{ money(p.profit) }}</td>
-                <td>{{ p.margin }}%</td>
-            </tr>
-            {% else %}
-            <tr><td colspan="5">No sales data yet. Record some sales to see profitability.</td></tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<div class="page-header"><h1><i data-lucide="pie-chart"></i> Product Profitability Matrix</h1></div>
+<div class="card">
+  <table class="data-table">
+    <thead><tr><th>Product</th><th>Estimated Profit</th></tr></thead>
+    <tbody>
+      {% for p in products %}
+      <tr><td>{{ p.name }}</td><td>{{ money(p.profit) }}</td></tr>
+      {% else %}
+      <tr><td colspan="2">No sales data yet</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
 </div>
 {% endblock %}

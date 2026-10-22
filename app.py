@@ -1,4 +1,3 @@
-from functools import lru_cache
 # KAZE Traders Business Manager
 # Flask + PostgreSQL. Run with: gunicorn app:app
 
@@ -2009,20 +2008,6 @@ NAV_GROUPS = (
         ('Login activity', 'activity', 'log-in', None, ('activity',)),
         ('Business Man', 'business_man', 'user-check', None, ('business_man',)),
     )),
-    ('Insights & Tools', (
-        ('Invoices', 'invoices', 'file-text', None, ('invoices',)),
-        ('Stock Valuation', 'stock_valuation', 'package', 'stock', ('stock_valuation',)),
-        ('Sales by Product', 'sales_by_product', 'bar-chart-3', 'sales', ('sales_by_product',)),
-        ('Profit by Day', 'profit_by_day', 'calendar', 'sales', ('profit_by_day',)),
-        ('Reorder List', 'reorder', 'alert-triangle', 'stock', ('reorder',)),
-        ('Cash Position', 'cash_position', 'wallet', None, ('cash_position',)),
-        ('Top Margins', 'top_margins', 'percent', 'sales', ('top_margins',)),
-        ('Monthly Compare', 'monthly_compare', 'trending-up', 'sales', ('monthly_compare',)),
-        ('Sales Target', 'sales_target', 'target', None, ('sales_target',)),
-        ('Customer Count', 'customer_count', 'users', 'customers', ('customer_count',)),
-        ('Export Reminder', 'export_reminder', 'download', None, ('export_reminder',)),
-    )),
-
 )
 
 
@@ -4575,6 +4560,9 @@ def _brand_logo_image(size=36):
     return Spacer(size, size)
 
 def _build_pdf(buffer, title, business_name, meta_lines, table_data, footer_lines=None):
+    from xml.sax.saxutils import escape as _xml_escape
+    def _safe_paragraph(text, style):
+        return Paragraph(_xml_escape(str(text)), style)
     doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.75*inch, bottomMargin=0.75*inch)
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle('TitleStyle', parent=styles['Title'], textColor=colors.HexColor('#1f8a3d'), alignment=TA_LEFT)
@@ -4582,8 +4570,8 @@ def _build_pdf(buffer, title, business_name, meta_lines, table_data, footer_line
 
     header_text = []
     if business_name:
-        header_text.append(Paragraph(business_name, styles['Heading2']))
-    header_text.append(Paragraph(title, title_style))
+        header_text.append(_safe_paragraph(business_name, styles['Heading2']))
+    header_text.append(_safe_paragraph(title, title_style))
     header_table = Table([[_brand_logo_image(36), header_text]], colWidths=[50, 460])
     header_table.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -4596,7 +4584,8 @@ def _build_pdf(buffer, title, business_name, meta_lines, table_data, footer_line
         elements.append(Paragraph(line, styles['Normal']))
     elements.append(Spacer(1, 16))
 
-    table = Table(table_data, hAlign='LEFT')
+    safe_table = [[_xml_escape(str(cell)) for cell in row] for row in table_data]
+    table = Table(safe_table, hAlign='LEFT')
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a1a1a')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
@@ -5641,47 +5630,49 @@ def search():
     ''', (current_user.id, f'%{q}%', f'%{q}%'))
     sku_hits = cur.fetchall()
 
+    def _safe_query(sql, params):
+        try:
+            cur.execute("SAVEPOINT sp_search")
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+            cur.execute("RELEASE SAVEPOINT sp_search")
+            return rows
+        except Exception:
+            try:
+                cur.execute("ROLLBACK TO SAVEPOINT sp_search")
+            except Exception:
+                pass
+            return []
+
+    like = '%' + q + '%'
+    service_hits = _safe_query(
+        "SELECT id, name, 'service' as type FROM services WHERE user_id = %s "
+        "AND (name ILIKE %s OR category ILIKE %s OR description ILIKE %s) LIMIT 10",
+        (current_user.id, like, like, like))
+    session_hits = _safe_query(
+        "SELECT id, customer_name as name, 'session' as type FROM service_sessions "
+        "WHERE user_id = %s AND (customer_name ILIKE %s OR notes ILIKE %s) LIMIT 10",
+        (current_user.id, like, like))
+    bank_hits = _safe_query(
+        "SELECT id, name, 'bank' as type FROM bank_accounts "
+        "WHERE user_id = %s AND (name ILIKE %s OR bank_name ILIKE %s) LIMIT 8",
+        (current_user.id, like, like))
+    invest_hits = _safe_query(
+        "SELECT id, name, 'investment' as type FROM investments "
+        "WHERE user_id = %s AND name ILIKE %s LIMIT 8",
+        (current_user.id, like))
+    shop_hits = _safe_query(
+        "SELECT id, title as name, 'listing' as type FROM shop_listings "
+        "WHERE user_id = %s AND (title ILIKE %s OR description ILIKE %s) LIMIT 8",
+        (current_user.id, like, like))
+
     cur.close()
     conn.close()
 
-
-    service_hits = []
-    session_hits = []
-    try:
-        cur.execute(
-            "SELECT id, name, 'service' as type FROM services WHERE user_id = %s AND (name ILIKE %s OR category ILIKE %s OR description ILIKE %s) LIMIT 10",
-            (current_user.id, '%'+q+'%', '%'+q+'%', '%'+q+'%')
-        )
-        service_hits = cur.fetchall()
-        cur.execute(
-            "SELECT id, customer_name as name, 'session' as type FROM service_sessions WHERE user_id = %s AND (customer_name ILIKE %s OR notes ILIKE %s) LIMIT 10",
-            (current_user.id, '%'+q+'%', '%'+q+'%')
-        )
-        session_hits = cur.fetchall()
-    except Exception:
-        pass
-
-    bank_hits = invest_hits = shop_hits = []
-    try:
-        cur.execute(
-            "SELECT id, name, 'bank' as type FROM bank_accounts WHERE user_id = %s AND (name ILIKE %s OR bank_name ILIKE %s) LIMIT 8",
-            (current_user.id, '%'+q+'%', '%'+q+'%')
-        )
-        bank_hits = cur.fetchall()
-        cur.execute(
-            "SELECT id, name, 'investment' as type FROM investments WHERE user_id = %s AND name ILIKE %s LIMIT 8",
-            (current_user.id, '%'+q+'%')
-        )
-        invest_hits = cur.fetchall()
-        cur.execute(
-            "SELECT id, title as name, 'listing' as type FROM shop_listings WHERE user_id = %s AND (title ILIKE %s OR description ILIKE %s) LIMIT 8",
-            (current_user.id, '%'+q+'%', '%'+q+'%')
-        )
-        shop_hits = cur.fetchall()
-    except Exception:
-        pass
-
-    results = customers + products + docs + note_hits + task_hits + book_hits + sku_hits + service_hits + session_hits + bank_hits + invest_hits + shop_hits
+    results = (list(customers) + list(products) + list(docs) + list(note_hits)
+               + list(task_hits) + list(book_hits) + list(sku_hits)
+               + list(service_hits) + list(session_hits)
+               + list(bank_hits) + list(invest_hits) + list(shop_hits))
     return render_template('search_results.html', results=results, q=q)
 
 # ======================== Services ========================
@@ -8922,7 +8913,7 @@ def pay_plan(tier):
         return redirect(url_for('plans'))
     settings = _stripe_settings()
     current = plan_info(settings)
-    if PLAN_RANK[wanted] <= PLAN_RANK[current['key']]:
+    if PLAN_RANK[wanted] <= PLAN_RANK[current['stored_key']]:
         flash('You already have this plan or a higher one.', 'info')
         return redirect(url_for('plans'))
     info = PLAN_TIERS[wanted]
@@ -9868,10 +9859,17 @@ def insights():
     conn = get_db()
     cur = conn.cursor()
     # Example computations
-    cur.execute("SELECT COALESCE(SUM(total),0) as sales FROM sales WHERE user_id=%s AND date >= CURRENT_DATE - INTERVAL '30 days'", (current_user.id,))
-    recent_sales = cur.fetchone()['sales']
-    cur.execute("SELECT COUNT(*) as low FROM stock WHERE user_id=%s AND quantity <= low_stock_threshold", (current_user.id,))
-    low_stock = cur.fetchone()['low']
+    cur.execute(
+        "SELECT COALESCE(SUM(total_amount),0) AS sales FROM sales "
+        "WHERE user_id=%s AND sale_date >= to_char(CURRENT_DATE - INTERVAL '30 days', 'YYYY-MM-DD')",
+        (current_user.id,))
+    recent_sales = (cur.fetchone() or {}).get('sales') or 0
+    cur.execute(
+        "SELECT COUNT(*) AS low FROM stock st "
+        "WHERE st.user_id=%s AND st.quantity <= COALESCE("
+        "(SELECT low_stock_threshold FROM settings WHERE user_id=%s), 10)",
+        (current_user.id, current_user.id))
+    low_stock = (cur.fetchone() or {}).get('low') or 0
     tips = []
     if low_stock > 0:
         tips.append(f"You have {low_stock} items below stock threshold. Consider restocking soon.")
@@ -9889,8 +9887,11 @@ def forecast():
     # Simple cash flow forecast based on historical average
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT COALESCE(AVG(total),0) as avg_daily FROM sales WHERE user_id=%s AND date >= CURRENT_DATE - INTERVAL '30 days'", (current_user.id,))
-    avg = cur.fetchone()['avg_daily'] or 0
+    cur.execute(
+        "SELECT COALESCE(AVG(total_amount),0) AS avg_daily FROM sales "
+        "WHERE user_id=%s AND sale_date >= to_char(CURRENT_DATE - INTERVAL '30 days', 'YYYY-MM-DD')",
+        (current_user.id,))
+    avg = (cur.fetchone() or {}).get('avg_daily') or 0
     projections = []
     balance = 0  # placeholder, fetch real if possible
     for d in range(1, 31):
@@ -9955,10 +9956,17 @@ def voice():
 def health():
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT COALESCE(SUM(total),0) as sales FROM sales WHERE user_id=%s AND date >= CURRENT_DATE - INTERVAL '30 days'", (current_user.id,))
-    sales = cur.fetchone()['sales'] or 0
-    cur.execute("SELECT COUNT(*) as low FROM stock WHERE user_id=%s AND quantity <= COALESCE(low_stock_threshold,5)", (current_user.id,))
-    low = cur.fetchone()['low'] or 0
+    cur.execute(
+        "SELECT COALESCE(SUM(total_amount),0) AS sales FROM sales "
+        "WHERE user_id=%s AND sale_date >= to_char(CURRENT_DATE - INTERVAL '30 days', 'YYYY-MM-DD')",
+        (current_user.id,))
+    sales = (cur.fetchone() or {}).get('sales') or 0
+    cur.execute(
+        "SELECT COUNT(*) AS low FROM stock st "
+        "WHERE st.user_id=%s AND st.quantity <= COALESCE("
+        "(SELECT low_stock_threshold FROM settings WHERE user_id=%s), 5)",
+        (current_user.id, current_user.id))
+    low = (cur.fetchone() or {}).get('low') or 0
     score = min(100, max(40, int(50 + (sales / 1000) - (low * 5))))
     status = 'Excellent' if score >= 80 else 'Good' if score >= 60 else 'Needs Attention'
     conn.close()
@@ -9970,12 +9978,12 @@ def profit_matrix():
     conn = get_db()
     cur = conn.cursor()
     cur.execute("""
-        SELECT s.name, SUM(si.quantity * (si.price - COALESCE(st.cost_price,0))) as profit
-        FROM sales_items si
-        JOIN sales s ON si.sale_id = s.id
-        LEFT JOIN stock st ON si.product_name = st.name AND st.user_id = s.user_id
+        SELECT st.product_name AS name,
+               COALESCE(SUM(s.profit),0) AS profit
+        FROM sales s
+        LEFT JOIN stock st ON st.id = s.stock_id
         WHERE s.user_id = %s
-        GROUP BY s.name
+        GROUP BY st.product_name
         ORDER BY profit DESC
         LIMIT 15
     """, (current_user.id,))
@@ -9989,10 +9997,10 @@ def rfm():
     conn = get_db()
     cur = conn.cursor()
     cur.execute("""
-        SELECT c.name, 
-               MAX(s.date) as last_purchase,
-               COUNT(s.id) as frequency,
-               COALESCE(SUM(s.total),0) as monetary
+        SELECT c.name,
+               MAX(s.sale_date) AS last_purchase,
+               COUNT(s.id) AS frequency,
+               COALESCE(SUM(s.total_amount),0) AS monetary
         FROM customers c
         LEFT JOIN sales s ON s.customer_id = c.id AND s.user_id = c.user_id
         WHERE c.user_id = %s
@@ -10020,11 +10028,12 @@ def collections():
     conn = get_db()
     cur = conn.cursor()
     cur.execute("""
-        SELECT c.name, SUM(s.total - COALESCE(s.paid,0)) as outstanding
+        SELECT c.name, COALESCE(SUM(s.total_amount),0) AS outstanding
         FROM sales s
         JOIN customers c ON s.customer_id = c.id
-        WHERE s.user_id = %s AND (s.total - COALESCE(s.paid,0)) > 0
+        WHERE s.user_id = %s AND COALESCE(s.payment_method,'cash') NOT IN ('cash')
         GROUP BY c.id, c.name
+        HAVING COALESCE(SUM(s.total_amount),0) > 0
         ORDER BY outstanding DESC
         LIMIT 15
     """, (current_user.id,))
@@ -10076,7 +10085,11 @@ def snapshot():
 def loyalty():
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT name, COALESCE(SUM(total),0) as spent FROM customers c LEFT JOIN sales s ON s.customer_id=c.id WHERE c.user_id=%s GROUP BY c.id ORDER BY spent DESC LIMIT 15", (current_user.id,))
+    cur.execute(
+        "SELECT c.name, COALESCE(SUM(s.total_amount),0) AS spent "
+        "FROM customers c LEFT JOIN sales s ON s.customer_id=c.id AND s.user_id=c.user_id "
+        "WHERE c.user_id=%s GROUP BY c.id, c.name ORDER BY spent DESC LIMIT 15",
+        (current_user.id,))
     members = cur.fetchall()
     conn.close()
     return render_template('loyalty.html', members=members)
@@ -10086,7 +10099,10 @@ def loyalty():
 def expense_analytics():
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT category, COALESCE(SUM(amount),0) as total FROM cashbook WHERE user_id=%s AND type='expense' GROUP BY category ORDER BY total DESC LIMIT 10", (current_user.id,))
+    cur.execute(
+        "SELECT category, COALESCE(SUM(amount),0) AS total FROM cash_books "
+        "WHERE user_id=%s AND entry_type='out' GROUP BY category ORDER BY total DESC LIMIT 10",
+        (current_user.id,))
     cats = cur.fetchall()
     conn.close()
     return render_template('expense_analytics.html', categories=cats)
@@ -10096,7 +10112,11 @@ def expense_analytics():
 def top_customers():
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT c.name, COALESCE(SUM(s.total),0) as total FROM customers c LEFT JOIN sales s ON s.customer_id=c.id WHERE c.user_id=%s GROUP BY c.id ORDER BY total DESC LIMIT 10", (current_user.id,))
+    cur.execute(
+        "SELECT c.name, COALESCE(SUM(s.total_amount),0) AS total "
+        "FROM customers c LEFT JOIN sales s ON s.customer_id=c.id AND s.user_id=c.user_id "
+        "WHERE c.user_id=%s GROUP BY c.id, c.name ORDER BY total DESC LIMIT 10",
+        (current_user.id,))
     tops = cur.fetchall()
     conn.close()
     return render_template('top_customers.html', customers=tops)
@@ -10116,8 +10136,11 @@ def stock_value():
 def daily_summary():
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT COALESCE(SUM(total_amount),0) as sales FROM sales WHERE user_id=%s AND sale_date = CURRENT_DATE", (current_user.id,))
-    today_sales = cur.fetchone()['sales']
+    cur.execute(
+        "SELECT COALESCE(SUM(total_amount),0) AS sales FROM sales "
+        "WHERE user_id=%s AND sale_date = to_char(CURRENT_DATE, 'YYYY-MM-DD')",
+        (current_user.id,))
+    today_sales = (cur.fetchone() or {}).get('sales') or 0
     conn.close()
     return render_template('daily_summary.html', sales=today_sales)
 
@@ -10132,7 +10155,7 @@ def daily_summary():
 def sales_margin_alert():
     conn = get_db(); cur = conn.cursor()
     cur.execute("""
-        SELECT s.product_name, AVG(s.selling_price_at_time) as avg_sell, AVG(COALESCE(st.cost_price,0)) as avg_cost
+        SELECT st.product_name, AVG(s.selling_price_at_time) AS avg_sell, AVG(COALESCE(st.cost_price,0)) AS avg_cost
         FROM sales s LEFT JOIN stock st ON s.stock_id = st.id
         WHERE s.user_id=%s AND s.sale_date >= CURRENT_DATE - INTERVAL '14 days'
         GROUP BY s.product_name HAVING AVG(s.selling_price_at_time) > 0
@@ -10152,9 +10175,10 @@ def sales_margin_alert():
 def sales_velocity():
     conn = get_db(); cur = conn.cursor()
     cur.execute("""
-        SELECT product_name, SUM(quantity_sold)/14.0 as vel FROM sales
-        WHERE user_id=%s AND sale_date >= CURRENT_DATE - INTERVAL '14 days'
-        GROUP BY product_name ORDER BY vel DESC LIMIT 12
+        SELECT st.product_name, SUM(s.quantity_sold)/14.0 AS vel
+        FROM sales s JOIN stock st ON st.id = s.stock_id
+        WHERE s.user_id=%s AND s.sale_date >= to_char(CURRENT_DATE - INTERVAL '14 days', 'YYYY-MM-DD')
+        GROUP BY st.product_name ORDER BY vel DESC LIMIT 12
     """, (current_user.id,))
     rows = cur.fetchall()
     cur.close(); conn.close()
@@ -10657,7 +10681,9 @@ def calendar_free():
 @login_required
 def reminders_context():
     conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT title, due_date FROM reminders WHERE user_id=%s AND done=0 LIMIT 8", (current_user.id,))
+    cur.execute(
+        "SELECT title, due_date FROM tasks WHERE user_id=%s AND done=0 LIMIT 8",
+        (current_user.id,))
     rows = cur.fetchall()
     cur.close(); conn.close()
     return render_template('reminders.html', reminders=rows)
@@ -10671,7 +10697,9 @@ def reminders_escalation():
 @login_required
 def team_permissions():
     conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT username, role FROM users WHERE id=%s OR invited_by=%s", (current_user.id, current_user.id))
+    cur.execute(
+        "SELECT username, role FROM users WHERE id=%s OR owner_id=%s",
+        (current_user.id, current_user.id))
     rows = cur.fetchall()
     cur.close(); conn.close()
     return render_template('team.html', members=rows)
@@ -10851,176 +10879,3 @@ def business_man_ask():
 
 if __name__ == '__main__':
     app.run(debug=True)
-
-# ========== NEW FEATURES (added) ==========
-"""
-Enhanced feature routes with richer data presentation.
-Compatible with RealDictCursor (dict rows).
-Add these to app.py, then add the NAV_GROUPS snippet below.
-"""
-
-from flask import render_template, request, redirect, url_for, flash
-from flask_login import login_required, current_user
-from datetime import datetime, timedelta
-
-# ---------- Enhanced routes ----------
-
-@app.route('/invoices')
-@login_required
-def invoices():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("""
-        SELECT s.id, s.sale_date, s.customer_name, s.customer_email,
-               COALESCE(st.product_name, 'Item') as product_name,
-               s.quantity_sold, s.total_amount, s.profit, s.payment_method
-        FROM sales s
-        LEFT JOIN stock st ON s.stock_id = st.id
-        WHERE s.user_id=%s
-        ORDER BY s.sale_date DESC, s.id DESC LIMIT 60
-    """, (current_user.id,))
-    rows = cur.fetchall()
-    total = sum(float(r.get('total_amount') or 0) for r in rows)
-    cur.close(); conn.close()
-    return render_template('invoices.html', invoices=rows, total=total)
-
-
-@app.route('/stock_valuation')
-@login_required
-def stock_valuation():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("""
-        SELECT product_name, quantity,
-               COALESCE(cost_price,0) as cost,
-               COALESCE(selling_price,0) as sell,
-               (quantity * COALESCE(cost_price,0)) as value,
-               COALESCE(low_stock_threshold,10) as threshold
-        FROM stock WHERE user_id=%s ORDER BY value DESC
-    """, (current_user.id,))
-    items = cur.fetchall()
-    total_value = sum(float(i.get('value') or 0) for i in items)
-    low = sum(1 for i in items if float(i.get('quantity') or 0) <= float(i.get('threshold') or 10))
-    cur.close(); conn.close()
-    return render_template('stock_valuation.html', items=items, total_value=total_value, low=low)
-
-@app.route('/sales_by_product')
-@login_required
-def sales_by_product():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("""
-        SELECT COALESCE(st.product_name, 'Unknown') as name,
-               SUM(s.quantity_sold) as units,
-               SUM(s.total_amount) as revenue,
-               SUM(s.profit) as profit,
-               COUNT(*) as tickets
-        FROM sales s
-        LEFT JOIN stock st ON s.stock_id = st.id
-        WHERE s.user_id=%s
-        GROUP BY st.product_name
-        ORDER BY revenue DESC LIMIT 40
-    """, (current_user.id,))
-    rows = cur.fetchall()
-    cur.close(); conn.close()
-    return render_template('sales_by_product.html', products=rows)
-
-@app.route('/profit_by_day')
-@login_required
-def profit_by_day():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("""
-        SELECT sale_date,
-               SUM(total_amount) as revenue,
-               SUM(profit) as profit,
-               COUNT(*) as tickets,
-               SUM(quantity_sold) as units
-        FROM sales
-        WHERE user_id=%s AND sale_date >= CURRENT_DATE - INTERVAL '21 days'
-        GROUP BY sale_date ORDER BY sale_date DESC
-    """, (current_user.id,))
-    rows = cur.fetchall()
-    cur.close(); conn.close()
-    return render_template('profit_by_day.html', days=rows)
-
-@app.route('/reorder')
-@login_required
-def reorder():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("""
-        SELECT product_name, quantity,
-               COALESCE(low_stock_threshold,10) as threshold,
-               COALESCE(cost_price,0) as cost,
-               COALESCE(selling_price,0) as sell
-        FROM stock
-        WHERE user_id=%s AND quantity <= COALESCE(low_stock_threshold,10)
-        ORDER BY quantity ASC
-    """, (current_user.id,))
-    items = cur.fetchall()
-    cur.close(); conn.close()
-    return render_template('reorder.html', items=items)
-
-@app.route('/cash_position')
-@login_required
-def cash_position():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT COALESCE(SUM(amount),0) as t FROM cash_books WHERE user_id=%s AND type='income'", (current_user.id,))
-    cash_in = float((cur.fetchone() or {}).get('t') or 0)
-    cur.execute("SELECT COALESCE(SUM(amount),0) as t FROM cash_books WHERE user_id=%s AND type='expense'", (current_user.id,))
-    cash_out = float((cur.fetchone() or {}).get('t') or 0)
-    cur.execute("SELECT COALESCE(SUM(total_amount),0) as t FROM sales WHERE user_id=%s", (current_user.id,))
-    sales_total = float((cur.fetchone() or {}).get('t') or 0)
-    cur.execute("SELECT COALESCE(SUM(profit),0) as t FROM sales WHERE user_id=%s", (current_user.id,))
-    sales_profit = float((cur.fetchone() or {}).get('t') or 0)
-    cur.close(); conn.close()
-    return render_template('cash_position.html', cash_in=cash_in, cash_out=cash_out,
-                           net=cash_in - cash_out, sales_total=sales_total, sales_profit=sales_profit)
-
-@app.route('/top_margins')
-@login_required
-def top_margins():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("""
-        SELECT COALESCE(st.product_name, 'Unknown') as name,
-               SUM(s.profit) as profit,
-               SUM(s.total_amount) as revenue,
-               SUM(s.quantity_sold) as units
-        FROM sales s LEFT JOIN stock st ON s.stock_id = st.id
-        WHERE s.user_id=%s
-        GROUP BY st.product_name
-        HAVING SUM(s.total_amount) > 0
-        ORDER BY (SUM(s.profit)/NULLIF(SUM(s.total_amount),0)) DESC LIMIT 20
-    """, (current_user.id,))
-    rows = cur.fetchall()
-    cur.close(); conn.close()
-    return render_template('top_margins.html', products=rows)
-
-@app.route('/monthly_compare')
-@login_required
-def monthly_compare():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("""
-        SELECT DATE_TRUNC('month', sale_date::date)::date as m,
-               SUM(total_amount) as revenue,
-               SUM(profit) as profit,
-               COUNT(*) as tickets
-        FROM sales WHERE user_id=%s
-        GROUP BY m ORDER BY m DESC LIMIT 8
-    """, (current_user.id,))
-    rows = cur.fetchall()
-    cur.close(); conn.close()
-    return render_template('monthly_compare.html', months=rows)
-
-@app.route('/sales_target')
-@login_required
-def sales_target():
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("""
-        SELECT COALESCE(SUM(total_amount),0) as m, COALESCE(SUM(profit),0) as p
-        FROM sales WHERE user_id=%s AND sale_date >= DATE_TRUNC('month', CURRENT_DATE)
-    """, (current_user.id,))
-    row = cur.fetchone() or {}
-    month = float(row.get('m') or 0)
-    profit = float(row.get('p') or 0)
-    cur.execute("SELECT monthly_revenue_goal FROM settings WHERE user_id=%s", (current_user.id,))
-    goal = float((cur.fetchone() or {}).get('monthly_revenue_goal') or 0)
-    pct = min(100, round((month / goal * 100) if goal else 0, 1))
-    cur.close(); conn.close()
-    return render_template('sales_target.html', month=month, profit=profit, goal=goal, pct=pct)

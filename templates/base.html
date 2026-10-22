@@ -78,7 +78,6 @@
             --red-bright: #2ecc71;
             --red-dim: #14351a;
             --red-glow: rgba(46, 204, 113, 0.15);
-            --accent: var(--red-bright);
             --text: #f0f0f0;
             --text2: #a0a0a0;
             --text3: #666;
@@ -123,6 +122,7 @@
                 linear-gradient(var(--accent-grid) 1px, transparent 1px),
                 linear-gradient(90deg, var(--accent-grid) 1px, transparent 1px);
             background-size: auto, auto, 42px 42px, 42px 42px;
+            animation: gridDrift 40s linear infinite;
         }
         @keyframes gridDrift {
             from { background-position: 0 0, 0 0, 0 0, 0 0; }
@@ -324,6 +324,7 @@
             background: var(--red-bright);
             border-radius: 3px;
             box-shadow: 0 0 8px var(--red-bright);
+            animation: activePulse 2s infinite;
         }
         @keyframes activePulse {
             0%, 100% { opacity: 1; }
@@ -348,6 +349,7 @@
             font-size: 0.65rem;
             font-weight: 600;
             color: var(--text2);
+            animation: versionPulse 3s infinite;
         }
         @keyframes versionPulse {
             0%, 100% { box-shadow: 0 0 0 0 var(--red-glow); }
@@ -1791,6 +1793,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   transform: translateY(-4px);
   box-shadow: var(--shadow-hover);
 }
+.page-header {
+  background: linear-gradient(135deg, var(--accent, #10b981) 0%, #059669 100%);
+  color: white;
+  padding: 1.5rem 2rem;
+  margin-bottom: 1.5rem;
+}
 .page-header h1 { margin: 0; display: flex; align-items: center; gap: 0.6rem; }
 .data-table { border-radius: 12px; overflow: hidden; }
 .data-table th { background: rgba(16,185,129,0.1); }
@@ -1804,21 +1812,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .stat-card { text-align: center; padding: 1.5rem; }
 .stat-value { font-size: 1.8rem; font-weight: 700; color: var(--accent); }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-.text-center { text-align: center; }
-.stat-label {
-  display: block;
-  font-size: 0.72rem;
-  color: var(--text3);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  margin-top: 0.35rem;
-}
-.stat-value {
-  font-family: var(--mono);
-  font-size: 1.8rem;
-  font-weight: 700;
-  color: var(--accent, var(--red-bright));
-}
 .card, .page-header { animation: fadeIn 0.4s ease-out; }
 </style>
 

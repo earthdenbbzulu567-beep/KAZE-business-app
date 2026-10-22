@@ -1,41 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Loyalty Points{% endblock %}
 {% block content %}
-<div class="page-header">
-    <div>
-        <h1><i data-lucide="award"></i> Customer Loyalty</h1>
-        <p>Points based on total spend (1 point per 10 currency units).</p>
-    </div>
-</div>
-
-<div class="stat-grid">
-    <div class="stat-chip"><span>Members</span><strong>{{ members|length }}</strong></div>
-    <div class="stat-chip"><span>Total spend tracked</span><strong>{{ money(total_spent) }}</strong></div>
-</div>
-
-<div class="table-wrapper" style="margin-top:1.2rem;">
-    <table>
-        <thead><tr><th>Customer</th><th>Total Spent</th><th>Points</th><th>Status</th></tr></thead>
-        <tbody>
-            {% for m in members %}
-            <tr>
-                <td>{{ m.name }}</td>
-                <td>{{ money(m.spent) }}</td>
-                <td>{{ (m.spent / 10)|round(0)|int }}</td>
-                <td>
-                    {% if m.spent >= 5000 %}<span class="status-pill status-ok">VIP</span>
-                    {% elif m.spent >= 1000 %}<span class="status-pill">Regular</span>
-                    {% else %}<span class="status-pill">New</span>{% endif %}
-                </td>
-            </tr>
-            {% else %}
-            <tr><td colspan="4">No loyalty data yet. Sales with linked customers will appear here.</td></tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-
-<div class="widget" style="margin-top:1rem;">
-    <p style="color:var(--text3); font-size:0.85rem;">Points are calculated as total spent ÷ 10. You can later expand this with expiry rules or redeemable rewards.</p>
+<div class="page-header"><h1><i data-lucide="award"></i> Customer Loyalty</h1></div>
+<div class="card">
+  <table class="data-table">
+    <thead><tr><th>Customer</th><th>Total Spent</th><th>Points</th></tr></thead>
+    <tbody>
+      {% for m in members %}
+      <tr><td>{{ m.name }}</td><td>{{ money(m.spent) }}</td><td>{{ (m.spent / 10)|round(0) }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
 </div>
 {% endblock %}

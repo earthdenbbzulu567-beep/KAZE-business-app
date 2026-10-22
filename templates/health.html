@@ -1,47 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Business Health Score{% endblock %}
 {% block content %}
-<div class="page-header">
-    <div>
-        <h1><i data-lucide="activity"></i> Business Health Score</h1>
-        <p>A single number that reflects sales momentum, stock health, and recent activity.</p>
-    </div>
+
+<div class="card detail-overlay" style="margin-bottom:1.5rem; background:linear-gradient(135deg, rgba(16,185,129,0.08), transparent);">
+  <h3>Health Score Overview</h3>
+  <p>Overall business health calculated from sales, stock, and activity.</p>
 </div>
 
-<div class="stat-grid" style="margin-bottom:1.5rem;">
-    <div class="stat-chip" style="text-align:center; padding:1.5rem;">
-        <span>Overall Score</span>
-        <strong style="font-size:3.5rem; color:var(--red-bright);">{{ score }}</strong>
-        <div style="margin-top:0.4rem; font-weight:600;">{{ status }}</div>
-    </div>
-    <div class="stat-chip"><span>30-day sales</span><strong>{{ money(sales_30) }}</strong></div>
-    <div class="stat-chip"><span>30-day profit</span><strong>{{ money(profit_30) }}</strong></div>
-    <div class="stat-chip"><span>Low stock items</span><strong>{{ low_stock }}</strong></div>
-    <div class="stat-chip"><span>Active customers (30d)</span><strong>{{ active_customers }}</strong></div>
-</div>
-
-{% if actions %}
-<div class="widget">
-    <h2>Priority actions</h2>
-    <div style="display:grid; gap:0.6rem;">
-        {% for a in actions %}
-        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.8rem 1rem; background:var(--surface2); border-radius:10px;">
-            <span>{{ a.action }}</span>
-            <span class="status-pill status-ok">{{ a.impact }}</span>
-        </div>
-        {% endfor %}
-    </div>
-</div>
-{% endif %}
-
-{% if history %}
-<div class="widget">
-    <h2>Score trend</h2>
-    <p style="color:var(--text3); font-size:0.9rem;">Recent scores: {{ history|join(' → ') }}</p>
-</div>
-{% endif %}
-
-<div class="widget" style="margin-top:1rem;">
-    <p style="color:var(--text3); font-size:0.85rem;">Score is calculated from recent sales volume, margin health, low-stock pressure, and customer activity. Higher is better. Address the priority actions to raise the score.</p>
+<div class="page-header"><h1><i data-lucide="activity"></i> Business Health Score</h1></div>
+<div class="card text-center">
+  <div style="font-size:4rem; font-weight:bold; color:var(--accent);">{{ score }}</div>
+  <h2>{{ status }}</h2>
+  <p>30-day sales: {{ money(sales) }} | Low stock items: {{ low }}</p>
 </div>
 {% endblock %}

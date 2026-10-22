@@ -1,61 +1,25 @@
 {% extends "base.html" %}
 {% block title %}Cash Flow Forecast{% endblock %}
-{% block charts_js %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>{% endblock %}
 {% block content %}
+
+<div class="card detail-overlay" style="margin-bottom:1.5rem; background:linear-gradient(135deg, rgba(16,185,129,0.08), transparent);">
+  <h3>Cash Forecast Overview</h3>
+  <p>Projected cash position based on historical performance.</p>
+</div>
+
 <div class="page-header">
-    <div>
-        <h1><i data-lucide="trending-up"></i> Cash Flow Forecast</h1>
-        <p>Projected based on your last 30 days of average daily sales ({{ money(avg_daily) }}).</p>
-    </div>
+  <h1><i data-lucide="trending-up"></i> Cash Flow Forecast</h1>
+  <p>Projected based on average daily sales of {{ money(avg_daily) }}</p>
 </div>
-
-<div class="stat-grid">
-    <div class="stat-chip"><span>Avg daily sales</span><strong>{{ money(avg_daily) }}</strong></div>
-    {% if scenarios %}
-    {% for s in scenarios %}
-    <div class="stat-chip"><span>{{ s.name }} (30d)</span><strong>{{ money(s.month) }}</strong></div>
-    {% endfor %}
-    {% endif %}
+<div class="card">
+  <table class="data-table">
+    <thead><tr><th>Day</th><th>Projected Cumulative</th></tr></thead>
+    <tbody>
+      {% for p in projections[:14] %}
+      <tr><td>Day {{ p.day }}</td><td>{{ money(p.projected) }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="note">Simple average-based projection. Actual results may vary.</p>
 </div>
-
-{% if projections %}
-<div class="chart-container" style="margin:1.5rem 0;">
-    <canvas id="forecastChart"></canvas>
-</div>
-<script>
-(function(){
-    const labels = [{% for p in projections[:21] %}'Day {{ p.day }}'{% if not loop.last %},{% endif %}{% endfor %}];
-    const data = [{% for p in projections[:21] %}{{ p.projected }}{% if not loop.last %},{% endif %}{% endfor %}];
-    new Chart(document.getElementById('forecastChart'), {
-        type: 'line',
-        data: { labels, datasets: [{ label: 'Projected cumulative', data, borderColor: '#2ecc71', backgroundColor: 'rgba(46,204,113,0.15)', fill: true, tension: 0.3 }] },
-        options: { responsive: true, plugins: { title: { display: true, text: '21-day cash projection' } }, scales: { y: { ticks: { callback: v => window.kazeMoney(v) } } } }
-    });
-})();
-</script>
-{% endif %}
-
-<div class="widget">
-    <h2>Daily projection (first 14 days)</h2>
-    <div class="table-wrapper">
-        <table>
-            <thead><tr><th>Day</th><th>Projected cumulative</th></tr></thead>
-            <tbody>
-                {% for p in projections[:14] %}
-                <tr><td>Day {{ p.day }}</td><td>{{ money(p.projected) }}</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    <p class="note" style="margin-top:0.8rem; color:var(--text3); font-size:0.85rem;">Simple average-based projection. Actual results will vary with seasonality, promotions, and stock levels.</p>
-</div>
-
-{% if drivers %}
-<div class="widget">
-    <h2>Key drivers</h2>
-    <ul>
-        {% for d in drivers %}<li>{{ d }}</li>{% endfor %}
-    </ul>
-</div>
-{% endif %}
 {% endblock %}

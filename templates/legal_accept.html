@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="auth-card" style="max-width:44rem;">
+    <p class="home-kicker" style="text-align:center;">KAZE Traders · Ephraim Zulu</p>
+    <h1>Accept the licence</h1>
+    <p style="color:var(--text2);">Version {{ legal_version }}. The desk stays locked until you accept. Ephraim Zulu and KAZE Traders will sue, charge, and — where the law allows — prosecute anyone who violates these terms.</p>
+    <pre style="white-space:pre-wrap;font-size:0.78rem;line-height:1.4;max-height:18rem;overflow:auto;padding:0.85rem;border:1px solid var(--border);border-radius:12px;">{{ legal_text }}</pre>
+    <form method="POST" style="margin-top:1rem;">
+        <div class="form-group">
+            <label style="display:flex;gap:0.55rem;align-items:flex-start;">
+                <input type="checkbox" name="accept_terms" required>
+                <span>I have read the licence and terms of service, including breach penalties and termination. I accept them.</span>
+            </label>
+        </div>
+        <button type="submit">Accept and continue</button>
+    </form>
+    <p style="text-align:center;margin-top:1rem;font-size:0.85rem;">
+        <a href="{{ url_for('legal_licence') }}">Open full licence</a>
+        ·
+        <a href="{{ url_for('legal_terms') }}">Terms of Service</a>
+        ·
+        <a href="{{ url_for('logout') }}">Log out</a>
+    </p>
+</div>
+{% endblock %}

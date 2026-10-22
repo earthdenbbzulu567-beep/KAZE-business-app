@@ -2,6 +2,7 @@
 {% block charts_js %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>{% endblock %}
 {% block content %}
 
+<div class="card detail-overlay" style="margin-bottom:1.5rem; background:linear-gradient(135deg, rgba(16,185,129,0.08), transparent);">
   <h3>Sales Overview</h3>
   
 <p>Total records shown below. Use filters and bulk actions for deeper analysis.</p>
@@ -255,6 +256,10 @@
 </div>
 
 <script>
+    // Toggle all checkboxes
+    function toggleAll(source) {
+        document.querySelectorAll('input[name="selected_ids"]').forEach(cb => cb.checked = source.checked);
+    }
 
     // Sales revenue chart
     const salesCanvas = document.getElementById('salesRevenueChart');

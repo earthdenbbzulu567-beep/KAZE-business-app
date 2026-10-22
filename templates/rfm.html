@@ -1,55 +1,20 @@
 {% extends "base.html" %}
 {% block title %}RFM Customer Analysis{% endblock %}
 {% block content %}
-<div class="page-header">
-    <div>
-        <h1><i data-lucide="users"></i> RFM Customer Analysis</h1>
-        <p>Recency, Frequency, and Monetary value — identify your best customers and those at risk.</p>
-    </div>
+<div class="page-header"><h1><i data-lucide="users"></i> RFM Analysis</h1><p>Recency, Frequency, Monetary value</p></div>
+<div class="card">
+  <table class="data-table">
+    <thead><tr><th>Customer</th><th>Last Purchase</th><th>Frequency</th><th>Monetary</th></tr></thead>
+    <tbody>
+      {% for c in customers %}
+      <tr>
+        <td>{{ c.name }}</td>
+        <td>{{ c.last_purchase or 'Never' }}</td>
+        <td>{{ c.frequency }}</td>
+        <td>{{ money(c.monetary) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 </div>
-
-<div class="stat-grid">
-    <div class="stat-chip"><span>Customers analysed</span><strong>{{ customers|length }}</strong></div>
-    <div class="stat-chip"><span>Total monetary</span><strong>{{ money(total_monetary) }}</strong></div>
-</div>
-
-<div class="table-wrapper" style="margin-top:1.2rem;">
-    <table>
-        <thead>
-            <tr>
-                <th>Customer</th>
-                <th>Last purchase</th>
-                <th>Frequency</th>
-                <th>Monetary</th>
-                <th>Segment</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for c in customers %}
-            <tr>
-                <td>{{ c.name }}</td>
-                <td>{{ c.last_purchase or 'Never' }}</td>
-                <td>{{ c.frequency }}</td>
-                <td>{{ money(c.monetary) }}</td>
-                <td>
-                    {% if c.segment == 'Champions' %}<span class="status-pill status-ok">Champions</span>
-                    {% elif c.segment == 'At Risk' %}<span class="status-pill status-warn">At Risk</span>
-                    {% else %}<span class="status-pill">{{ c.segment }}</span>{% endif %}
-                </td>
-            </tr>
-            {% else %}
-            <tr><td colspan="5">No customer sales data yet.</td></tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-
-{% if actions %}
-<div class="widget" style="margin-top:1.2rem;">
-    <h2>Suggested actions</h2>
-    <ul>
-        {% for a in actions %}<li>{{ a }}</li>{% endfor %}
-    </ul>
-</div>
-{% endif %}
 {% endblock %}
