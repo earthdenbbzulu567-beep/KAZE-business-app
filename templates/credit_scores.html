@@ -1,23 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Customer Credit Scores{% endblock %}
+{% block title %}Credit Scores{% endblock %}
 {% block content %}
-<div class="page-header">
-  <h1><i data-lucide="shield-check"></i> Customer Credit Scores</h1>
-  <p>Internal reliability scores based on payment history</p>
-</div>
+<div class="page-header"><div><h1><i data-lucide="shield-check"></i> Customer Credit Scores</h1>
+<p>Recency + frequency + payment consistency. Higher is better.</p></div></div>
 <div class="card">
-  <table class="data-table">
-    <thead><tr><th>Customer</th><th>Score</th><th>Risk</th></tr></thead>
-    <tbody>
-      {% for s in scores %}
-      <tr>
-        <td>{{ s.name }}</td>
-        <td>{{ s.score }}/100</td>
-        <td>{{ s.risk }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  <p class="note">Scores are indicative. Improve by tracking on-time payments.</p>
-</div>
+<table class="data-table">
+<thead><tr><th>Customer</th><th>Score</th><th>Risk</th><th>Days since</th><th>Orders</th><th>Total</th></tr></thead>
+<tbody>{% for s in scores %}
+<tr><td>{{ s.name }}</td>
+<td><strong>{{ s.score }}/100</strong></td>
+<td><span class="status-pill" style="background:{% if s.risk == 'Low' %}var(--green-dim){% elif s.risk == 'Medium' %}rgba(224,160,48,0.15){% else %}rgba(231,76,60,0.15){% endif %};color:{% if s.risk == 'Low' %}var(--green){% elif s.risk == 'Medium' %}#e0a030{% else %}#e74c3c{% endif %};">{{ s.risk }}</span></td>
+<td>{{ s.days_since }}d</td><td>{{ s.orders }}</td><td>{{ money(s.total) }}</td></tr>
+{% else %}<tr><td colspan="6">No scored customers yet — need at least one sale per customer.</td></tr>{% endfor %}
+</tbody></table></div>
 {% endblock %}

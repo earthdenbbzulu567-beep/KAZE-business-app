@@ -1,29 +1,76 @@
 {% extends "base.html" %}
 {% block title %}Voice Entry{% endblock %}
 {% block content %}
-<div class="page-header">
-  <h1><i data-lucide="mic"></i> Voice Entry</h1>
-  <p>Speak to add sales or stock updates (browser speech recognition)</p>
+<div class="page-header"><div><h1><i data-lucide="mic"></i> Voice Entry</h1>
+<p>Say: "Sold 3 rice for 250" or "5 sugar at 30 each".</p></div></div>
+<div class="widget">
+<div style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap;">
+<button type="button" class="btn-primary" id="listenBtn"><i data-lucide="mic"></i> Start listening</button>
+<button type="button" class="btn-secondary" id="stopBtn" style="display:none;">Stop</button>
+<span id="status" style="color:var(--text3);font-size:0.88rem;">Ready</span>
 </div>
-<div class="card">
-  <button class="btn" id="listenBtn">Start Listening</button>
-  <div id="transcript" class="mt-2 p-2 border" style="min-height:80px;">Waiting for speech...</div>
-  <p class="note">Say things like "Add sale of 5 rice for 50 kwacha" — expandable with parsing.</p>
+<div id="transcript" style="margin-top:1rem;padding:1rem;background:var(--surface2);border-radius:10px;min-height:60px;font-family:var(--mono);">
+<em style="color:var(--text3);">Waiting for speech...</em></div>
+<div id="parsed" style="margin-top:1rem;display:none;">
+<h3 style="margin-top:0;">Parsed sale</h3>
+<div id="parsedDetails"></div>
+<button type="button" class="btn-primary" id="confirmSale" style="margin-top:0.75rem;">Confirm and record sale</button>
+</div>
 </div>
 <script>
-const btn = document.getElementById('listenBtn');
-const out = document.getElementById('transcript');
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-if (SpeechRecognition) {
-  const rec = new SpeechRecognition();
-  rec.continuous = false;
-  rec.onresult = (e) => {
-    const text = e.results[0][0].transcript;
-    out.textContent = text;
-  };
-  btn.onclick = () => rec.start();
-} else {
-  out.textContent = 'Speech recognition not supported in this browser.';
-}
+(function(){
+  const listenBtn = document.getElementById('listenBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const status = document.getElementById('status');
+  const transcript = document.getElementById('transcript');
+  const parsed = document.getElementById('parsed');
+  const parsedDetails = document.getElementById('parsedDetails');
+  const confirmSale = document.getElementById('confirmSale');
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let rec = null, lastParsed = null;
+  if(!SpeechRecognition){
+    transcript.innerHTML = '<em style="color:#e74c3c;">Speech not supported. Try Chrome, Edge, or Safari.</em>';
+    listenBtn.disabled = true; return;
+  }
+  function parseSpeech(text){
+    const lower = text.toLowerCase();
+    const qtyMatch = lower.match(/(\d+(?:\.\d+)?)\s*(?:units?|pcs?|pieces?|bags?|kg|items?)?/);
+    const priceMatch = lower.match(/(?:for|at)\s+(\d+(?:\.\d+)?)/);
+    const eachMatch = lower.match(/(\d+(?:\.\d+)?)\s*(?:each|per unit)/);
+    const qty = qtyMatch ? parseFloat(qtyMatch[1]) : 1;
+    let total = null, unitPrice = null;
+    if(priceMatch) total = parseFloat(priceMatch[1]);
+    if(eachMatch) unitPrice = parseFloat(eachMatch[1]);
+    const filler = /(\d+(?:\.\d+)?|sold|record|sale|of|for|at|each|units?|pcs?|pieces?|bags?|kg|items?|the|a|an|and|please|i|want|to)/g;
+    const product = lower.replace(filler, ' ').replace(/\s+/g, ' ').trim();
+    return {qty, total, unitPrice, product, raw: text};
+  }
+  function startListening(){
+    rec = new SpeechRecognition();
+    rec.continuous = false; rec.interimResults = false; rec.lang = 'en-US';
+    rec.onstart = () => { status.textContent = 'Listening...'; listenBtn.style.display = 'none'; stopBtn.style.display = ''; };
+    rec.onresult = (e) => {
+      const text = e.results[0][0].transcript;
+      transcript.innerHTML = '<strong>Heard:</strong> "' + text + '"';
+      lastParsed = parseSpeech(text);
+      parsed.style.display = 'block';
+      parsedDetails.innerHTML = '<p><strong>Product:</strong> ' + (lastParsed.product || '(empty)') + '</p>' +
+        '<p><strong>Qty:</strong> ' + lastParsed.qty + '</p>' +
+        (lastParsed.total !== null ? '<p><strong>Total:</strong> ' + window.kazeMoney(lastParsed.total) + '</p>' : '') +
+        (lastParsed.unitPrice !== null ? '<p><strong>Unit:</strong> ' + window.kazeMoney(lastParsed.unitPrice) + '</p>' : '');
+    };
+    rec.onerror = (e) => { status.textContent = 'Error: ' + e.error; };
+    rec.onend = () => { listenBtn.style.display = ''; stopBtn.style.display = 'none'; status.textContent = 'Stopped'; };
+    rec.start();
+  }
+  function stopListening(){ if(rec) rec.stop(); }
+  confirmSale.addEventListener('click', () => {
+    if(!lastParsed) return;
+    const params = new URLSearchParams({product: lastParsed.product, qty: lastParsed.qty});
+    window.location = '/voice/sale?' + params.toString();
+  });
+  listenBtn.addEventListener('click', startListening);
+  stopBtn.addEventListener('click', stopListening);
+})();
 </script>
 {% endblock %}

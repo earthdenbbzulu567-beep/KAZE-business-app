@@ -1,16 +1,37 @@
 {% extends "base.html" %}
-{% block title %}Business Health Score{% endblock %}
+{% block title %}Business Health{% endblock %}
 {% block content %}
-
-<div class="card detail-overlay" style="margin-bottom:1.5rem; background:linear-gradient(135deg, rgba(16,185,129,0.08), transparent);">
-  <h3>Health Score Overview</h3>
-  <p>Overall business health calculated from sales, stock, and activity.</p>
+<div class="page-header"><div><h1><i data-lucide="activity"></i> Business Health Score</h1>
+<p>Weighted score from five independent factors.</p></div></div>
+<div class="widget" style="text-align:center;padding:2rem;">
+<div style="font-size:5rem;font-weight:800;font-family:var(--mono);color:{% if score >= 80 %}var(--green){% elif score >= 60 %}var(--red-bright){% elif score >= 40 %}#e0a030{% else %}#e74c3c{% endif %};line-height:1;">{{ score }}</div>
+<h2 style="margin:0.4rem 0 0;border:none;">{{ status }}</h2>
+<p style="margin:0.5rem 0 0;color:var(--text3);">out of 100</p></div>
+<div class="stat-grid">
+<div class="stat-chip"><span>30-day sales</span><strong>{{ money(sales) }}</strong></div>
+<div class="stat-chip"><span>Sales trend</span><strong>{{ '%+d'|format(trend_pct|int) }}%</strong></div>
+<div class="stat-chip"><span>Avg margin</span><strong>{{ margin_pct }}%</strong></div>
+<div class="stat-chip"><span>Low stock</span><strong>{{ low }}</strong></div>
+<div class="stat-chip"><span>Cash buffer</span><strong>{{ months_covered }} mo</strong></div>
+<div class="stat-chip"><span>Repeat buyers</span><strong>{{ repeaters }}/{{ buyers }}</strong></div>
 </div>
-
-<div class="page-header"><h1><i data-lucide="activity"></i> Business Health Score</h1></div>
-<div class="card text-center">
-  <div style="font-size:4rem; font-weight:bold; color:var(--accent);">{{ score }}</div>
-  <h2>{{ status }}</h2>
-  <p>30-day sales: {{ money(sales) }} | Low stock items: {{ low }}</p>
+<h2>Score breakdown</h2>
+<div class="health-grid">
+{% for c in components %}
+<div class="health-card">
+<div class="health-head"><strong>{{ c.name }}</strong><span>{{ c.score }}/100</span></div>
+<div class="health-bar"><div style="width:{{ c.score }}%;background:{% if c.score >= 80 %}var(--green){% elif c.score >= 60 %}var(--red-bright){% elif c.score >= 40 %}#e0a030{% else %}#e74c3c{% endif %};"></div></div>
+<p>{{ c.detail }}</p>
+<small style="color:var(--text3);">Weight: {{ c.weight }}%</small></div>
+{% endfor %}
 </div>
+<style>
+.health-grid {display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0.85rem;}
+.health-card {padding: 1rem 1.1rem; border-radius: 12px; border: 1px solid var(--border); background: var(--surface);}
+.health-head {display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.5rem;}
+.health-head span {font-family: var(--mono); font-weight: 700;}
+.health-bar {height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden;}
+.health-bar div {height: 100%;}
+.health-card p {margin: 0.55rem 0 0.2rem; font-size: 0.86rem; color: var(--text2);}
+</style>
 {% endblock %}

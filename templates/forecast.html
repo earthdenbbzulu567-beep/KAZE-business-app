@@ -1,25 +1,35 @@
 {% extends "base.html" %}
 {% block title %}Cash Flow Forecast{% endblock %}
+{% block charts_js %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>{% endblock %}
 {% block content %}
-
-<div class="card detail-overlay" style="margin-bottom:1.5rem; background:linear-gradient(135deg, rgba(16,185,129,0.08), transparent);">
-  <h3>Cash Forecast Overview</h3>
-  <p>Projected cash position based on historical performance.</p>
+<div class="page-header"><div><h1><i data-lucide="trending-up"></i> Cash Flow Forecast</h1>
+<p>30-day projection from your current {{ cash_source }} balance, average daily flows, and upcoming obligations.</p></div></div>
+<div class="stat-grid">
+  <div class="stat-chip"><span>Current cash</span><strong>{{ money(current_cash) }}</strong></div>
+  <div class="stat-chip"><span>Avg daily revenue</span><strong>{{ money(avg_daily_revenue) }}</strong></div>
+  <div class="stat-chip"><span>Avg daily expense</span><strong>{{ money(avg_daily_expense) }}</strong></div>
+  <div class="stat-chip"><span>Net daily</span><strong>{{ money(net_daily) }}</strong></div>
+  <div class="stat-chip"><span>Upcoming recurring</span><strong>{{ money(upcoming_recurring) }}</strong></div>
+  <div class="stat-chip"><span>Pending POs</span><strong>{{ money(upcoming_pos) }}</strong></div>
 </div>
-
-<div class="page-header">
-  <h1><i data-lucide="trending-up"></i> Cash Flow Forecast</h1>
-  <p>Projected based on average daily sales of {{ money(avg_daily) }}</p>
-</div>
-<div class="card">
-  <table class="data-table">
-    <thead><tr><th>Day</th><th>Projected Cumulative</th></tr></thead>
-    <tbody>
-      {% for p in projections[:14] %}
-      <tr><td>Day {{ p.day }}</td><td>{{ money(p.projected) }}</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  <p class="note">Simple average-based projection. Actual results may vary.</p>
-</div>
+<div class="widget"><h3 style="margin-top:0;">Risk assessment</h3>
+<p style="margin:0;"><strong>Lowest projected cash:</strong> {{ money(lowest) }} · <strong>Risk:</strong> {{ cash_risk }}</p></div>
+<div class="chart-container"><canvas id="forecastChart" height="150"></canvas></div>
+<script>
+new Chart(document.getElementById('forecastChart'), {
+  type: 'line',
+  data: { labels: {{ labels|tojson }}, datasets: [
+    {label: 'Best case', data: {{ best|tojson }}, borderColor: '#2ecc71', tension: 0.25, fill: false},
+    {label: 'Base case', data: {{ base|tojson }}, borderColor: '#3498db', tension: 0.25, fill: false, borderWidth: 3},
+    {label: 'Worst case', data: {{ worst|tojson }}, borderColor: '#e74c3c', tension: 0.25, fill: false}
+  ]},
+  options: {responsive: true, plugins: {title: {display: true, text: 'Projected cash · next 30 days'},
+    tooltip: {callbacks: {label: c => c.dataset.label + ': ' + window.kazeMoney(c.raw)}}},
+    scales: {y: {ticks: {callback: v => window.kazeMoney(v)}}}}
+});
+</script>
+<h2>Daily detail</h2>
+<div class="table-wrapper"><table><thead><tr><th>Day</th><th>Worst</th><th>Base</th><th>Best</th></tr></thead>
+<tbody>{% for i in range(30) %}<tr><td>{{ labels[i] }}</td><td>{{ money(worst[i]) }}</td><td>{{ money(base[i]) }}</td><td>{{ money(best[i]) }}</td></tr>{% endfor %}</tbody>
+</table></div>
 {% endblock %}

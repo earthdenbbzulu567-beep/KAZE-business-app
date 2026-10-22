@@ -1,23 +1,78 @@
 {% extends "base.html" %}
-{% block title %}QR / Barcode Scanner{% endblock %}
+{% block title %}Barcode Scanner{% endblock %}
 {% block content %}
-<div class="page-header">
-  <h1><i data-lucide="scan"></i> QR / Barcode Scanner</h1>
-  <p>Scan products for stock or sales (uses device camera)</p>
+<div class="page-header"><div><h1><i data-lucide="scan"></i> Barcode Scanner</h1>
+<p>Point your camera at a barcode to look up the product in your stock.</p></div></div>
+<div class="widget">
+<div style="position:relative;background:#000;border-radius:12px;overflow:hidden;max-width:640px;margin:0 auto;">
+<video id="preview" style="width:100%;display:block;" playsinline></video>
+<canvas id="scanCanvas" style="display:none;"></canvas>
 </div>
-<div class="card">
-  <video id="preview" style="width:100%; max-height:400px; background:#000;"></video>
-  <button class="btn" onclick="startScan()">Start Camera Scan</button>
-  <div id="result" class="mt-2"></div>
+<div style="text-align:center;margin-top:1rem;display:flex;gap:0.6rem;justify-content:center;flex-wrap:wrap;">
+<button type="button" class="btn-primary" id="startScan">Start camera</button>
+<button type="button" class="btn-secondary" id="stopScan" style="display:none;">Stop</button>
+</div>
+<div id="result" style="margin-top:1rem;padding:1rem;background:var(--surface2);border-radius:10px;display:none;">
+<strong>Detected:</strong> <code id="barcodeValue"></code>
+<div id="productMatch" style="margin-top:0.5rem;"></div>
+</div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <script>
-async function startScan() {
-  const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-  document.getElementById('preview').srcObject = stream;
-  document.getElementById('preview').play();
-  // Basic loop would go here; for demo
-  alert('Camera access granted. Full barcode detection can be expanded with jsQR.');
-}
+(function(){
+  const video = document.getElementById('preview');
+  const canvas = document.getElementById('scanCanvas');
+  const ctx = canvas.getContext('2d', {willReadFrequently: true});
+  const startBtn = document.getElementById('startScan');
+  const stopBtn = document.getElementById('stopScan');
+  const result = document.getElementById('result');
+  const barcodeEl = document.getElementById('barcodeValue');
+  const matchEl = document.getElementById('productMatch');
+  let stream = null, rafId = null, scanning = false;
+  async function start(){
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({video: {facingMode: 'environment'}});
+      video.srcObject = stream;
+      await video.play();
+      startBtn.style.display = 'none';
+      stopBtn.style.display = '';
+      scanning = true; scan();
+    } catch(e) { alert('Camera failed: ' + e.message); }
+  }
+  function stop(){
+    scanning = false;
+    if(rafId) cancelAnimationFrame(rafId);
+    if(stream) stream.getTracks().forEach(t => t.stop());
+    video.srcObject = null;
+    startBtn.style.display = ''; stopBtn.style.display = 'none';
+  }
+  function scan(){
+    if(!scanning || video.readyState !== video.HAVE_ENOUGH_DATA){ rafId = requestAnimationFrame(scan); return; }
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(img.data, img.width, img.height, {inversionAttempts: 'dontInvert'});
+    if(code && code.data){ onDetected(code.data); return; }
+    rafId = requestAnimationFrame(scan);
+  }
+  function onDetected(data){
+    stop(); result.style.display = 'block'; barcodeEl.textContent = data;
+    matchEl.innerHTML = '<em style="color:var(--text3);">Looking up...</em>';
+    fetch('/api/lookup-sku?q=' + encodeURIComponent(data))
+      .then(r => r.json())
+      .then(d => {
+        if(d.found) {
+          matchEl.innerHTML = '<strong style="color:var(--green);">' + d.product_name + '</strong> — ' +
+            d.quantity + ' in stock at ' + window.kazeMoney(d.selling_price) +
+            ' <a href="/stock/edit/' + d.id + '" style="margin-left:0.5rem;">Edit</a>';
+        } else {
+          matchEl.innerHTML = '<em style="color:var(--text3);">No product with this SKU. <a href="/stock">Add one</a>.</em>';
+        }
+      }).catch(() => { matchEl.innerHTML = '<em style="color:#e74c3c;">Lookup failed.</em>'; });
+  }
+  startBtn.addEventListener('click', start);
+  stopBtn.addEventListener('click', stop);
+  window.addEventListener('beforeunload', stop);
+})();
 </script>
 {% endblock %}
