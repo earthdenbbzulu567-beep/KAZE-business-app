@@ -50,7 +50,7 @@ _APP_DIR = os.path.dirname(os.path.abspath(__file__))
 _TPL_DIR = os.path.join(_APP_DIR, 'templates') if os.path.isdir(os.path.join(_APP_DIR, 'templates')) else _APP_DIR
 app = Flask(__name__, template_folder=_TPL_DIR)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
-LEGAL_VERSION = '4.5.4'
+LEGAL_VERSION = '4.6.0'
 LEGAL_DIR = _APP_DIR
 _LEGAL_CACHE = {}
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 86400
@@ -532,6 +532,36 @@ def init_db():
     cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS stripe_publishable_key TEXT DEFAULT ''")
     cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS stripe_webhook_secret TEXT DEFAULT ''")
     cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS plan_tier TEXT DEFAULT 'ceo'")
+    cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS plan_paid_rank INTEGER DEFAULT 0")
+    # One-time migration: grandfathered users keep their highest paid tier forever.
+    cur.execute('''
+        UPDATE settings
+        SET plan_paid_rank = CASE plan_tier
+            WHEN 'founder' THEN 4
+            WHEN 'ceo' THEN 3
+            WHEN 'businessman_pro' THEN 3
+            WHEN 'businessman' THEN 2
+            WHEN 'entrepreneur_plus' THEN 2
+            WHEN 'entrepreneur' THEN 1
+            WHEN 'new_user_plus' THEN 1
+            ELSE 0
+        END
+        WHERE plan_paid_rank = 0
+          AND plan_tier IS NOT NULL
+          AND plan_tier != ''
+          AND plan_tier != 'new_user'
+    ''')
+    # Collapse legacy tier names into the new 5-tier set.
+    cur.execute('''
+        UPDATE settings
+        SET plan_tier = CASE plan_tier
+            WHEN 'new_user_plus' THEN 'entrepreneur'
+            WHEN 'entrepreneur_plus' THEN 'businessman'
+            WHEN 'businessman_pro' THEN 'ceo'
+            ELSE plan_tier
+        END
+        WHERE plan_tier IN ('new_user_plus', 'entrepreneur_plus', 'businessman_pro')
+    ''')
     cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS package_prices TEXT DEFAULT ''")
     cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS flutterwave_public_key TEXT DEFAULT ''")
     cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS flutterwave_secret_key TEXT DEFAULT ''")
@@ -1649,31 +1679,15 @@ PLAN_TIERS = {
         ],
         'limits': {'stock': 20, 'customers': 20, 'services': 0, 'sales_month': 40, 'team': 1},
     },
-    'new_user_plus': {
-        'key': 'new_user_plus',
-        'label': 'New user +',
-        'tagline': 'Add services and a few extra tools.',
-        'price': 25,
-        'highlights': [
-            'Everything in New user',
-            'Services, calculator, and reminders',
-            'More stock and customer room',
-        ],
-        'modules': [
-            'stock', 'sales', 'counter', 'customers', 'services',
-            'calculator', 'reminders', 'workspace',
-        ],
-        'limits': {'stock': 60, 'customers': 60, 'services': 8, 'sales_month': 120, 'team': 1},
-    },
     'entrepreneur': {
         'key': 'entrepreneur',
         'label': 'Entrepreneur',
-        'tagline': 'Till plus a cash ledger for a growing stall.',
-        'price': 50,
+        'tagline': 'Till plus cash ledger, day close, and services.',
+        'price': 75,
         'highlights': [
-            'Everything in New user +',
-            'Book keeping papers and cash ledger',
-            'Day close for the drawer',
+            'Everything in New user',
+            'Services, day close, cash ledger',
+            'Book keeping papers and calculator',
         ],
         'modules': [
             'stock', 'sales', 'counter', 'customers', 'services',
@@ -1682,50 +1696,16 @@ PLAN_TIERS = {
         ],
         'limits': {'stock': 150, 'customers': 150, 'services': 20, 'sales_month': 400, 'team': 2},
     },
-    'entrepreneur_plus': {
-        'key': 'entrepreneur_plus',
-        'label': 'Entrepreneur +',
-        'tagline': 'Suppliers, purchase orders, and extra papers.',
-        'price': 75,
-        'highlights': [
-            'Everything in Entrepreneur',
-            'Suppliers, budgets, and recurring items',
-            'Business documents',
-        ],
-        'modules': [
-            'stock', 'sales', 'counter', 'customers', 'services',
-            'calculator', 'reminders', 'workspace',
-            'bookkeeping', 'day_close', 'operations', 'documents',
-        ],
-        'limits': {'stock': 250, 'customers': 250, 'services': 40, 'sales_month': 800, 'team': 3},
-    },
     'businessman': {
         'key': 'businessman',
         'label': 'Businessman',
-        'tagline': 'Shop floor, books, reports, and tax estimate.',
-        'price': 100,
+        'tagline': 'Suppliers, budgets, reports, and tax estimate.',
+        'price': 300,
         'highlights': [
-            'Everything in Entrepreneur +',
-            'Reports, tax summary, SWOT and plan',
-            'Room for a small team',
-        ],
-        'modules': [
-            'stock', 'sales', 'counter', 'customers', 'services',
-            'calculator', 'reminders', 'workspace',
-            'bookkeeping', 'day_close', 'operations', 'documents',
-            'reports', 'tax', 'planning',
-        ],
-        'limits': {'stock': 400, 'customers': 400, 'services': 80, 'sales_month': 2000, 'team': 5},
-    },
-    'businessman_pro': {
-        'key': 'businessman_pro',
-        'label': 'Businessman pro',
-        'tagline': 'Statistics and higher desk limits for a busy shop.',
-        'price': 150,
-        'highlights': [
-            'Everything in Businessman',
-            'Statistics tables and Excel export',
-            'Higher stock, sales, and team limits',
+            'Everything in Entrepreneur',
+            'Purchase orders, suppliers, budgets, recurring',
+            'Reports, statistics, tax summary, documents',
+            'SWOT and business plan',
         ],
         'modules': [
             'stock', 'sales', 'counter', 'customers', 'services',
@@ -1733,17 +1713,18 @@ PLAN_TIERS = {
             'bookkeeping', 'day_close', 'operations', 'documents',
             'reports', 'tax', 'planning', 'stats',
         ],
-        'limits': {'stock': 1500, 'customers': 1500, 'services': 200, 'sales_month': 8000, 'team': 10},
+        'limits': {'stock': 800, 'customers': 800, 'services': 100, 'sales_month': 4000, 'team': 6},
     },
     'ceo': {
         'key': 'ceo',
         'label': 'CEO',
-        'tagline': 'Every module, including account tracking.',
-        'price': 300,
+        'tagline': 'Every operational module, plus account tracking.',
+        'price': 550,
         'highlights': [
-            'Every module in KAZE',
-            'Banking, investments, shop, and market value',
+            'Everything in Businessman',
+            'Banking, investments, shop, market value',
             'Journals, ledgers, and statements',
+            'Supreme hub: health, profit matrix, RFM, forecast',
         ],
         'modules': None,
         'limits': {'stock': 8000, 'customers': 8000, 'services': 800, 'sales_month': 40000, 'team': 25},
@@ -1752,21 +1733,35 @@ PLAN_TIERS = {
         'key': 'founder',
         'label': "Founder's premium",
         'tagline': 'The full house with no practical desk limits.',
-        'price': 500,
+        'price': 1100,
         'highlights': [
-            'Everything in CEO including supreme desks',
+            'Everything in CEO',
+            'Barcode scanner, voice entry, batch tracker',
+            'Credit scores and WhatsApp hub',
             'No practical stock, sales, or team caps',
-            'Banking, investments, shop, and market value',
         ],
         'modules': None,
         'limits': {'stock': 0, 'customers': 0, 'services': 0, 'sales_month': 0, 'team': 0},
     },
 }
-PLAN_ORDER = (
-    'new_user', 'new_user_plus', 'entrepreneur', 'entrepreneur_plus',
-    'businessman', 'businessman_pro', 'ceo', 'founder',
-)
+PLAN_ORDER = ('new_user', 'entrepreneur', 'businessman', 'ceo', 'founder')
 PLAN_RANK = {k: i for i, k in enumerate(PLAN_ORDER)}
+
+
+# Legacy aliases — old tier names still work in URLs and DB, they map to the
+# new 5-tier structure with a courtesy upgrade for existing customers.
+_LEGACY_TIER_ALIASES = {
+    'new_user_plus':     'entrepreneur',
+    'starter':           'new_user',
+    'starter_plus':      'entrepreneur',
+    'entrepreneur_plus': 'businessman',
+    'businessman_pro':   'ceo',
+    'pro':               'ceo',
+    'business':          'businessman',
+    'enterprise':        'ceo',
+    'premium':           'founder',
+}
+
 
 
 def default_package_prices():
@@ -1794,14 +1789,15 @@ def normalize_plan(raw):
     key = ' '.join(key.replace('-', ' ').replace('_', ' ').split())
     aliases = {
         'new': 'new_user', 'new user': 'new_user', 'starter': 'new_user', 'free': 'new_user',
-        'new user plus': 'new_user_plus', 'new user +': 'new_user_plus', 'starter plus': 'new_user_plus',
         'entrepreneur': 'entrepreneur',
-        'entrepreneur plus': 'entrepreneur_plus', 'entrepreneur +': 'entrepreneur_plus',
         'business': 'businessman', 'businessman': 'businessman', 'trader': 'businessman',
-        'businessman pro': 'businessman_pro', 'pro': 'businessman_pro',
         'ceo': 'ceo', 'enterprise': 'ceo', 'full': 'ceo',
         'founder': 'founder', 'founders': 'founder', 'founders premium': 'founder',
         'founder premium': 'founder', 'premium': 'founder',
+        # Legacy 8-tier names — courtesy upgrade
+        'new user plus': 'entrepreneur', 'new user_plus': 'entrepreneur',
+        'entrepreneur plus': 'businessman', 'entrepreneur_plus': 'businessman',
+        'businessman pro': 'ceo', 'businessman_pro': 'ceo', 'pro': 'ceo',
     }
     if key in PLAN_TIERS:
         return key
@@ -3887,9 +3883,10 @@ def settings():
         bank_account_number = (request.form.get('bank_account_number') or '').strip()[:40]
         bank_branch = (request.form.get('bank_branch') or '').strip()[:80]
 
-        plan_tier = normalize_plan(request.form.get('plan_tier') or 'ceo')
-        if getattr(current_user, 'role', 'owner') != 'owner':
-            plan_tier = normalize_plan((prior_keys.get('plan_tier') if prior_keys else None) or 'ceo')
+        # Plan changes flow ONLY through /plans/upgrade -> checkout ->
+        # webhook, or through set_plan()'s free-tier + already-paid guard.
+        # Never trust a form field for the paid tier here.
+        plan_tier = normalize_plan((prior_keys.get('plan_tier') if prior_keys else None) or 'ceo')
 
         package_prices = ''
 
@@ -8346,6 +8343,16 @@ def _fulfill_stripe_payment(uid, kind, record_id, checkout_id, payment_intent, a
     today = datetime.today().strftime('%Y-%m-%d')
     conn = get_db()
     cur = conn.cursor()
+    # Idempotency: read current status first. If already paid, do nothing.
+    cur.execute(
+        "SELECT status FROM stripe_payments WHERE user_id=%s AND checkout_id=%s FOR UPDATE",
+        (uid, checkout_id or '')
+    )
+    prior = cur.fetchone() or {}
+    if (prior.get('status') or '').lower() == 'paid':
+        cur.close()
+        conn.close()
+        return
     cur.execute(
         "UPDATE stripe_payments SET status='paid', paid_date=%s, payment_intent=%s "
         "WHERE user_id=%s AND checkout_id=%s",
@@ -8390,11 +8397,21 @@ def _fulfill_stripe_payment(uid, kind, record_id, checkout_id, payment_intent, a
             pay = cur.fetchone() or {}
             title = (pay.get('title') or '')
             wanted = normalize_plan(title.replace('KAZE package:', '').strip() or 'new_user')
-        cur.execute('SELECT plan_tier FROM settings WHERE user_id=%s', (uid,))
+        cur.execute('SELECT plan_tier, COALESCE(plan_paid_rank, 0) AS paid_rank FROM settings WHERE user_id=%s', (uid,))
         row = cur.fetchone() or {}
-        current = normalize_plan(row.get('plan_tier') or 'new_user')
-        if PLAN_RANK.get(wanted, 0) >= PLAN_RANK.get(current, 0):
-            cur.execute('UPDATE settings SET plan_tier=%s WHERE user_id=%s', (wanted, uid))
+        try:
+            current_paid_rank = int(row.get('paid_rank') or 0)
+        except (TypeError, ValueError):
+            current_paid_rank = 0
+        wanted_rank = PLAN_RANK.get(wanted, 0)
+        # Successful payment always bumps plan_paid_rank. plan_tier only moves
+        # up — never silently downgrades someone who already had a higher tier.
+        new_paid_rank = max(wanted_rank, current_paid_rank)
+        new_tier = wanted if wanted_rank >= PLAN_RANK.get(normalize_plan(row.get('plan_tier') or 'new_user'), 0) else (row.get('plan_tier') or 'new_user')
+        cur.execute(
+            'UPDATE settings SET plan_tier=%s, plan_paid_rank=%s WHERE user_id=%s',
+            (new_tier, new_paid_rank, uid)
+        )
     elif kind == 'custom':
         if amount and float(amount) > 0:
             cur.execute(
@@ -8656,10 +8673,20 @@ def stripe_pay_success():
             stripe.api_key = secret
             sess = stripe.checkout.Session.retrieve(session_id)
             meta = sess.get('metadata') or {}
+            # Ownership check: only the session owner may fulfill it.
+            try:
+                session_user_id = int(meta.get('user_id') or 0)
+            except (TypeError, ValueError):
+                session_user_id = 0
+            if not session_user_id or session_user_id != int(current_user.id):
+                print('stripe success: session %s does not belong to user %s'
+                      % (session_id, current_user.id))
+                flash('That payment belongs to a different account.', 'danger')
+                return redirect(url_for('payments'))
             kind = meta.get('kind') or 'custom'
             try:
                 record_id = int(meta.get('record_id') or 0)
-            except ValueError:
+            except (TypeError, ValueError):
                 record_id = 0
             intent = sess.get('payment_intent') or ''
             amount = stripe_payments.from_stripe_amount(sess.get('amount_total'), sess.get('currency'))
@@ -8705,22 +8732,49 @@ def stripe_webhook():
         event, err = stripe_payments.parse_webhook(payload, sig, row)
     if err or not event:
         return ('invalid webhook', 400)
-    if event.get('type') == 'checkout.session.completed':
+    etype = event.get('type')
+    if etype in ('checkout.session.completed', 'checkout.session.async_payment_succeeded'):
         sess = event['data']['object']
         meta = sess.get('metadata') or {}
         try:
             uid = int(meta.get('user_id') or 0)
-        except ValueError:
+        except (TypeError, ValueError):
             uid = 0
         try:
             record_id = int(meta.get('record_id') or 0)
-        except ValueError:
+        except (TypeError, ValueError):
             record_id = 0
         kind = meta.get('kind') or 'custom'
         intent = sess.get('payment_intent') or ''
         amount = stripe_payments.from_stripe_amount(sess.get('amount_total'), sess.get('currency'))
-        if uid:
+        if uid and (sess.get('payment_status') or '') == 'paid':
             _fulfill_stripe_payment(uid, kind, record_id, sess.get('id'), intent, amount)
+    elif etype == 'checkout.session.expired':
+        sess = event['data']['object']
+        try:
+            conn = get_db(); cur = conn.cursor()
+            cur.execute(
+                "UPDATE stripe_payments SET status='expired' "
+                "WHERE checkout_id=%s AND status='pending'",
+                (sess.get('id'),)
+            )
+            conn.commit(); cur.close(); conn.close()
+        except Exception as exc:
+            print('stripe webhook expired:', exc)
+    elif etype == 'charge.refunded':
+        charge = event['data']['object']
+        intent = charge.get('payment_intent') or ''
+        if intent:
+            try:
+                conn = get_db(); cur = conn.cursor()
+                cur.execute(
+                    "UPDATE stripe_payments SET status='refunded' "
+                    "WHERE payment_intent=%s AND status='paid'",
+                    (intent,)
+                )
+                conn.commit(); cur.close(); conn.close()
+            except Exception as exc:
+                print('stripe webhook refunded:', exc)
     return ('', 200)
 
 
@@ -8738,9 +8792,15 @@ def plans():
     cur.close()
     conn.close()
     trial = current.get('trial') or trial_info(settings)
-    unlocked_rank = PLAN_RANK.get(current.get('stored_key') or current['key'], 0)
-    if trial.get('active'):
-        unlocked_rank = PLAN_RANK.get('ceo', unlocked_rank)
+    # Read paid_rank from the DB — this is the tier the user actually owns.
+    try:
+        rcur = get_db().cursor()
+        rcur.execute('SELECT COALESCE(plan_paid_rank, 0) AS paid_rank FROM settings WHERE user_id=%s', (current_user.id,))
+        prow = rcur.fetchone() or {}
+        rcur.close()
+        paid_rank = int(prow.get('paid_rank') or 0)
+    except Exception:
+        paid_rank = 0
     return render_template(
         'plans.html',
         tiers=priced_tiers(settings),
@@ -8751,8 +8811,8 @@ def plans():
         flutterwave_ready=integrations.flutterwave_ready(settings),
         bank_ready=gateways.bank_ready(settings),
         trial=trial,
-        trial_day_choices=list(range(7, 18)),
-        unlocked_rank=unlocked_rank,
+        trial_day_choices=list(range(7, 13)),
+        paid_rank=paid_rank,
         is_owner=(getattr(current_user, 'role', 'owner') == 'owner'),
     )
 
@@ -8882,6 +8942,23 @@ def set_plan():
         flash('Only the owner can change the plan.', 'danger')
         return redirect(url_for('plans'))
     wanted = normalize_plan(request.form.get('plan_tier'))
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT plan_paid_rank FROM settings WHERE user_id=%s', (current_user.id,))
+    row = cur.fetchone() or {}
+    try:
+        paid_rank = int(row.get('plan_paid_rank') or 0)
+    except (TypeError, ValueError):
+        paid_rank = 0
+    cur.close()
+    conn.close()
+    wanted_rank = PLAN_RANK.get(wanted, 0)
+    wanted_price = float(PLAN_TIERS.get(wanted, {}).get('price') or 0)
+    # Free tier is always reachable. Any paid tier above what the user has
+    # already purchased must go through /plans/upgrade (checkout flow).
+    if wanted_price > 0 and wanted_rank > paid_rank:
+        flash('Pay for that package on the Packages page to unlock it.', 'danger')
+        return redirect(url_for('plans'))
     conn = get_db()
     cur = conn.cursor()
     cur.execute('UPDATE settings SET plan_tier=%s WHERE user_id=%s', (wanted, current_user.id))
@@ -9664,6 +9741,14 @@ def flutterwave_return():
         flash(err, 'danger')
         return redirect(url_for('shop'))
     meta = data.get('meta') or {}
+    # Ownership check: refuse to fulfill a payment for a different user.
+    try:
+        meta_user_id = int(meta.get('user_id') or 0)
+    except (TypeError, ValueError):
+        meta_user_id = 0
+    if meta_user_id and meta_user_id != int(current_user.id):
+        flash('That payment belongs to a different account.', 'danger')
+        return redirect(url_for('payments'))
     try:
         order_id = int(meta.get('order_id') or 0)
     except (TypeError, ValueError):
@@ -9704,44 +9789,46 @@ def flutterwave_webhook():
     except Exception:
         return ('', 400)
     data = payload.get('data') or {}
-    meta = data.get('meta') or {}
-    try:
-        uid = int(meta.get('user_id') or 0)
-    except (TypeError, ValueError):
-        uid = 0
-    settings = _stripe_settings(uid) if uid else None
-    if settings and not integrations.flutterwave_hash_ok(settings, header_hash):
-        return ('', 401)
-    status = str(data.get('status') or payload.get('event') or '').lower()
-    if 'success' not in status and payload.get('event') != 'charge.completed':
-        return ('', 200)
-    if not uid:
-        return ('', 200)
-    try:
-        order_id = int(meta.get('order_id') or 0)
-    except (TypeError, ValueError):
-        order_id = 0
     tx_ref = data.get('tx_ref') or ''
-    if not order_id and str(tx_ref).startswith('kaze-shop-'):
-        try:
-            order_id = int(str(tx_ref).split('-')[2])
-        except (IndexError, ValueError):
-            order_id = 0
-    kind = str(meta.get('kind') or '')
+    # Hash check runs FIRST, using app-level config, before we trust any body.
     try:
-        record_id = int(meta.get('record_id') or 0)
-    except (TypeError, ValueError):
-        record_id = 0
+        conn = get_db(); cur = conn.cursor()
+        cur.execute("SELECT flutterwave_webhook_hash FROM settings WHERE flutterwave_webhook_hash != '' LIMIT 1")
+        hook_row = cur.fetchone()
+        cur.close(); conn.close()
+    except Exception:
+        hook_row = None
+    if hook_row and hook_row.get('flutterwave_webhook_hash'):
+        if not integrations.flutterwave_hash_ok(hook_row, header_hash):
+            return ('', 401)
+    # Verify with Flutterwave BEFORE trusting any meta in the body.
+    settings = _stripe_settings()
     verified, err = integrations.verify_flutterwave(settings, tx_ref=tx_ref, transaction_id=data.get('id'))
-    if err:
+    if err or not verified:
         return ('', 200)
-    if order_id:
-        _mark_shop_paid(uid, order_id, tx_ref, (verified or {}).get('id') or data.get('id'))
-    elif kind:
-        _fulfill_stripe_payment(
-            uid, kind, record_id, tx_ref, str((verified or {}).get('id') or data.get('id') or ''),
-            (verified or {}).get('amount') or data.get('amount'),
-        )
+    # Use VERIFIED meta only — never the raw body meta.
+    v_meta = (verified or {}).get('meta') or {}
+    try:
+        v_user_id = int(v_meta.get('user_id') or 0)
+    except (TypeError, ValueError):
+        v_user_id = 0
+    try:
+        v_order_id = int(v_meta.get('order_id') or 0)
+    except (TypeError, ValueError):
+        v_order_id = 0
+    v_kind = str(v_meta.get('kind') or '')
+    try:
+        v_record_id = int(v_meta.get('record_id') or 0)
+    except (TypeError, ValueError):
+        v_record_id = 0
+    if not v_user_id:
+        return ('', 200)
+    v_tx_id = str((verified or {}).get('id') or data.get('id') or '')
+    v_amount = (verified or {}).get('amount')
+    if v_order_id:
+        _mark_shop_paid(v_user_id, v_order_id, tx_ref, v_tx_id)
+    elif v_kind:
+        _fulfill_stripe_payment(v_user_id, v_kind, v_record_id, tx_ref, v_tx_id, v_amount)
     return ('', 200)
 
 

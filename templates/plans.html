@@ -1,6 +1,49 @@
 {% extends "base.html" %}
 {% block content %}
-<style>.pay-methods{display:flex;flex-wrap:wrap;gap:.45rem;margin-top:.55rem}.pay-methods a{display:inline-block}</style>
+<style>
+.pkg-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.9rem;
+    align-items: stretch;
+}
+.pkg-card {
+    padding: 1.2rem 1.15rem 1.2rem;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    position: relative;
+}
+.pkg-card h2 { margin: 0; font-size: 1.15rem; }
+.pkg-rank {
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text3);
+    font-weight: 800;
+}
+.pkg-tag { color: var(--text2); font-size: 0.88rem; margin: 0; min-height: 2.6em; }
+.pkg-price { font-family: var(--mono); font-size: 1.35rem; margin: 0.3rem 0 0.4rem; }
+.pkg-price span { font-size: 0.72rem; color: var(--text3); font-family: var(--font); }
+.pkg-card ul { margin: 0 0 0.9rem; padding-left: 1.1rem; color: var(--text2); font-size: 0.88rem; line-height: 1.55; flex: 1; }
+.pkg-card.is-current { border-color: var(--red-bright); box-shadow: 0 0 0 1px var(--red-bright), 0 12px 28px rgba(0,0,0,0.2); }
+.pkg-card.is-founder { background: linear-gradient(180deg, var(--accent-wash), var(--surface)); }
+.pkg-note { color: var(--text3); font-size: 0.85rem; max-width: 44rem; margin-top: 1.1rem; }
+.pkg-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    margin-top: 0.4rem;
+}
+.pkg-badge.current { background: var(--green-dim); color: var(--green); }
+.pkg-badge.paid { background: var(--red-glow); color: var(--red-bright); }
+</style>
+
 <div class="page-header">
     <div>
         <h1>Packages</h1>
@@ -16,7 +59,7 @@
 {% if is_owner and trial and not trial.started %}
 <div class="widget" style="margin-bottom:1.1rem;">
     <h2>Free trial</h2>
-    <p style="color:var(--text2);max-width:40rem;">Try the full CEO desk for 7 to 17 days. One trial per shop. Reminder emails go out 3 days out, 1 day out, and when it ends.</p>
+    <p style="color:var(--text2);max-width:40rem;">Try the full CEO desk for 7 to 12 days. One trial per shop. Reminder emails go out 3 days out, 1 day out, and when it ends.</p>
     <form method="POST" action="{{ url_for('start_trial') }}" style="display:flex;gap:0.6rem;flex-wrap:wrap;align-items:flex-end;">
         <div class="form-group">
             <label>Trial length</label>
@@ -54,21 +97,23 @@
         <li>{{ line }}</li>
         {% endfor %}
     </ul>
-    {% set paid_ok = (not t.price) or (loop.index0 <= (unlocked_rank or 0)) %}
-    {% if t.key == current.stored_key or (current.trial and current.trial.active and t.key == current.key) %}
-        <p><span class="status-pill status-ok">{% if current.trial and current.trial.active and t.key == 'ceo' %}Trial desk{% else %}Current package{% endif %}</span></p>
+
+    {% set paid_ok = (not t.price) or (loop.index0 <= (paid_rank or 0)) %}
+    {% if t.key == current.stored_key %}
+        <span class="pkg-badge current">Current package</span>
     {% endif %}
+
     {% if is_owner %}
         {% if t.price and not paid_ok %}
             <p style="font-size:0.82rem;color:var(--text3);">Locked until you pay.</p>
-            <div class="pay-methods">
+            <div style="display:flex;gap:0.4rem;flex-wrap:wrap;">
                 {% if stripe_ready %}<a class="btn-secondary" href="{{ url_for('pay_plan', tier=t.key) }}?method=stripe">Visa / Mastercard</a>{% endif %}
                 {% if paypal_ready %}<a class="btn-secondary" href="{{ url_for('pay_plan', tier=t.key) }}?method=paypal">PayPal</a>{% endif %}
                 {% if flutterwave_ready %}<a class="btn-secondary" href="{{ url_for('pay_plan', tier=t.key) }}?method=flutterwave">Card / MoMo</a>{% endif %}
                 {% if bank_ready %}<a class="btn-secondary" href="{{ url_for('pay_plan', tier=t.key) }}?method=bank">Current account</a>{% endif %}
             </div>
         {% elif t.price and paid_ok %}
-            <p><span class="status-pill status-ok">Unlocked</span></p>
+            <span class="pkg-badge paid">Unlocked (paid)</span>
             {% if t.key != current.stored_key %}
             <form method="POST" action="{{ url_for('set_plan') }}">
                 <input type="hidden" name="plan_tier" value="{{ t.key }}">
@@ -86,38 +131,5 @@
 {% endfor %}
 </div>
 
-<p class="pkg-note">Existing shops stay on CEO until you change them. New signups start as New user. Modes can still hide modules inside a package. Unlocks use Stripe (Visa/Mastercard), PayPal, Flutterwave, or a current-account transfer — whichever you switched on in Settings. <code>/plans</code> still works as an old link.</p>
-
-<style>
-.pkg-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-    gap: 0.85rem;
-    align-items: stretch;
-}
-.pkg-card {
-    padding: 1.05rem 1.1rem 1.15rem;
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    background: var(--surface);
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-}
-.pkg-card h2 { margin: 0; font-size: 1.15rem; }
-.pkg-rank {
-    font-size: 0.68rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--text3);
-    font-weight: 800;
-}
-.pkg-tag { color: var(--text2); font-size: 0.88rem; margin: 0; min-height: 2.6em; }
-.pkg-price { font-family: var(--mono); font-size: 1.35rem; margin: 0.2rem 0 0.4rem; }
-.pkg-price span { font-size: 0.72rem; color: var(--text3); font-family: var(--font); }
-.pkg-card ul { margin: 0 0 0.7rem; padding-left: 1.1rem; color: var(--text2); font-size: 0.88rem; line-height: 1.5; flex: 1; }
-.pkg-card.is-current { border-color: var(--red-bright); box-shadow: 0 0 0 1px var(--red-bright), 0 12px 28px rgba(0,0,0,0.2); }
-.pkg-card.is-founder { background: linear-gradient(180deg, var(--accent-wash), var(--surface)); }
-.pkg-note { color: var(--text3); font-size: 0.85rem; max-width: 44rem; margin-top: 1.1rem; }
-</style>
+<p class="pkg-note">Five packages. Existing customers keep the highest tier they paid for — grandfathering is permanent. Unlocks use Stripe (Visa/Mastercard), PayPal, Flutterwave, or a current-account transfer — whichever you switched on in Settings. <code>/plans</code> and <code>/packages</code> both work.</p>
 {% endblock %}

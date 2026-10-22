@@ -2,52 +2,66 @@
 KAZE TRADERS BUSINESS MANAGER -- TERMS OF SERVICE
 ==============================================================================
 
-Companion to LICENCE version 4.6.0. If they differ, the LICENCE controls.
+Companion to LICENCE version 4.6.0. If they differ, LICENCE controls.
 
 Brand:           KAZE Traders
 Rightful owner:  Ephraim Zulu
 Copyright:       (C) 2026 Ephraim Zulu and KAZE Traders. All rights reserved.
-Legal version:   4.6.0
+Effective date:  2026-10-22
 
-1. Acceptance
-   You accept these Terms and the LICENCE by ticking the acceptance box,
-   signing in, paying, starting a trial, or using any feature. The App
-   records the legal version and acceptance time.
+1. You accept these terms by ticking the box, signing in, paying,
+   starting a trial, or using any feature. The App stores the legal
+   version and the time you accepted.
 
-2. Ownership
-   Ephraim Zulu owns KAZE Traders and the Software. You own the business
-   data you enter. All unique functions, navigation groups, and UI elements
-   are part of the Software.
+2. Ephraim Zulu owns KAZE Traders and the Software. You own the shop
+   data you type.
 
-3. Feature Access
-   Features include sales, stock, customers, bookkeeping, payments, analytics,
-   invoices, stock valuation, profit reports, reorder lists, and other tools.
-   Locked features remain locked until valid payment or an active trial.
-   Incorrect data produces incorrect reports. You are solely responsible
-   for data accuracy and backups.
+3. Locked features stay locked until payment or an active trial.
+   Wrong entries make wrong reports. Notes may use simple markdown.
+   Raw HTML is escaped.
 
-4. Packages and Pricing
-   Packages are sold at the prices shown in the App. Free tiers may be
-   selected without payment. Paid packages require successful payment.
+4. Prices (Kwacha, one-time, hardcoded):
+       New user              K 0       (free forever)
+       Entrepreneur          K 75
+       Businessman           K 300
+       CEO                   K 550
+       Founder's premium     K 1,100
 
-5. Payments
-   Card numbers never pass through KAZE. You configure your own Stripe,
-   PayPal, Flutterwave, or bank details. You are responsible for correct
-   setup and for complying with the provider’s terms.
+   Free trial: 7 to 12 days. One trial per shop. Unused days are not
+   paid out. Customers who purchased under the earlier eight-tier
+   structure keep their purchased rank permanently as described in
+   the LICENCE, Part D.
 
-6. Acceptable use
-   Do not use the App for unlawful activity, to store others’ data without
-   permission, or to attempt to reverse-engineer or resell the Software.
+5. Breach penalties (summary)
+   - No acceptance: desk blocked.
+   - Unpaid package force: refused, logged, debt equal to that price.
+   - Chargeback after use: relock + price + provider fees.
+   - Copy / resell / strip copyright: termination + damages not less
+     than K 1,100 plus extra proven loss and costs.
+   - Attack or fraud: ban and report to host and authorities.
+   - Vulgar, offensive, or insulting language about the App or the
+     owner: warning, then suspension, then a heavy fine at the owner's
+     reasonable discretion. Constructive criticism is always welcome
+     and is not covered by this clause.
+   - Plagiarism, piracy, or unauthorised distribution of the Software:
+     termination and takedown, plus a liquidated sum of not less than
+     USD 10,000 and up to USD 100,000, plus legal costs and any other
+     charges that apply.
 
-7. Termination
-   We may suspend or end access for breach of these Terms or the LICENCE.
+6. Termination
+   The licence ends at once if you copy the Software, bypass locks
+   after a logged breach, attack the service, refuse this version,
+   pay with a method you have no right to use, or engage in plagiarism
+   or unauthorised distribution. After that you must stop using the
+   Software. Shop-data exports remain yours. Breach does not create
+   a refund.
 
-8. Liability
-   The App is provided as-is. We are not liable for lost profits, data loss,
-   or decisions made from reports or forecasts.
+7. Enforcement
+   Ephraim Zulu and KAZE Traders will sue, charge, and -- where the
+   law allows -- prosecute anyone who violates the licence or these
+   terms.
 
-9. Changes
-   We may update these Terms. Continued use after an update constitutes
-   acceptance of the new version.
+8. Shares stay in Ephraim Zulu's discretion. Using the App is not
+   buying shares.
 
-By using the App you confirm you have read and accept these Terms.
+Full text: LICENCE.
