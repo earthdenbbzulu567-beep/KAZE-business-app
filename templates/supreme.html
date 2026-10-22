@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Supreme Desk{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1><i data-lucide="crown"></i> Supreme Desk</h1>
+    <p>Every business intelligence signal in one place. Click any tile for the full analysis.</p>
+  </div>
+</div>
+
+<h2>At a glance</h2>
+<div class="supreme-grid">
+{% for t in tiles %}
+<a href="{{ t.url }}" class="supreme-tile">
+  <span class="tile-label">{{ t.title }}</span>
+  <span class="tile-value" style="color:{{ t.color }};">{{ t.value }}<span style="font-size:1rem;color:var(--text3);">{{ t.suffix }}</span></span>
+  <span class="tile-sub">{{ t.label }}</span>
+</a>
+{% endfor %}
+</div>
+
+<h2>Supreme features</h2>
+<div class="feature-grid">
+{% for f in features %}
+<a href="{{ f.url }}" class="feature-card supreme-feature">
+  <div class="feature-icon"><i data-lucide="{{ f.icon }}"></i></div>
+  <h3>{{ f.title }}</h3>
+  <p>{{ f.desc }}</p>
+</a>
+{% endfor %}
+</div>
+
+<style>
+.supreme-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.9rem;
+  margin: 0.5rem 0 2rem;
+}
+.supreme-tile {
+  padding: 1.2rem 1.1rem;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  transition: transform 0.16s var(--ease-out), border-color 0.16s ease, box-shadow 0.16s ease;
+}
+.supreme-tile:hover {
+  transform: translateY(-3px);
+  border-color: var(--red-bright);
+  box-shadow: 0 12px 24px rgba(0,0,0,0.2);
+}
+.tile-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text3);
+  font-weight: 700;
+}
+.tile-value {
+  font-size: 1.9rem;
+  font-family: var(--mono);
+  font-weight: 800;
+  line-height: 1.1;
+  margin: 0.2rem 0;
+}
+.tile-sub {
+  font-size: 0.82rem;
+  color: var(--text2);
+}
+.supreme-feature {
+  display: flex;
+  flex-direction: column;
+  text-decoration: none;
+  color: inherit;
+}
+</style>
+{% endblock %}

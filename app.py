@@ -1965,6 +1965,7 @@ NAV_GROUPS = (
         ('QR Scanner', 'scanner', 'scan', 'operations', ('scanner',)),
     )),
     ('Growth', (
+        ('Supreme Desk', 'supreme', 'crown', None, ('supreme',)),
         ('Investments', 'investments', 'line-chart', 'investments', ('investments',)),
         ('Market value', 'market', 'trending-up', 'market', ('market',)),
         ('Reports', 'reports', 'bar-chart-3', 'reports', ('reports',)),
@@ -2168,6 +2169,7 @@ _bind_module(
 )
 _bind_module(
     'dashboard',
+    'supreme',
     'add_income', 'add_expense', 'delete_income', 'delete_expense',
     'export_income_csv', 'export_expenses_csv', 'import_income_csv', 'import_expenses_csv',
 )
@@ -11270,6 +11272,192 @@ def voice_sale():
                  f'{item["product_name"]} x{qty} {_format_money(total)}')
     flash(f'Voice sale recorded: {item["product_name"]} x{qty} — {_format_money(total)}', 'success')
     return redirect(url_for('sales'))
+
+
+@app.route('/supreme')
+@login_required
+def supreme():
+    """Supreme desk — one page showing every business intelligence signal."""
+    uid = current_user.id
+    conn = get_db(); cur = conn.cursor()
+
+    # Health snapshot
+    cur.execute("SELECT COALESCE(SUM(total_amount),0) AS rev, COALESCE(SUM(profit),0) AS pft "
+                "FROM sales WHERE user_id=%s AND sale_date >= to_char(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD')", (uid,))
+    r = cur.fetchone() or {}
+    sales_30 = float(r.get('rev') or 0)
+    profit_30 = float(r.get('pft') or 0)
+    cur.execute("SELECT COALESCE(SUM(total_amount),0) AS rev FROM sales WHERE user_id=%s "
+                "AND sale_date >= to_char(CURRENT_DATE - INTERVAL '60 days','YYYY-MM-DD') "
+                "AND sale_date < to_char(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD')", (uid,))
+    sales_prev = float((cur.fetchone() or {}).get('rev') or 0)
+    cur.execute("SELECT COUNT(*) AS total, SUM(CASE WHEN quantity <= COALESCE("
+                "(SELECT low_stock_threshold FROM settings WHERE user_id=%s),10) THEN 1 ELSE 0 END) AS low "
+                "FROM stock WHERE user_id=%s", (uid, uid))
+    st = cur.fetchone() or {}
+    total_sku = int(st.get('total') or 0); low_sku = int(st.get('low') or 0)
+    cur.execute("SELECT COALESCE(SUM(amount),0) AS m FROM expenses WHERE user_id=%s "
+                "AND date >= to_char(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD')", (uid,))
+    exp_30 = float((cur.fetchone() or {}).get('m') or 0)
+    cur.execute("SELECT COALESCE(SUM(opening_balance),0) AS op FROM bank_accounts WHERE user_id=%s", (uid,))
+    op = float((cur.fetchone() or {}).get('op') or 0)
+    cur.execute("SELECT COALESCE(SUM(CASE WHEN kind='in' THEN amount ELSE -amount END),0) AS mv FROM bank_transactions WHERE user_id=%s", (uid,))
+    mv = float((cur.fetchone() or {}).get('mv') or 0)
+    cur.execute("SELECT COUNT(*) AS n FROM bank_accounts WHERE user_id=%s", (uid,))
+    if int((cur.fetchone() or {}).get('n') or 0) > 0:
+        current_cash = op + mv
+    else:
+        cur.execute("SELECT COALESCE(SUM(CASE WHEN entry_type='in' THEN amount ELSE -amount END),0) AS net FROM cash_books WHERE user_id=%s", (uid,))
+        current_cash = float((cur.fetchone() or {}).get('net') or 0)
+    cur.execute("SELECT COUNT(DISTINCT customer_id) AS buyers, SUM(CASE WHEN c > 1 THEN 1 ELSE 0 END) AS repeaters "
+                "FROM (SELECT customer_id, COUNT(*) AS c FROM sales WHERE user_id=%s "
+                "AND customer_id IS NOT NULL GROUP BY customer_id) t", (uid,))
+    rb = cur.fetchone() or {}
+    buyers = int(rb.get('buyers') or 0); repeaters = int(rb.get('repeaters') or 0)
+
+    trend_pct = ((sales_30 - sales_prev) / sales_prev * 100) if sales_prev > 0 else (100 if sales_30 > 0 else 0)
+    trend_score = max(0, min(100, int(50 + trend_pct * 0.5)))
+    margin_pct = round((profit_30 / sales_30 * 100) if sales_30 > 0 else 0, 1)
+    margin_score = max(0, min(100, int(margin_pct * 2.5)))
+    stock_score = int(100 - (low_sku / total_sku) * 100) if total_sku > 0 else 100
+    monthly_exp = exp_30 if exp_30 > 0 else 1
+    months_covered = round(current_cash / monthly_exp, 1) if current_cash > 0 else 0
+    cash_score = max(0, min(100, int(months_covered * 50)))
+    retention_score = int((repeaters / buyers * 100) if buyers > 0 else 0)
+    health_score = int(trend_score * 0.30 + margin_score * 0.25 + stock_score * 0.15 + cash_score * 0.15 + retention_score * 0.15)
+    health_status = 'Excellent' if health_score >= 80 else 'Good' if health_score >= 60 else 'Fair' if health_score >= 40 else 'Needs Attention'
+
+    # Profit matrix counts
+    cur.execute("SELECT st.product_name AS name, COALESCE(SUM(s.total_amount),0) AS rev, "
+                "COALESCE(SUM(s.profit),0) AS pft FROM sales s LEFT JOIN stock st ON st.id = s.stock_id "
+                "WHERE s.user_id=%s AND s.sale_date >= to_char(CURRENT_DATE - INTERVAL '90 days','YYYY-MM-DD') "
+                "GROUP BY st.product_name", (uid,))
+    pm_rows = []
+    for row in (cur.fetchall() or []):
+        rev = float(row.get('rev') or 0); pft = float(row.get('pft') or 0)
+        pm_rows.append({'rev': rev, 'margin': (pft / rev * 100) if rev > 0 else 0})
+    avg_rev_pm = sum(x['rev'] for x in pm_rows) / len(pm_rows) if pm_rows else 0
+    avg_margin_pm = sum(x['margin'] for x in pm_rows) / len(pm_rows) if pm_rows else 0
+    pm_counts = {'star': 0, 'cash_cow': 0, 'rocket': 0, 'dog': 0}
+    for x in pm_rows:
+        hr = x['rev'] >= avg_rev_pm; hm = x['margin'] >= avg_margin_pm
+        key = 'star' if hr and hm else ('cash_cow' if hr else ('rocket' if hm else 'dog'))
+        pm_counts[key] += 1
+
+    # RFM counts
+    cur.execute("SELECT MAX(s.sale_date) AS lp, COUNT(s.id) AS f, COALESCE(SUM(s.total_amount),0) AS m "
+                "FROM customers c LEFT JOIN sales s ON s.customer_id = c.id AND s.user_id = c.user_id "
+                "WHERE c.user_id=%s GROUP BY c.id", (uid,))
+    today = datetime.today().date()
+    rfm_rows = []
+    for row in (cur.fetchall() or []):
+        lp = (row.get('lp') or '')[:10]
+        try:
+            days = (today - datetime.strptime(lp, '%Y-%m-%d').date()).days if lp else 9999
+        except ValueError:
+            days = 9999
+        rfm_rows.append({'days': days, 'f': int(row.get('f') or 0), 'm': float(row.get('m') or 0)})
+    avg_m = sum(x['m'] for x in rfm_rows) / len(rfm_rows) if rfm_rows else 0
+    champions = at_risk_rfm = 0
+    for x in rfm_rows:
+        R = 5 if x['days'] < 7 else 4 if x['days'] < 30 else 3 if x['days'] < 60 else 2 if x['days'] < 90 else 1
+        F = 1 if x['f'] <= 1 else 2 if x['f'] == 2 else 3 if x['f'] <= 4 else 4 if x['f'] <= 9 else 5
+        M = 1 if x['m'] < avg_m * 0.5 else 2 if x['m'] < avg_m else 3 if x['m'] < avg_m * 2 else 4 if x['m'] < avg_m * 4 else 5
+        if R >= 4 and F >= 4 and M >= 4:
+            champions += 1
+        elif R <= 2 and F >= 3:
+            at_risk_rfm += 1
+
+    # Credit high-risk count
+    cur.execute("SELECT COUNT(*) AS c FROM ("
+                "SELECT c.id FROM customers c LEFT JOIN sales s ON s.customer_id = c.id AND s.user_id = c.user_id "
+                "WHERE c.user_id=%s GROUP BY c.id HAVING COUNT(s.id) > 0) t", (uid,))
+    total_scored = int((cur.fetchone() or {}).get('c') or 0)
+
+    # Forecast risk
+    cur.execute("SELECT COALESCE(AVG(daily_rev),0) AS a FROM ("
+                "SELECT SUM(total_amount) AS daily_rev FROM sales WHERE user_id=%s "
+                "AND sale_date >= to_char(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD') GROUP BY sale_date) t", (uid,))
+    avg_rev_daily = float((cur.fetchone() or {}).get('a') or 0)
+    cur.execute("SELECT COALESCE(AVG(daily_exp),0) AS a FROM ("
+                "SELECT SUM(amount) AS daily_exp FROM expenses WHERE user_id=%s "
+                "AND date >= to_char(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD') GROUP BY date) t", (uid,))
+    avg_exp_daily = float((cur.fetchone() or {}).get('a') or 0)
+    net_daily = avg_rev_daily - avg_exp_daily
+    projected_30 = round(current_cash + net_daily * 30, 2)
+    if projected_30 < 0:
+        forecast_risk = 'High'
+    elif projected_30 < current_cash * 0.2:
+        forecast_risk = 'Moderate'
+    else:
+        forecast_risk = 'Low'
+
+    # Collections outstanding
+    cur.execute("SELECT COALESCE(SUM(s.total_amount),0) AS out FROM sales s "
+                "WHERE s.user_id=%s AND COALESCE(s.payment_method,'cash') NOT IN ('cash')", (uid,))
+    total_outstanding = float((cur.fetchone() or {}).get('out') or 0)
+
+    # Dead stock capital
+    cur.execute("SELECT COALESCE(SUM(quantity * cost_price),0) AS v FROM stock st "
+                "WHERE st.user_id=%s AND NOT EXISTS ("
+                "SELECT 1 FROM sales s WHERE s.stock_id = st.id "
+                "AND s.sale_date >= to_char(CURRENT_DATE - INTERVAL '60 days','YYYY-MM-DD'))", (uid,))
+    dead_capital = float((cur.fetchone() or {}).get('v') or 0)
+
+    cur.close(); conn.close()
+
+    tiles = [
+        {'title': 'Health Score', 'value': str(health_score), 'suffix': '/100',
+         'label': health_status, 'url': url_for('health'),
+         'color': 'var(--green)' if health_score >= 80 else 'var(--red-bright)' if health_score >= 60 else '#e0a030' if health_score >= 40 else '#e74c3c'},
+        {'title': 'Avg Margin', 'value': f'{margin_pct}', 'suffix': '%',
+         'label': 'last 30 days', 'url': url_for('profit_matrix'),
+         'color': 'var(--green)' if margin_pct >= 20 else 'var(--red-bright)' if margin_pct >= 10 else '#e0a030'},
+        {'title': 'Cash Forecast', 'value': forecast_risk, 'suffix': '',
+         'label': f'projected 30d: {_format_money(projected_30)}', 'url': url_for('forecast'),
+         'color': '#e74c3c' if forecast_risk == 'High' else '#e0a030' if forecast_risk == 'Moderate' else 'var(--green)'},
+        {'title': 'RFM Champions', 'value': str(champions), 'suffix': '',
+         'label': f'{at_risk_rfm} at risk', 'url': url_for('rfm'),
+         'color': 'var(--green)' if champions > 0 else 'var(--text3)'},
+        {'title': 'Outstanding', 'value': _format_money(total_outstanding), 'suffix': '',
+         'label': 'from non-cash sales', 'url': url_for('collections'),
+         'color': '#e74c3c' if total_outstanding > 0 else 'var(--green)'},
+        {'title': 'Dead Capital', 'value': _format_money(dead_capital), 'suffix': '',
+         'label': 'tied up in dead stock', 'url': url_for('insights'),
+         'color': '#e0a030' if dead_capital > 0 else 'var(--green)'},
+        {'title': 'Low Stock', 'value': str(low_sku), 'suffix': '',
+         'label': f'of {total_sku} SKU(s)', 'url': url_for('stock'),
+         'color': '#e74c3c' if low_sku >= 5 else '#e0a030' if low_sku > 0 else 'var(--green)'},
+        {'title': 'Scored Customers', 'value': str(total_scored), 'suffix': '',
+         'label': 'with credit history', 'url': url_for('credit_scores'),
+         'color': 'var(--green)' if total_scored > 0 else 'var(--text3)'},
+    ]
+
+    features = [
+        {'title': 'AI Insights', 'icon': 'lightbulb', 'url': url_for('insights'),
+         'desc': 'Live growth trends, dead stock, payment mix, and recommendations.'},
+        {'title': 'Cash Forecast', 'icon': 'trending-up', 'url': url_for('forecast'),
+         'desc': '30-day cash projection from real balance with worst/base/best cases.'},
+        {'title': 'Health Score', 'icon': 'activity', 'url': url_for('health'),
+         'desc': 'Weighted 5-factor score: trend, margin, stock, cash, retention.'},
+        {'title': 'Profit Matrix', 'icon': 'pie-chart', 'url': url_for('profit_matrix'),
+         'desc': 'Stars, cash cows, rockets, dogs — quadrant classification + Pareto.'},
+        {'title': 'RFM Analysis', 'icon': 'users', 'url': url_for('rfm'),
+         'desc': 'Recency, frequency, monetary scoring into 6 customer segments.'},
+        {'title': 'Credit Scores', 'icon': 'shield-check', 'url': url_for('credit_scores'),
+         'desc': 'Payment-history score per customer, ranked from safest to riskiest.'},
+        {'title': 'Barcode Scanner', 'icon': 'scan', 'url': url_for('scanner'),
+         'desc': 'Point your camera at any barcode to look up the product in stock.'},
+        {'title': 'Voice Entry', 'icon': 'mic', 'url': url_for('voice'),
+         'desc': 'Speak a sale ("sold 3 rice for 250") and it gets recorded.'},
+    ]
+
+    return render_template('supreme.html', tiles=tiles, features=features,
+                           health_score=health_score, health_status=health_status,
+                           pm_counts=pm_counts, champions=champions, at_risk=at_risk_rfm,
+                           current_cash=current_cash, total_outstanding=total_outstanding)
+
+
 
 
 if __name__ == '__main__':
