@@ -29,6 +29,7 @@ import re
 import mode_runtime
 import stripe_payments
 import integrations
+import subscriptions
 import gateways
 import oauth_login
 
@@ -533,6 +534,12 @@ def init_db():
     cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS stripe_webhook_secret TEXT DEFAULT ''")
     cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS plan_tier TEXT DEFAULT 'ceo'")
     cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS plan_paid_rank INTEGER DEFAULT 0")
+    cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS plan_started_at TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS plan_expires_at TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS grace_expires_at TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'none'")
     # One-time migration: grandfathered users keep their highest paid tier forever.
     cur.execute('''
         UPDATE settings
@@ -1683,7 +1690,7 @@ PLAN_TIERS = {
         'key': 'entrepreneur',
         'label': 'Entrepreneur',
         'tagline': 'Till plus cash ledger, day close, and services.',
-        'price': 75,
+        'price': 10,
         'highlights': [
             'Everything in New user',
             'Services, day close, cash ledger',
@@ -1700,7 +1707,7 @@ PLAN_TIERS = {
         'key': 'businessman',
         'label': 'Businessman',
         'tagline': 'Suppliers, budgets, reports, and tax estimate.',
-        'price': 300,
+        'price': 25,
         'highlights': [
             'Everything in Entrepreneur',
             'Purchase orders, suppliers, budgets, recurring',
@@ -1719,7 +1726,7 @@ PLAN_TIERS = {
         'key': 'ceo',
         'label': 'CEO',
         'tagline': 'Every operational module, plus account tracking.',
-        'price': 550,
+        'price': 50,
         'highlights': [
             'Everything in Businessman',
             'Banking, investments, shop, market value',
@@ -1733,7 +1740,7 @@ PLAN_TIERS = {
         'key': 'founder',
         'label': "Founder's premium",
         'tagline': 'The full house with no practical desk limits.',
-        'price': 1100,
+        'price': 100,
         'highlights': [
             'Everything in CEO',
             'Barcode scanner, voice entry, batch tracker',
@@ -1830,18 +1837,66 @@ def trial_info(settings=None):
     }
 
 
+def days_between(start_iso, end_iso):
+    try:
+        a = datetime.strptime(str(start_iso or '')[:10], '%Y-%m-%d')
+        b = datetime.strptime(str(end_iso or '')[:10], '%Y-%m-%d')
+        return max(0, (b - a).days)
+    except (TypeError, ValueError):
+        return 0
+
+
+def subscription_info(settings=None):
+    settings = settings or {}
+    today = datetime.today().strftime('%Y-%m-%d')
+    expires = str(settings.get('plan_expires_at') or '')[:10]
+    grace = str(settings.get('grace_expires_at') or '')[:10]
+    status = str(settings.get('subscription_status') or 'none').lower()
+
+    if status in ('active', 'trialing') and expires and expires >= today:
+        return {'status': 'active', 'expires': expires,
+                'days_left': days_between(today, expires), 'grace': ''}
+    if status == 'past_due' and grace and grace >= today:
+        return {'status': 'grace', 'expires': expires, 'grace': grace,
+                'days_left': days_between(today, grace)}
+    if status == 'canceled' and expires and expires >= today:
+        return {'status': 'canceled_active', 'expires': expires,
+                'days_left': days_between(today, expires), 'grace': ''}
+    if expires and expires < today:
+        return {'status': 'expired', 'expires': expires,
+                'days_since': days_between(expires, today), 'grace': ''}
+    return {'status': 'none', 'expires': '', 'grace': '', 'days_left': 0}
+
+
+def effective_plan(settings=None):
+    settings = settings or {}
+    today = datetime.today().strftime('%Y-%m-%d')
+
+    expires = str(settings.get('plan_expires_at') or '')[:10]
+    if expires and expires >= today:
+        return normalize_plan(settings.get('plan_tier') or 'new_user')
+
+    grace = str(settings.get('grace_expires_at') or '')[:10]
+    if grace and grace >= today:
+        return normalize_plan(settings.get('plan_tier') or 'new_user')
+
+    if trial_info(settings).get('active'):
+        return 'ceo'
+
+    return 'new_user'
+
+
 def plan_info(settings=None):
-    raw = None
-    if settings:
-        raw = settings.get('plan_tier')
-    stored = normalize_plan(raw if raw not in (None, '') else 'ceo')
-    trial = trial_info(settings)
-    key = 'ceo' if trial.get('active') else stored
+    settings = settings or {}
+    stored = normalize_plan(settings.get('plan_tier') or 'new_user')
+    key = effective_plan(settings)
     info = dict(PLAN_TIERS[key])
     info['key'] = key
     info['stored_key'] = stored
     info['price'] = package_prices_for(settings).get(key, info.get('price') or 0)
-    info['trial'] = trial
+    info['trial'] = trial_info(settings)
+    info['subscription'] = subscription_info(settings)
+    info['stripe_customer_id'] = str(settings.get('stripe_customer_id') or '')
     return info
 
 
@@ -8733,7 +8788,17 @@ def stripe_webhook():
     if err or not event:
         return ('invalid webhook', 400)
     etype = event.get('type')
+    if etype and etype.startswith('customer.subscription.'):
+        return subscriptions.handle_webhook(get_db, event)
+    if etype in ('invoice.payment_succeeded', 'invoice.payment_failed'):
+        return subscriptions.handle_webhook(get_db, event)
     if etype in ('checkout.session.completed', 'checkout.session.async_payment_succeeded'):
+        # Skip subscription checkouts — subscription lifecycle events
+        # (customer.subscription.created, invoice.payment_succeeded) are
+        # the source of truth. Without this guard, the one-time handler
+        # below would insert a spurious income row for every subscription.
+        if ((event.get('data') or {}).get('object') or {}).get('mode') == 'subscription':
+            return ('', 200)
         sess = event['data']['object']
         meta = sess.get('metadata') or {}
         try:
@@ -8811,9 +8876,11 @@ def plans():
         flutterwave_ready=integrations.flutterwave_ready(settings),
         bank_ready=gateways.bank_ready(settings),
         trial=trial,
-        trial_day_choices=list(range(7, 13)),
+        trial_day_choices=list(range(14, 19)),
         paid_rank=paid_rank,
         is_owner=(getattr(current_user, 'role', 'owner') == 'owner'),
+        subs_configured_tiers=subscriptions.configured_tiers(),
+        subs_any_ready=subscriptions.subs_ready(),
     )
 
 
@@ -8921,7 +8988,7 @@ def start_trial():
         days = int(request.form.get('trial_days') or 12)
     except (TypeError, ValueError):
         days = 12
-    days = min(17, max(7, days))
+    days = min(18, max(14, days))
     ends = (datetime.today() + timedelta(days=days)).strftime('%Y-%m-%d')
     conn = get_db()
     cur = conn.cursor()
@@ -8942,31 +9009,104 @@ def set_plan():
         flash('Only the owner can change the plan.', 'danger')
         return redirect(url_for('plans'))
     wanted = normalize_plan(request.form.get('plan_tier'))
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute('SELECT plan_paid_rank FROM settings WHERE user_id=%s', (current_user.id,))
-    row = cur.fetchone() or {}
-    try:
-        paid_rank = int(row.get('plan_paid_rank') or 0)
-    except (TypeError, ValueError):
-        paid_rank = 0
-    cur.close()
-    conn.close()
-    wanted_rank = PLAN_RANK.get(wanted, 0)
-    wanted_price = float(PLAN_TIERS.get(wanted, {}).get('price') or 0)
-    # Free tier is always reachable. Any paid tier above what the user has
-    # already purchased must go through /plans/upgrade (checkout flow).
-    if wanted_price > 0 and wanted_rank > paid_rank:
-        flash('Pay for that package on the Packages page to unlock it.', 'danger')
+    if wanted != 'new_user':
+        flash('Paid packages are subscribed on the Packages page.', 'danger')
         return redirect(url_for('plans'))
     conn = get_db()
     cur = conn.cursor()
-    cur.execute('UPDATE settings SET plan_tier=%s WHERE user_id=%s', (wanted, current_user.id))
+    cur.execute('SELECT subscription_status FROM settings WHERE user_id=%s', (current_user.id,))
+    row = cur.fetchone() or {}
+    if (row.get('subscription_status') or '').lower() in ('active', 'trialing', 'past_due'):
+        cur.close()
+        conn.close()
+        flash('You have an active subscription. Cancel it from Manage first.', 'danger')
+        return redirect(url_for('plans'))
+    cur.execute('UPDATE settings SET plan_tier=%s WHERE user_id=%s', ('new_user', current_user.id))
     conn.commit()
     cur.close()
     conn.close()
-    flash('Package set to {}.'.format(PLAN_TIERS[wanted]['label']), 'success')
+    flash('Switched to the free tier.', 'success')
     return redirect(url_for('plans'))
+
+
+@app.route('/plans/subscribe/<tier>')
+@login_required
+def subscribe_plan(tier):
+    if getattr(current_user, 'role', 'owner') != 'owner':
+        flash('Only the owner can subscribe.', 'danger')
+        return redirect(url_for('plans'))
+    wanted = normalize_plan(tier)
+    if wanted == 'new_user':
+        flash('Free tier needs no subscription.', 'info')
+        return redirect(url_for('plans'))
+    if not subscriptions.price_id_for(wanted):
+        flash('That package is not available for subscription yet.', 'danger')
+        return redirect(url_for('plans'))
+    settings = _stripe_settings()
+    sub = subscription_info(settings)
+    if sub.get('status') in ('active', 'grace', 'canceled_active'):
+        flash('You already have an active subscription. Use Manage to change it.', 'danger')
+        return redirect(url_for('plans'))
+
+    customer_id, err = subscriptions.get_or_create_customer(
+        settings, current_user.id, current_user.email, current_user.username)
+    if err:
+        flash('Could not reach Stripe: ' + err, 'danger')
+        return redirect(url_for('plans'))
+
+    if customer_id and customer_id != (settings or {}).get('stripe_customer_id'):
+        conn = get_db(); cur = conn.cursor()
+        cur.execute('UPDATE settings SET stripe_customer_id=%s WHERE user_id=%s',
+                    (customer_id, current_user.id))
+        conn.commit(); cur.close(); conn.close()
+
+    success = url_for('plans_sync', _external=True) + '?session_id={CHECKOUT_SESSION_ID}'
+    cancel = url_for('plans', _external=True)
+    session, err = subscriptions.create_subscription_checkout(
+        settings, wanted, customer_id, current_user.id, success, cancel)
+    if err:
+        flash('Could not start subscription: ' + err, 'danger')
+        return redirect(url_for('plans'))
+    return redirect(session.url, code=303)
+
+
+@app.route('/plans/sync')
+@login_required
+def plans_sync():
+    """Landing page while Stripe webhook catches up."""
+    return render_template('plans_sync.html')
+
+
+@app.route('/plans/status')
+@login_required
+def plans_status():
+    """JSON status used by the /plans/sync polling page."""
+    settings = _stripe_settings()
+    sub = subscription_info(settings)
+    return {
+        'active': sub.get('status') in ('active', 'grace', 'canceled_active'),
+        'status': sub.get('status'),
+        'expires': sub.get('expires'),
+    }
+
+
+@app.route('/plans/manage')
+@login_required
+def plans_manage():
+    if getattr(current_user, 'role', 'owner') != 'owner':
+        flash('Only the owner can manage the subscription.', 'danger')
+        return redirect(url_for('plans'))
+    settings = _stripe_settings()
+    customer_id = (settings or {}).get('stripe_customer_id') or ''
+    if not customer_id:
+        flash('No active subscription to manage.', 'info')
+        return redirect(url_for('plans'))
+    return_url = url_for('plans', _external=True)
+    session, err = subscriptions.create_portal_session(settings, customer_id, return_url)
+    if err:
+        flash('Could not open the billing portal: ' + err, 'danger')
+        return redirect(url_for('plans'))
+    return redirect(session.url, code=303)
 
 
 @app.route('/plans/upgrade/<tier>')

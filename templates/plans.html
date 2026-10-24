@@ -1,30 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
 <style>
-.pkg-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 0.9rem;
-    align-items: stretch;
-}
-.pkg-card {
-    padding: 1.2rem 1.15rem 1.2rem;
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    background: var(--surface);
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-    position: relative;
-}
+.pkg-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.9rem; align-items: stretch; }
+.pkg-card { padding: 1.2rem 1.15rem 1.2rem; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); display: flex; flex-direction: column; gap: 0.35rem; }
 .pkg-card h2 { margin: 0; font-size: 1.15rem; }
-.pkg-rank {
-    font-size: 0.68rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--text3);
-    font-weight: 800;
-}
+.pkg-rank { font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text3); font-weight: 800; }
 .pkg-tag { color: var(--text2); font-size: 0.88rem; margin: 0; min-height: 2.6em; }
 .pkg-price { font-family: var(--mono); font-size: 1.35rem; margin: 0.3rem 0 0.4rem; }
 .pkg-price span { font-size: 0.72rem; color: var(--text3); font-family: var(--font); }
@@ -32,41 +12,62 @@
 .pkg-card.is-current { border-color: var(--red-bright); box-shadow: 0 0 0 1px var(--red-bright), 0 12px 28px rgba(0,0,0,0.2); }
 .pkg-card.is-founder { background: linear-gradient(180deg, var(--accent-wash), var(--surface)); }
 .pkg-note { color: var(--text3); font-size: 0.85rem; max-width: 44rem; margin-top: 1.1rem; }
-.pkg-badge {
-    display: inline-block;
-    padding: 3px 10px;
-    border-radius: 999px;
-    font-size: 0.72rem;
-    font-weight: 700;
-    margin-top: 0.4rem;
-}
-.pkg-badge.current { background: var(--green-dim); color: var(--green); }
-.pkg-badge.paid { background: var(--red-glow); color: var(--red-bright); }
+.pkg-badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; margin: 0.4rem 0; }
+.pkg-badge.paid    { background: var(--red-glow); color: var(--red-bright); }
+.pkg-badge.warn    { background: rgba(224,160,48,0.15); color: #e0a030; }
+.sub-panel { padding: 1rem 1.1rem; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); margin-bottom: 1rem; }
 </style>
 
 <div class="page-header">
     <div>
         <h1>Packages</h1>
         <p>You are on <strong>{{ current.label }}</strong> — {{ current.tagline }}</p>
-        {% if trial and trial.active %}
-        <p class="pkg-note" style="margin-top:0.4rem;">Free trial is on. Full CEO tools stay open for <strong>{{ trial.days_left }}</strong> day{{ '' if trial.days_left == 1 else 's' }} (until {{ trial.ends }}).</p>
-        {% elif trial and trial.expired %}
-        <p class="pkg-note" style="margin-top:0.4rem;">The free trial ended on {{ trial.ends }}. Paid packages only unlock after checkout completes.</p>
-        {% endif %}
     </div>
 </div>
 
-{% if is_owner and trial and not trial.started %}
-<div class="widget" style="margin-bottom:1.1rem;">
-    <h2>Free trial</h2>
-    <p style="color:var(--text2);max-width:40rem;">Try the full CEO desk for 7 to 12 days. One trial per shop. Reminder emails go out 3 days out, 1 day out, and when it ends.</p>
+{% set sub = current.subscription %}
+{% if sub and sub.status == 'active' %}
+<div class="sub-panel" style="border-color:var(--green);">
+    <strong style="color:var(--green);">Active subscription</strong>
+    <p style="margin:0.35rem 0 0.6rem;">Renews on <strong>{{ sub.expires }}</strong> ({{ sub.days_left }} day{{ '' if sub.days_left == 1 else 's' }}).</p>
+    {% if is_owner %}<a class="btn-secondary" href="{{ url_for('plans_manage') }}">Manage subscription</a>{% endif %}
+</div>
+{% elif sub and sub.status == 'grace' %}
+<div class="sub-panel" style="border-color:#e74c3c;">
+    <strong style="color:#e74c3c;">Payment failed</strong>
+    <p style="margin:0.35rem 0 0.6rem;">Update your card by <strong>{{ sub.grace }}</strong> ({{ sub.days_left }} day{{ '' if sub.days_left == 1 else 's' }}) or you'll drop to free.</p>
+    {% if is_owner %}<a class="btn-secondary" href="{{ url_for('plans_manage') }}">Update payment</a>{% endif %}
+</div>
+{% elif sub and sub.status == 'canceled_active' %}
+<div class="sub-panel" style="border-color:#e0a030;">
+    <strong style="color:#e0a030;">Canceled</strong>
+    <p style="margin:0.35rem 0 0.6rem;">You keep {{ current.label }} until <strong>{{ sub.expires }}</strong>, then drop to free.</p>
+    {% if is_owner %}<a class="btn-secondary" href="{{ url_for('subscribe_plan', tier=current.stored_key) }}">Reactivate</a>{% endif %}
+</div>
+{% elif sub and sub.status == 'expired' %}
+<div class="sub-panel" style="border-color:#e74c3c;">
+    <strong style="color:#e74c3c;">Subscription expired</strong>
+    <p style="margin:0.35rem 0 0.6rem;">Ended on {{ sub.expires }}. Data is safe. Subscribe again to restore.</p>
+</div>
+{% elif trial and trial.active %}
+<div class="sub-panel" style="border-color:var(--red-bright);">
+    <strong>Trial active</strong>
+    <p style="margin:0.35rem 0 0;">Full CEO tools for <strong>{{ trial.days_left }}</strong> more day{{ '' if trial.days_left == 1 else 's' }} (until {{ trial.ends }}).</p>
+</div>
+{% elif trial and trial.expired %}
+<div class="sub-panel">
+    <p style="margin:0;">Trial ended {{ trial.ends }}. You are now on the free tier.</p>
+</div>
+{% endif %}
+
+{% if is_owner and trial and not trial.started and (not sub or sub.status == 'none') %}
+<div class="sub-panel">
+    <strong>Free trial</strong>
+    <p style="margin:0.35rem 0 0.7rem;color:var(--text2);max-width:40rem;">Try the full CEO desk for 14–18 days. One trial per shop.</p>
     <form method="POST" action="{{ url_for('start_trial') }}" style="display:flex;gap:0.6rem;flex-wrap:wrap;align-items:flex-end;">
-        <div class="form-group">
-            <label>Trial length</label>
+        <div class="form-group"><label>Trial length</label>
             <select name="trial_days">
-                {% for d in trial_day_choices %}
-                <option value="{{ d }}" {% if d == 12 %}selected{% endif %}>{{ d }} days</option>
-                {% endfor %}
+                {% for d in trial_day_choices %}<option value="{{ d }}" {% if d == 14 %}selected{% endif %}>{{ d }} days</option>{% endfor %}
             </select>
         </div>
         <button type="submit">Start free trial</button>
@@ -89,47 +90,33 @@
     <h2>{{ t.label }}</h2>
     <p class="pkg-tag">{{ t.tagline }}</p>
     <p class="pkg-price">
-        {% if t.price %}{{ money(t.price) }} <span>one-time unlock</span>
+        {% if t.price %}${{ '%.0f'|format(t.price) }} <span>per year</span>
         {% else %}Free{% endif %}
     </p>
-    <ul>
-        {% for line in t.highlights %}
-        <li>{{ line }}</li>
-        {% endfor %}
-    </ul>
+    <ul>{% for line in t.highlights %}<li>{{ line }}</li>{% endfor %}</ul>
 
-    {% set paid_ok = (not t.price) or (loop.index0 <= (paid_rank or 0)) %}
-    {% if t.key == current.stored_key %}
-        <span class="pkg-badge current">Current package</span>
-    {% endif %}
-
-    {% if is_owner %}
-        {% if t.price and not paid_ok %}
-            <p style="font-size:0.82rem;color:var(--text3);">Locked until you pay.</p>
-            <div style="display:flex;gap:0.4rem;flex-wrap:wrap;">
-                {% if stripe_ready %}<a class="btn-secondary" href="{{ url_for('pay_plan', tier=t.key) }}?method=stripe">Visa / Mastercard</a>{% endif %}
-                {% if paypal_ready %}<a class="btn-secondary" href="{{ url_for('pay_plan', tier=t.key) }}?method=paypal">PayPal</a>{% endif %}
-                {% if flutterwave_ready %}<a class="btn-secondary" href="{{ url_for('pay_plan', tier=t.key) }}?method=flutterwave">Card / MoMo</a>{% endif %}
-                {% if bank_ready %}<a class="btn-secondary" href="{{ url_for('pay_plan', tier=t.key) }}?method=bank">Current account</a>{% endif %}
-            </div>
-        {% elif t.price and paid_ok %}
-            <span class="pkg-badge paid">Unlocked (paid)</span>
-            {% if t.key != current.stored_key %}
-            <form method="POST" action="{{ url_for('set_plan') }}">
-                <input type="hidden" name="plan_tier" value="{{ t.key }}">
-                <button type="submit" class="btn-secondary">Use {{ t.label }}</button>
-            </form>
-            {% endif %}
-        {% elif not t.price and t.key != current.stored_key %}
+    {% if t.key == current.stored_key and sub.status in ('active', 'grace', 'canceled_active') %}
+        <span class="pkg-badge {% if sub.status != 'active' %}warn{% else %}paid{% endif %}">
+            {% if sub.status == 'active' %}Subscribed until {{ sub.expires }}
+            {% elif sub.status == 'grace' %}Payment failed
+            {% else %}Canceled — until {{ sub.expires }}{% endif %}
+        </span>
+        {% if is_owner %}<a class="btn-secondary" href="{{ url_for('plans_manage') }}">Manage</a>{% endif %}
+    {% elif t.price and is_owner %}
+        {% if t.key in subs_configured_tiers %}
+        <a class="btn-secondary" href="{{ url_for('subscribe_plan', tier=t.key) }}">Subscribe — ${{ '%.0f'|format(t.price) }}/year</a>
+        {% else %}
+        <p style="font-size:0.8rem;color:var(--text3);">Not available for subscription yet.</p>
+        {% endif %}
+    {% elif not t.price and t.key != current.key %}
         <form method="POST" action="{{ url_for('set_plan') }}">
             <input type="hidden" name="plan_tier" value="{{ t.key }}">
-            <button type="submit" class="btn-secondary">Switch to New user</button>
+            <button type="submit" class="btn-secondary">Switch to free</button>
         </form>
-        {% endif %}
     {% endif %}
 </article>
 {% endfor %}
 </div>
 
-<p class="pkg-note">Five packages. Existing customers keep the highest tier they paid for — grandfathering is permanent. Unlocks use Stripe (Visa/Mastercard), PayPal, Flutterwave, or a current-account transfer — whichever you switched on in Settings. <code>/plans</code> and <code>/packages</code> both work.</p>
+<p class="pkg-note">Billed yearly in USD. Existing customers keep the highest tier they paid for. Your display currency in Settings is still used on screens and PDFs — the subscription charge itself is always USD.</p>
 {% endblock %}

@@ -38,14 +38,8 @@ def stripe_ready(settings=None):
 
 
 def currency_code(settings=None):
-    env = (os.environ.get('STRIPE_CURRENCY') or '').strip().upper()
-    shop = ''
-    if settings:
-        shop = str(settings.get('currency_code') or '').strip().upper()
-    code = env or shop or 'USD'
-    if len(code) != 3:
-        code = 'USD'
-    return code
+    # Subscriptions are billed in USD. Fixed for the launch model.
+    return 'USD'
 
 
 def to_stripe_amount(amount, currency='USD'):
@@ -100,6 +94,7 @@ def create_checkout(settings, *, amount, title, success_url, cancel_url, metadat
                 },
             }],
             'metadata': {str(k): str(v)[:500] for k, v in (metadata or {}).items()},
+            'managed_payments': {'enabled': False},
         }
         if embedded:
             payload['ui_mode'] = 'embedded'

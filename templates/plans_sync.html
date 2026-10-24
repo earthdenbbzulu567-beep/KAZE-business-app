@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Activating subscription{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Activating your subscription</h1>
+        <p>Stripe confirmed your payment. Waiting for the webhook — this usually takes 2-10 seconds.</p>
+    </div>
+</div>
+
+<div class="widget" style="text-align:center;padding:2rem;">
+    <div id="status-icon" style="font-size:3rem;line-height:1;">⏳</div>
+    <p id="status-text" style="margin:1rem 0 0;color:var(--text2);">Checking subscription status…</p>
+    <p id="fallback" style="margin:1.5rem 0 0;font-size:0.85rem;color:var(--text3);" hidden>
+        Still processing. <a href="{{ url_for('plans') }}">Click here</a> to continue — the tier may update in a few seconds.
+    </p>
+</div>
+
+<script>
+(function(){
+    var attempts = 0;
+    var maxAttempts = 15;
+    var statusText = document.getElementById('status-text');
+    var statusIcon = document.getElementById('status-icon');
+    var fallback = document.getElementById('fallback');
+
+    function poll() {
+        attempts++;
+        statusText.textContent = 'Checking… (' + attempts + '/' + maxAttempts + ')';
+        fetch('{{ url_for("plans_status") }}', { credentials: 'same-origin' })
+            .then(function(r){ return r.json(); })
+            .then(function(d){
+                if (d && d.active) {
+                    statusIcon.textContent = '✅';
+                    statusText.textContent = 'Subscription active. Redirecting…';
+                    window.location = '{{ url_for("plans") }}';
+                    return;
+                }
+                if (attempts >= maxAttempts) {
+                    statusIcon.textContent = '⚠️';
+                    statusText.textContent = 'Webhook still pending.';
+                    fallback.hidden = false;
+                    return;
+                }
+                setTimeout(poll, 2000);
+            })
+            .catch(function(){
+                if (attempts >= maxAttempts) {
+                    fallback.hidden = false;
+                    return;
+                }
+                setTimeout(poll, 2000);
+            });
+    }
+    setTimeout(poll, 1500);
+})();
+</script>
+{% endblock %}
