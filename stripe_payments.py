@@ -108,6 +108,27 @@ def create_checkout(settings, *, amount, title, success_url, cancel_url, metadat
         return None, 'Stripe could not start checkout: {}'.format(exc)
 
 
+def _kaze_event_to_dict(event):
+    """Stripe SDK 16.0.0+ returns StripeObject, not dict. Convert it.
+    Every handler downstream expects dicts so .get() and [...] work."""
+    if event is None:
+        return None
+    if isinstance(event, dict):
+        return event
+    try:
+        if hasattr(event, 'to_dict_recursive'):
+            return event.to_dict_recursive()
+        if hasattr(event, 'to_dict'):
+            return event.to_dict()
+    except Exception:
+        pass
+    try:
+        import json as _json
+        return _json.loads(str(event))
+    except Exception:
+        return None
+
+
 def parse_webhook(payload, sig_header, settings=None):
     _, _, webhook = keys_from(settings)
     if not stripe_available():
@@ -117,6 +138,9 @@ def parse_webhook(payload, sig_header, settings=None):
         return None, 'STRIPE_WEBHOOK_SECRET is not set.'
     try:
         event = stripe.Webhook.construct_event(payload, sig_header, webhook)
+        event = _kaze_event_to_dict(event)
+        if event is None:
+            return None, 'Event parsed but could not be converted to dict.'
         return event, None
     except Exception as exc:
         return None, str(exc)
