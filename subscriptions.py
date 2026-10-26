@@ -74,15 +74,32 @@ def _unix_to_iso(ts):
 
 
 def _first_period_end(sub_obj):
-    if not sub_obj:
-        return None
-    items = sub_obj.get('items') or {}
-    data = items.get('data') or []
-    if data:
-        end = data[0].get('current_period_end')
+    """Return unix timestamp of the current period end, or a sane fallback.
+
+    Stripe moved current_period_end between API versions:
+      - Older: at sub.current_period_end
+      - 2025-03-31+: at sub.items.data[0].current_period_end
+    Some events (or future API versions) may not include it at all.
+    In that case, fall back to +365 days (all KAZE plans are yearly).
+    """
+    if sub_obj:
+        items = sub_obj.get('items') or {}
+        data = items.get('data') or []
+        if data:
+            end = data[0].get('current_period_end')
+            if end:
+                return int(end)
+        end = sub_obj.get('current_period_end')
         if end:
-            return end
-    return sub_obj.get('current_period_end')
+            return int(end)
+    # Sane fallback: +365 days from now (all KAZE plans are yearly).
+    import sys as _sys
+    import time as _time
+    _sys.stderr.write(
+        'KAZE WARN: _first_period_end could not find current_period_end; '
+        'falling back to now+365 days\n'
+    )
+    return int(_time.time()) + 365 * 86400
 
 
 # ── Customer + Checkout ─────────────────────────────────────────────
@@ -290,7 +307,8 @@ def handle_invoice_succeeded(get_db, event):
         try:
             period_end = inv['lines']['data'][0]['period']['end']
         except (KeyError, IndexError, TypeError):
-            period_end = int(datetime.today().timestamp()) + 365 * 86400
+            import time as _time
+            period_end = int(_time.time()) + 365 * 86400
     expires_iso = _unix_to_iso(period_end)
     conn = get_db()
     cur = conn.cursor()
