@@ -967,6 +967,7 @@ def init_db():
     cur.execute("ALTER TABLE service_sessions ADD COLUMN IF NOT EXISTS stripe_checkout_id TEXT DEFAULT ''")
     cur.execute("ALTER TABLE bookkeeping_docs ADD COLUMN IF NOT EXISTS stripe_checkout_id TEXT DEFAULT ''")
     cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS stripe_checkout_id TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS received_date TEXT DEFAULT ''")
 
     conn.commit()
     cur.close()
@@ -2009,6 +2010,7 @@ NAV_GROUPS = (
     ('Analytics', (
         ('Sales analytics', 'sales_analytics', 'bar-chart-3', 'sales', ('sales_analytics',)),
         ('Customer analytics', 'customers_analytics', 'users', 'customers', ('customers_analytics',)),
+        ('Inventory analytics', 'stock_analytics', 'package-search', 'stock', ('stock_analytics',)),
     )),
     ('Trade', (
         ('Shop', 'shop', 'store', 'shop', ('shop',)),
@@ -5327,7 +5329,10 @@ def receive_purchase_order(id):
     if not po:
         flash('Purchase order not found.', 'danger')
         return redirect(url_for('purchase_orders'))
-    cur.execute("UPDATE purchase_orders SET status = 'received' WHERE id = %s", (id,))
+    cur.execute(
+        "UPDATE purchase_orders SET status = 'received', received_date = %s WHERE id = %s",
+        (datetime.today().strftime('%Y-%m-%d'), id),
+    )
     if po['stock_id']:
         cur.execute('UPDATE stock SET quantity = quantity + %s WHERE id = %s AND user_id = %s',
                     (po['quantity'], po['stock_id'], current_user.id))
@@ -11637,10 +11642,6 @@ def supreme():
 _DISABLED_PATHS = frozenset({
     '/collections/schedule',
     '/collections/aging',
-    '/stock/abc',
-    '/suppliers/lead-time',
-    '/suppliers/reliability',
-    '/purchase-orders/autofill',
     '/bookkeeping/anomaly-scan',
     '/bookkeeping/duplicate-check',
     '/accounts/integrity',
@@ -11968,6 +11969,174 @@ def redirect_customers_churn():
 @login_required
 def redirect_customers_lifetime():
     return redirect(url_for('customers_analytics') + '#lifetime', code=301)
+
+
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Batch 2b — Inventory Analytics (consolidated from 3 disabled routes)
+# ═══════════════════════════════════════════════════════════════════════
+
+_bind_module('stock',
+    'stock_analytics',
+    'redirect_stock_abc',
+    'redirect_supplier_leadtime', 'redirect_supplier_reliability',
+    'redirect_po_autofill')
+
+
+@app.route('/stock/analytics')
+@login_required
+def stock_analytics():
+    uid = current_user.id
+    conn = get_db(); cur = conn.cursor()
+
+    # ── ABC analysis ─────────────────────────────────────
+    cur.execute("""
+        SELECT product_name, revenue,
+               SUM(revenue) OVER (ORDER BY revenue DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cum_rev,
+               SUM(revenue) OVER () AS total_rev
+        FROM (
+            SELECT COALESCE(st.product_name, 'Item') AS product_name,
+                   COALESCE(SUM(s.total_amount),0) AS revenue
+            FROM sales s LEFT JOIN stock st ON st.id = s.stock_id
+            WHERE s.user_id=%s
+              AND s.sale_date >= to_char(CURRENT_DATE - INTERVAL '90 days','YYYY-MM-DD')
+            GROUP BY st.product_name
+            HAVING SUM(s.total_amount) > 0
+        ) t
+        ORDER BY revenue DESC
+    """, (uid,))
+
+    abc_rows = []
+    for r in (cur.fetchall() or []):
+        rev = float(r.get('revenue') or 0)
+        cum = float(r.get('cum_rev') or 0)
+        tot = float(r.get('total_rev') or 0)
+        cum_pct = (cum / tot * 100) if tot else 0
+        if cum_pct <= 80:
+            cls = 'A'
+        elif cum_pct <= 95:
+            cls = 'B'
+        else:
+            cls = 'C'
+        abc_rows.append({
+            'name': r.get('product_name') or 'Item',
+            'revenue': rev,
+            'share_pct': round(rev / tot * 100, 1) if tot else 0,
+            'cum_pct': round(cum_pct, 1),
+            'class': cls,
+        })
+
+    abc_totals = {'A': 0, 'B': 0, 'C': 0}
+    for r in abc_rows:
+        abc_totals[r['class']] += r['revenue']
+
+    # ── Lead times ───────────────────────────────────────
+    cur.execute("""
+        SELECT s.name,
+               COUNT(po.id) AS n,
+               AVG(EXTRACT(EPOCH FROM (po.received_date::timestamp - po.order_date::timestamp)) / 86400.0) AS avg_days,
+               MIN(EXTRACT(EPOCH FROM (po.received_date::timestamp - po.order_date::timestamp)) / 86400.0) AS min_days,
+               MAX(EXTRACT(EPOCH FROM (po.received_date::timestamp - po.order_date::timestamp)) / 86400.0) AS max_days
+        FROM purchase_orders po
+        JOIN suppliers s ON s.id = po.supplier_id
+        WHERE po.user_id=%s
+          AND po.status = 'received'
+          AND COALESCE(po.received_date, '') <> ''
+          AND COALESCE(po.order_date, '') <> ''
+        GROUP BY s.id, s.name
+        ORDER BY avg_days ASC
+    """, (uid,))
+
+    lead_rows = []
+    for r in (cur.fetchall() or []):
+        lead_rows.append({
+            'name': r.get('name') or 'Supplier',
+            'orders': int(r.get('n') or 0),
+            'avg_days': round(float(r.get('avg_days') or 0), 1),
+            'min_days': round(float(r.get('min_days') or 0), 1),
+            'max_days': round(float(r.get('max_days') or 0), 1),
+        })
+
+    # ── Reliability (on-time %) ──────────────────────────
+    cur.execute("""
+        SELECT s.name,
+               COUNT(po.id) AS total,
+               SUM(CASE WHEN po.expected_date <> ''
+                         AND po.received_date <= po.expected_date
+                        THEN 1 ELSE 0 END) AS on_time,
+               SUM(CASE WHEN po.expected_date = ''
+                        THEN 1 ELSE 0 END) AS no_expectation
+        FROM purchase_orders po
+        JOIN suppliers s ON s.id = po.supplier_id
+        WHERE po.user_id=%s
+          AND po.status = 'received'
+          AND COALESCE(po.received_date, '') <> ''
+        GROUP BY s.id, s.name
+        ORDER BY s.name
+    """, (uid,))
+
+    rel_rows = []
+    for r in (cur.fetchall() or []):
+        total = int(r.get('total') or 0)
+        on_time = int(r.get('on_time') or 0)
+        no_exp = int(r.get('no_expectation') or 0)
+        judged = total - no_exp
+        pct = round(on_time / judged * 100, 1) if judged else 0.0
+        if judged == 0:
+            flag = ''
+        elif pct >= 90:
+            flag = 'ok'
+        elif pct >= 70:
+            flag = 'warn'
+        else:
+            flag = 'danger'
+        rel_rows.append({
+            'name': r.get('name') or 'Supplier',
+            'total': total,
+            'judged': judged,
+            'no_expectation': no_exp,
+            'on_time': on_time,
+            'on_time_pct': pct,
+            'flag': flag,
+        })
+
+    cur.close(); conn.close()
+
+    total_revenue_90d = sum(r['revenue'] for r in abc_rows)
+    return render_template('stock_analytics.html',
+        abc_rows=abc_rows,
+        abc_totals=abc_totals,
+        abc_count=len(abc_rows),
+        total_revenue_90d=total_revenue_90d,
+        lead_rows=lead_rows,
+        rel_rows=rel_rows,
+    )
+
+
+# Redirects from original routes
+@app.route('/stock/abc')
+@login_required
+def redirect_stock_abc():
+    return redirect(url_for('stock_analytics') + '#abc', code=301)
+
+
+@app.route('/suppliers/lead-time')
+@login_required
+def redirect_supplier_leadtime():
+    return redirect(url_for('stock_analytics') + '#leadtime', code=301)
+
+
+@app.route('/suppliers/reliability')
+@login_required
+def redirect_supplier_reliability():
+    return redirect(url_for('stock_analytics') + '#reliability', code=301)
+
+
+@app.route('/purchase-orders/autofill')
+@login_required
+def redirect_po_autofill():
+    return redirect(url_for('stock_reorder_optimizer'), code=301)
 
 
 if __name__ == '__main__':
