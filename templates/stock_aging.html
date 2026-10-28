@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Stock Aging{% endblock %}
+{% block content %}
+<div class="page-header"><div><h1><i data-lucide="clock"></i> Stock Aging</h1>
+<p>How long each product has been sitting unsold. Capital tied up grows with age.</p></div></div>
+{% if items %}
+<div class="stat-grid">
+  <div class="stat-chip"><span>Products</span><strong>{{ items|length }}</strong></div>
+  <div class="stat-chip"><span>Never sold</span><strong>{{ items|selectattr('days_aging','ge',900)|list|length }}</strong></div>
+  <div class="stat-chip"><span>Over 90 days</span><strong>{{ items|selectattr('days_aging','ge',90)|list|length }}</strong></div>
+  <div class="stat-chip"><span>Over 60 days</span><strong>{{ items|selectattr('days_aging','ge',60)|list|length }}</strong></div>
+</div>
+<div class="table-wrapper"><table>
+<thead><tr><th>Product</th><th>Qty</th><th>Last Sold</th><th>Days Aging</th><th>Cost Tied Up</th><th>Selling Value</th></tr></thead>
+<tbody>
+{% for i in items %}
+<tr {% if i.days_aging >= 90 %}style="background:var(--danger-dim);"{% elif i.days_aging >= 60 %}style="background:rgba(224,160,48,0.08);"{% endif %}>
+  <td>{{ i.product_name }}</td><td>{{ i.quantity }}</td><td>{{ i.last_sold }}</td>
+  <td>{{ 'never' if i.days_aging >= 900 else i.days_aging ~ ' days' }}</td>
+  <td>{{ money(i.tied_up) }}</td><td>{{ money(i.quantity * i.selling_price) }}</td>
+</tr>
+{% endfor %}
+</tbody></table></div>
+{% else %}
+<div class="widget"><p style="color:var(--text3);">No stock items yet. Add products on the <a href="{{ url_for('stock') }}">Stock</a> page.</p></div>
+{% endif %}
+{% endblock %}

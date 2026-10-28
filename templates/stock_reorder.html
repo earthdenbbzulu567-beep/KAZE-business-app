@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Reorder Optimizer{% endblock %}
+{% block content %}
+<div class="page-header"><div><h1><i data-lucide="package-plus"></i> Reorder Optimizer</h1>
+<p>Suggested order quantities based on 14-day sales velocity and current stock.</p></div>
+<a href="{{ url_for('purchase_orders') }}" class="btn-secondary">Open purchase orders</a></div>
+{% if suggestions %}
+<div class="table-wrapper"><table>
+<thead><tr><th>Product</th><th>Current</th><th>Vel/day</th><th>Days left</th><th>Suggested</th><th>Est. Cost</th></tr></thead>
+<tbody>
+{% for s in suggestions %}
+<tr {% if s.days_left is number and s.days_left < 7 %}style="background:var(--danger-dim);"{% elif s.days_left is number and s.days_left < 14 %}style="background:rgba(224,160,48,0.08);"{% endif %}>
+  <td>{{ s.product_name }}</td><td>{{ s.quantity }}</td><td>{{ s.velocity }}</td>
+  <td>{{ s.days_left }}</td><td>{{ s.suggested }}</td><td>{{ money(s.cost_estimate) }}</td>
+</tr>
+{% endfor %}
+</tbody></table></div>
+<p style="margin-top:1rem;font-size:0.85rem;color:var(--text3);">Suggested quantities aim for 21 days of stock at current velocity. Use <a href="{{ url_for('stock') }}">Stock</a> → Reorder low stock to auto-create draft POs.</p>
+{% else %}
+<div class="widget"><p style="color:var(--text3);">All stock is currently healthy — no reorder suggestions.</p></div>
+{% endif %}
+{% endblock %}

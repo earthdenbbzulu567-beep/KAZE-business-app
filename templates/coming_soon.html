@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Coming soon{% endblock %}
+{% block content %}
+<div class="page-header"><div><h1><i data-lucide="hourglass"></i> Coming soon</h1>
+<p>This page is being built as part of an ongoing feature update.</p></div></div>
+<div class="widget">
+  <p style="color:var(--text2);">The page you requested — <code>{{ path }}</code> — is on the roadmap but hasn't shipped yet. It will land in an upcoming release.</p>
+  <p style="margin-top:1rem;"><a href="{{ url_for('dashboard') }}" class="btn-secondary">Back to dashboard</a></p>
+</div>
+{% endblock %}
