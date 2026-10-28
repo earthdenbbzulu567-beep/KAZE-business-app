@@ -2006,6 +2006,10 @@ NAV_GROUPS = (
         ('Banking', 'banking', 'landmark', 'banking', ('banking',)),
         ('Payments', 'payments', 'credit-card', None, ('payments',)),
     )),
+    ('Analytics', (
+        ('Sales analytics', 'sales_analytics', 'bar-chart-3', 'sales', ('sales_analytics',)),
+        ('Customer analytics', 'customers_analytics', 'users', 'customers', ('customers_analytics',)),
+    )),
     ('Trade', (
         ('Shop', 'shop', 'store', 'shop', ('shop',)),
         ('Purchase orders', 'purchase_orders', 'shopping-cart', 'operations', ('purchase_orders',)),
@@ -11631,11 +11635,6 @@ def supreme():
 
 # ── Disabled pending rebuild (Batch 2+) ────────────────────
 _DISABLED_PATHS = frozenset({
-    '/sales/margin-alert',
-    '/sales/velocity',
-    '/sales/repeat-rate',
-    '/customers/churn-risk',
-    '/customers/lifetime',
     '/collections/schedule',
     '/collections/aging',
     '/stock/abc',
@@ -11684,6 +11683,291 @@ _DISABLED_PATHS = frozenset({
 def _kaze_block_disabled():
     if request.path in _DISABLED_PATHS:
         return render_template('coming_soon.html', path=request.path), 200
+
+
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Batch 2a — Sales & Customer Analytics (consolidated from 5 disabled routes)
+# ═══════════════════════════════════════════════════════════════════════
+
+_bind_module('sales',
+    'sales_analytics',
+    'redirect_sales_margin', 'redirect_sales_velocity', 'redirect_sales_repeat')
+_bind_module('customers',
+    'customers_analytics',
+    'redirect_customers_churn', 'redirect_customers_lifetime')
+
+
+@app.route('/sales/analytics')
+@login_required
+def sales_analytics():
+    uid = current_user.id
+    conn = get_db(); cur = conn.cursor()
+
+    # ── Margin alert ─────────────────────────────────────
+    cur.execute("""
+        SELECT COALESCE(st.product_name, 'Item') AS name,
+               COALESCE(SUM(s.quantity_sold),0) AS units,
+               COALESCE(SUM(s.total_amount),0) AS revenue,
+               COALESCE(SUM(s.profit),0) AS profit,
+               COUNT(*) AS tickets
+        FROM sales s LEFT JOIN stock st ON st.id = s.stock_id
+        WHERE s.user_id=%s
+          AND s.sale_date >= to_char(CURRENT_DATE - INTERVAL '90 days','YYYY-MM-DD')
+        GROUP BY st.product_name
+        HAVING COUNT(*) >= 3
+        ORDER BY (COALESCE(SUM(s.profit),0) / NULLIF(COALESCE(SUM(s.total_amount),0), 0)) ASC
+        LIMIT 15
+    """, (uid,))
+    margin_rows = []
+    for r in (cur.fetchall() or []):
+        rev = float(r.get('revenue') or 0)
+        pft = float(r.get('profit') or 0)
+        if rev > 0:
+            margin_pct = round(pft / rev * 100, 1)
+        else:
+            margin_pct = 0.0
+        margin_rows.append({
+            'name': r.get('name') or 'Item',
+            'units': float(r.get('units') or 0),
+            'revenue': rev, 'profit': pft,
+            'margin_pct': margin_pct,
+            'tickets': int(r.get('tickets') or 0),
+        })
+
+    # ── Velocity ─────────────────────────────────────────
+    cur.execute("""
+        SELECT COALESCE(st.product_name, 'Item') AS name,
+               COALESCE(st.quantity, 0) AS stock,
+               COALESCE(SUM(s.quantity_sold),0) AS units_14d
+        FROM stock st
+        LEFT JOIN sales s ON s.stock_id = st.id AND s.user_id=%s
+            AND s.sale_date >= to_char(CURRENT_DATE - INTERVAL '14 days','YYYY-MM-DD')
+        WHERE st.user_id=%s
+        GROUP BY st.id, st.product_name, st.quantity
+        HAVING COALESCE(SUM(s.quantity_sold),0) > 0
+        ORDER BY (COALESCE(SUM(s.quantity_sold),0) / 14.0) DESC
+        LIMIT 20
+    """, (uid, uid))
+    velocity_rows = []
+    for r in (cur.fetchall() or []):
+        vel = float(r.get('units_14d') or 0) / 14.0
+        stock = float(r.get('stock') or 0)
+        days_left = (stock / vel) if vel > 0 else 999
+        velocity_rows.append({
+            'name': r.get('name') or 'Item',
+            'units_14d': float(r.get('units_14d') or 0),
+            'velocity': round(vel, 2),
+            'stock': stock,
+            'days_left': round(days_left, 1) if days_left < 900 else '∞',
+            'flag': ('danger' if days_left < 7 else
+                     'warn' if days_left < 14 else ''),
+        })
+
+    # ── Repeat rate ──────────────────────────────────────
+    cur.execute("""
+        SELECT COUNT(*) AS total,
+               SUM(CASE WHEN cnt >= 2 THEN 1 ELSE 0 END) AS repeaters
+        FROM (
+            SELECT customer_id, COUNT(*) AS cnt
+            FROM sales
+            WHERE user_id=%s AND customer_id IS NOT NULL
+            GROUP BY customer_id
+        ) t
+    """, (uid,))
+    rr = cur.fetchone() or {}
+    total_customers = int(rr.get('total') or 0)
+    repeaters = int(rr.get('repeaters') or 0)
+    one_timers = total_customers - repeaters
+    repeat_pct = round(repeaters / total_customers * 100, 1) if total_customers else 0.0
+
+    # Top 15 repeat customers for context
+    cur.execute("""
+        SELECT COALESCE(c.name, 'Walk-in') AS name,
+               COUNT(s.id) AS orders,
+               COALESCE(SUM(s.total_amount),0) AS spent
+        FROM sales s JOIN customers c ON c.id = s.customer_id
+        WHERE s.user_id=%s
+        GROUP BY c.id, c.name
+        HAVING COUNT(s.id) >= 2
+        ORDER BY spent DESC
+        LIMIT 15
+    """, (uid,))
+    repeat_list = [
+        {'name': r.get('name') or 'Customer',
+         'orders': int(r.get('orders') or 0),
+         'spent': float(r.get('spent') or 0)}
+        for r in (cur.fetchall() or [])
+    ]
+
+    # ── Top stats ────────────────────────────────────────
+    cur.execute("""
+        SELECT COALESCE(SUM(total_amount),0) AS revenue,
+               COALESCE(SUM(profit),0) AS profit,
+               COUNT(*) AS tickets
+        FROM sales WHERE user_id=%s
+    """, (uid,))
+    totals = cur.fetchone() or {}
+    total_revenue = float(totals.get('revenue') or 0)
+    total_profit = float(totals.get('profit') or 0)
+    total_tickets = int(totals.get('tickets') or 0)
+    overall_margin = round(total_profit / total_revenue * 100, 1) if total_revenue else 0.0
+
+    cur.close(); conn.close()
+
+    return render_template('sales_analytics.html',
+        margin_rows=margin_rows,
+        velocity_rows=velocity_rows,
+        repeat_list=repeat_list,
+        total_customers=total_customers,
+        repeaters=repeaters,
+        one_timers=one_timers,
+        repeat_pct=repeat_pct,
+        total_revenue=total_revenue,
+        total_profit=total_profit,
+        total_tickets=total_tickets,
+        overall_margin=overall_margin,
+    )
+
+
+@app.route('/customers/analytics')
+@login_required
+def customers_analytics():
+    uid = current_user.id
+    conn = get_db(); cur = conn.cursor()
+
+    # ── Churn risk ───────────────────────────────────────
+    cur.execute("""
+        SELECT c.id, c.name,
+               MAX(s.sale_date) AS last_sale,
+               COUNT(s.id) AS orders,
+               COALESCE(SUM(s.total_amount),0) AS spent
+        FROM customers c
+        JOIN sales s ON s.customer_id = c.id AND s.user_id = c.user_id
+        WHERE c.user_id = %s
+        GROUP BY c.id, c.name
+        HAVING COUNT(s.id) > 0
+        ORDER BY MAX(s.sale_date) ASC
+        LIMIT 30
+    """, (uid,))
+    churn_rows = []
+    today = datetime.today().date()
+    for r in (cur.fetchall() or []):
+        last = (r.get('last_sale') or '')[:10]
+        try:
+            days = (today - datetime.strptime(last, '%Y-%m-%d').date()).days if last else 9999
+        except ValueError:
+            days = 9999
+        flag = 'danger' if days >= 90 else ('warn' if days >= 60 else '')
+        churn_rows.append({
+            'id': r.get('id'),
+            'name': r.get('name') or 'Customer',
+            'last_sale': last or 'never',
+            'days': days,
+            'orders': int(r.get('orders') or 0),
+            'spent': float(r.get('spent') or 0),
+            'flag': flag,
+        })
+
+    # ── Lifetime value ───────────────────────────────────
+    cur.execute("""
+        SELECT c.id, c.name,
+               COUNT(s.id) AS orders,
+               COALESCE(SUM(s.total_amount),0) AS spent,
+               MAX(s.sale_date) AS last_sale,
+               COALESCE(MIN(s.sale_date), '') AS first_sale
+        FROM customers c
+        JOIN sales s ON s.customer_id = c.id AND s.user_id = c.user_id
+        WHERE c.user_id = %s
+        GROUP BY c.id, c.name
+        ORDER BY spent DESC
+        LIMIT 20
+    """, (uid,))
+    ltv_rows = []
+    for r in (cur.fetchall() or []):
+        orders = int(r.get('orders') or 0)
+        spent = float(r.get('spent') or 0)
+        last = (r.get('last_sale') or '')[:10]
+        try:
+            days_since = (today - datetime.strptime(last, '%Y-%m-%d').date()).days if last else 9999
+        except ValueError:
+            days_since = 9999
+        ltv_rows.append({
+            'id': r.get('id'),
+            'name': r.get('name') or 'Customer',
+            'orders': orders,
+            'spent': spent,
+            'aov': round(spent / orders, 2) if orders else 0,
+            'days_since': days_since,
+        })
+
+    # ── Top stats ────────────────────────────────────────
+    cur.execute("SELECT COUNT(*) AS n FROM customers WHERE user_id=%s", (uid,))
+    total_customers = int((cur.fetchone() or {}).get('n') or 0)
+
+    cur.execute("""
+        SELECT COUNT(DISTINCT customer_id) AS n
+        FROM sales
+        WHERE user_id=%s AND customer_id IS NOT NULL
+          AND sale_date >= to_char(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD')
+    """, (uid,))
+    active_30d = int((cur.fetchone() or {}).get('n') or 0)
+
+    cur.execute("""
+        SELECT COALESCE(AVG(total_spent),0) AS aov
+        FROM (
+            SELECT customer_id, SUM(total_amount) AS total_spent
+            FROM sales
+            WHERE user_id=%s AND customer_id IS NOT NULL
+            GROUP BY customer_id
+        ) t
+    """, (uid,))
+    avg_ltv = float((cur.fetchone() or {}).get('aov') or 0)
+
+    churn_count = sum(1 for r in churn_rows if r['flag'] in ('danger', 'warn'))
+
+    cur.close(); conn.close()
+
+    return render_template('customers_analytics.html',
+        churn_rows=churn_rows,
+        ltv_rows=ltv_rows,
+        total_customers=total_customers,
+        active_30d=active_30d,
+        avg_ltv=avg_ltv,
+        churn_count=churn_count,
+    )
+
+
+# Redirects from the old URLs into the new tabs
+@app.route('/sales/margin-alert')
+@login_required
+def redirect_sales_margin():
+    return redirect(url_for('sales_analytics') + '#margin', code=301)
+
+
+@app.route('/sales/velocity')
+@login_required
+def redirect_sales_velocity():
+    return redirect(url_for('sales_analytics') + '#velocity', code=301)
+
+
+@app.route('/sales/repeat-rate')
+@login_required
+def redirect_sales_repeat():
+    return redirect(url_for('sales_analytics') + '#repeat', code=301)
+
+
+@app.route('/customers/churn-risk')
+@login_required
+def redirect_customers_churn():
+    return redirect(url_for('customers_analytics') + '#churn', code=301)
+
+
+@app.route('/customers/lifetime')
+@login_required
+def redirect_customers_lifetime():
+    return redirect(url_for('customers_analytics') + '#lifetime', code=301)
 
 
 if __name__ == '__main__':

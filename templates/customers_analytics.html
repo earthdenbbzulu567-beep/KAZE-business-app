@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Customer Analytics{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1><i data-lucide="users"></i> Customer Analytics</h1>
+    <p>Churn risk and lifetime value — computed live from your customers and sales.</p>
+  </div>
+</div>
+
+<div class="stat-grid">
+  <div class="stat-chip"><span>Total customers</span><strong>{{ total_customers }}</strong></div>
+  <div class="stat-chip"><span>Active last 30d</span><strong>{{ active_30d }}</strong></div>
+  <div class="stat-chip"><span>Churn risk</span><strong>{{ churn_count }}</strong></div>
+  <div class="stat-chip"><span>Avg lifetime value</span><strong>{{ money(avg_ltv) }}</strong></div>
+</div>
+
+<nav class="analytics-tabs" role="tablist">
+  <button type="button" data-tab="churn" class="is-on">Churn risk</button>
+  <button type="button" data-tab="lifetime">Lifetime value</button>
+</nav>
+
+<section class="analytics-panel is-on" id="panel-churn">
+  {% if churn_rows %}
+  <h2>Churn risk</h2>
+  <p style="color:var(--text3);font-size:0.85rem;margin:-0.4rem 0 0.8rem;">Customers with at least one purchase, sorted by days since last purchase. Red = 90+ days, amber = 60-90 days.</p>
+  <div class="table-wrapper">
+    <table>
+      <thead><tr><th>Customer</th><th>Last purchase</th><th>Days since</th><th>Orders</th><th>Total spent</th></tr></thead>
+      <tbody>
+      {% for r in churn_rows %}
+      <tr {% if r.flag == 'danger' %}style="background:var(--danger-dim);"{% elif r.flag == 'warn' %}style="background:rgba(224,160,48,0.08);"{% endif %}>
+        <td>{{ r.name }}</td>
+        <td>{{ r.last_sale }}</td>
+        <td>{{ 'never' if r.days >= 9000 else r.days ~ 'd' }}</td>
+        <td>{{ r.orders }}</td>
+        <td>{{ money(r.spent) }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="widget"><p style="color:var(--text3);">No customer-linked sales yet. Attach customers to sales to see churn risk.</p></div>
+  {% endif %}
+</section>
+
+<section class="analytics-panel" id="panel-lifetime">
+  {% if ltv_rows %}
+  <h2>Lifetime value (top 20)</h2>
+  <p style="color:var(--text3);font-size:0.85rem;margin:-0.4rem 0 0.8rem;">Ranked by total spend. AOV is per-ticket average.</p>
+  <div class="table-wrapper">
+    <table>
+      <thead><tr><th>Customer</th><th>Orders</th><th>Total spent</th><th>AOV</th><th>Days since last</th></tr></thead>
+      <tbody>
+      {% for r in ltv_rows %}
+      <tr>
+        <td>{{ r.name }}</td>
+        <td>{{ r.orders }}</td>
+        <td>{{ money(r.spent) }}</td>
+        <td>{{ money(r.aov) }}</td>
+        <td>{{ 'never' if r.days_since >= 9000 else r.days_since ~ 'd' }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="widget"><p style="color:var(--text3);">No customer-linked sales yet.</p></div>
+  {% endif %}
+</section>
+
+<style>
+.analytics-tabs { display:flex; gap:0.4rem; margin:1rem 0 1.2rem; flex-wrap:wrap; border-bottom:1px solid var(--border); }
+.analytics-tabs button {
+  background: transparent; border: none; border-bottom: 2px solid transparent;
+  padding: 0.6rem 1rem; font-size: 0.9rem; font-weight: 700;
+  color: var(--text2); cursor: pointer; font-family: inherit;
+}
+.analytics-tabs button.is-on { color: var(--red-bright); border-bottom-color: var(--red-bright); }
+.analytics-tabs button:hover { color: var(--text); }
+.analytics-panel { display: none; }
+.analytics-panel.is-on { display: block; }
+</style>
+
+<script>
+(function(){
+  const tabs = document.querySelectorAll('.analytics-tabs button');
+  const panels = document.querySelectorAll('.analytics-panel');
+  function activate(name, scroll) {
+    tabs.forEach(t => t.classList.toggle('is-on', t.dataset.tab === name));
+    panels.forEach(p => p.classList.toggle('is-on', p.id === 'panel-' + name));
+    if (scroll !== false) {
+      document.getElementById('panel-' + name)?.scrollIntoView({behavior: 'smooth', block: 'start'});
+    }
+  }
+  tabs.forEach(t => t.addEventListener('click', () => {
+    activate(t.dataset.tab, false);
+    history.replaceState(null, '', '#' + t.dataset.tab);
+  }));
+  const hash = (location.hash || '').replace('#', '');
+  if (['churn','lifetime'].includes(hash)) {
+    activate(hash, false);
+  }
+})();
+</script>
+{% endblock %}
