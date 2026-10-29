@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}Patterns{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1><i data-lucide="activity"></i> Patterns</h1>
+    <p>Cohort retention, seasonality, and variance vs goal over the last 6 months.</p>
+  </div>
+</div>
+
+<nav class="analytics-tabs" role="tablist">
+  <button type="button" data-tab="cohorts" class="is-on">Cohorts</button>
+  <button type="button" data-tab="seasonality">Seasonality</button>
+  <button type="button" data-tab="variance">Variance</button>
+</nav>
+
+<section class="analytics-panel is-on" id="panel-cohorts">
+  {% if cohort_rows %}
+  <h2>Customer retention cohorts</h2>
+  <p style="color:var(--text3);font-size:0.85rem;margin:-0.4rem 0 0.8rem;">
+    Each row is a cohort of customers whose first purchase was in that month. Each column shows months since first purchase. Cells show customers who purchased in that month, with percentage of the original cohort.
+  </p>
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Cohort</th>
+          <th>Size</th>
+          {% for i in range(max_offset) %}
+          <th>Month {{ i }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+      {% for row in cohort_rows %}
+      <tr>
+        <td><strong>{{ row.cohort }}</strong></td>
+        <td>{{ row.size }}</td>
+        {% for cell in row.cells %}
+        <td style="text-align:center;{% if cell.pct >= 60 %}background:var(--green-dim);{% elif cell.pct >= 30 %}background:rgba(224,160,48,0.08);{% elif cell.pct == 0 %}color:var(--text3);{% endif %}">
+          {{ cell.customers }} <small>({{ cell.pct }}%)</small>
+        </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:0.85rem;color:var(--text3);margin-top:0.75rem;">
+    Customers who stay past month 1 are much more likely to stay long term. Retention falling fast in month 1 usually means the first experience needs attention.
+  </p>
+  {% else %}
+  <div class="widget"><p style="color:var(--text3);">No cohort data yet. Need at least one customer with a recorded sale to start building cohorts.</p></div>
+  {% endif %}
+</section>
+
+<section class="analytics-panel" id="panel-seasonality">
+  {% if dow_rows %}
+  <h2>Day-of-week pattern</h2>
+  <p style="color:var(--text3);font-size:0.85rem;margin:-0.4rem 0 0.8rem;">
+    Average revenue per day of the week, across all sales. Bar length is relative.
+  </p>
+  <div class="seasonality-bars">
+    {% for r in dow_rows %}
+    <div class="season-row">
+      <span class="season-label">{{ r.name }}</span>
+      <div class="season-bar-wrap"><div class="season-bar" style="width:{{ r.bar_pct }}%;"></div></div>
+      <span class="season-value">{{ money(r.avg) }} ({{ r.days }}d)</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if mon_rows %}
+  <h2 style="margin-top:2rem;">Month-of-year pattern</h2>
+  <p style="color:var(--text3);font-size:0.85rem;margin:-0.4rem 0 0.8rem;">
+    Average revenue per calendar month. Best months show where demand peaks.
+  </p>
+  <div class="seasonality-bars">
+    {% for r in mon_rows %}
+    <div class="season-row">
+      <span class="season-label">{{ r.name }}</span>
+      <div class="season-bar-wrap"><div class="season-bar" style="width:{{ r.bar_pct }}%;"></div></div>
+      <span class="season-value">{{ money(r.avg) }} ({{ r.days }}d)</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if not dow_rows and not mon_rows %}
+  <div class="widget"><p style="color:var(--text3);">No sales data yet to analyze seasonality.</p></div>
+  {% endif %}
+</section>
+
+<section class="analytics-panel" id="panel-variance">
+  {% if goal > 0 %}
+  <h2>Actual vs goal, last 6 months</h2>
+  <p style="color:var(--text3);font-size:0.85rem;margin:-0.4rem 0 0.8rem;">
+    Monthly revenue compared to your current goal of <strong>{{ money(goal) }}</strong>.
+    Note: goal is not stored historically. Past months are compared to the goal today, not the goal at that time.
+  </p>
+  {% if variance_rows %}
+  <div class="table-wrapper">
+    <table>
+      <thead><tr><th>Month</th><th style="text-align:right;">Revenue</th><th style="text-align:right;">Goal</th><th style="text-align:right;">Variance</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for r in variance_rows %}
+      <tr {% if r.hit %}style="background:var(--green-dim);"{% else %}style="background:rgba(224,160,48,0.08);"{% endif %}>
+        <td>{{ r.month }}</td>
+        <td style="text-align:right;font-family:var(--mono);">{{ money(r.revenue) }}</td>
+        <td style="text-align:right;font-family:var(--mono);">{{ money(r.goal) }}</td>
+        <td style="text-align:right;font-family:var(--mono);{% if r.variance < 0 %}color:#e74c3c;{% else %}color:var(--green);{% endif %}">{{ money(r.variance) }}</td>
+        <td>{% if r.hit %}<span class="status-pill status-ok">Hit</span>{% else %}<span class="status-pill" style="background:rgba(224,160,48,0.15);color:#e0a030;">Missed</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="widget"><p style="color:var(--text3);">No sales in the last 6 months to compare.</p></div>
+  {% endif %}
+  {% else %}
+  <div class="widget"><p style="color:var(--text3);">
+    Set a monthly revenue goal in <a href="{{ url_for('settings') }}">Settings</a> to unlock variance tracking.
+  </p></div>
+  {% endif %}
+</section>
+
+<style>
+.analytics-tabs { display:flex; gap:0.4rem; margin:1rem 0 1.2rem; flex-wrap:wrap; border-bottom:1px solid var(--border); }
+.analytics-tabs button {
+  background: transparent; border: none; border-bottom: 2px solid transparent;
+  padding: 0.6rem 1rem; font-size: 0.9rem; font-weight: 700;
+  color: var(--text2); cursor: pointer; font-family: inherit;
+}
+.analytics-tabs button.is-on { color: var(--red-bright); border-bottom-color: var(--red-bright); }
+.analytics-tabs button:hover { color: var(--text); }
+.analytics-panel { display: none; }
+.analytics-panel.is-on { display: block; }
+.seasonality-bars { display:flex; flex-direction:column; gap:0.4rem; margin:0.5rem 0 1rem; }
+.season-row { display:grid; grid-template-columns:56px 1fr 140px; align-items:center; gap:0.7rem; font-size:0.88rem; }
+.season-label { font-weight:700; color:var(--text2); }
+.season-bar-wrap { height:14px; background:var(--surface2); border-radius:4px; overflow:hidden; }
+.season-bar { height:100%; background:linear-gradient(90deg,var(--red-bright),var(--green)); border-radius:4px; }
+.season-value { font-family:var(--mono); font-size:0.82rem; text-align:right; color:var(--text2); }
+</style>
+
+<script>
+(function(){
+  const tabs = document.querySelectorAll('.analytics-tabs button');
+  const panels = document.querySelectorAll('.analytics-panel');
+  function activate(name) {
+    tabs.forEach(t => t.classList.toggle('is-on', t.dataset.tab === name));
+    panels.forEach(p => p.classList.toggle('is-on', p.id === 'panel-' + name));
+  }
+  tabs.forEach(t => t.addEventListener('click', () => {
+    activate(t.dataset.tab);
+    history.replaceState(null, '', '#' + t.dataset.tab);
+  }));
+  const hash = (location.hash || '').replace('#', '');
+  if (['cohorts','seasonality','variance'].includes(hash)) {
+    activate(hash);
+  }
+})();
+</script>
+{% endblock %}

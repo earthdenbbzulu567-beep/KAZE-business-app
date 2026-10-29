@@ -2013,6 +2013,7 @@ NAV_GROUPS = (
         ('Inventory analytics', 'stock_analytics', 'package-search', 'stock', ('stock_analytics',)),
         ('Books health', 'accounts_health', 'book-open-check', 'accounts', ('accounts_health',)),
         ('Decisions & signals', 'analytics_decisions', 'lightbulb', 'reports', ('analytics_decisions',)),
+        ('Patterns', 'analytics_patterns', 'activity', 'reports', ('analytics_patterns',)),
     )),
     ('Trade', (
         ('Shop', 'shop', 'store', 'shop', ('shop',)),
@@ -11646,9 +11647,6 @@ _DISABLED_PATHS = frozenset({
     '/collections/aging',
     '/payments/fees',
     '/health/history',
-    '/reports/variance',
-    '/stats/cohort',
-    '/stats/seasonality',
     '/team/permissions',
     '/team/activity',
     '/tasks/priority',
@@ -12714,6 +12712,200 @@ def redirect_insights_opportunities():
 @login_required
 def redirect_insights_risks():
     return redirect(url_for('analytics_decisions') + '#risks', code=301)
+
+
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Batch 2e — Patterns (consolidated from 3 disabled routes)
+# ═══════════════════════════════════════════════════════════════════════
+
+_bind_module('reports',
+    'analytics_patterns',
+    'redirect_stats_cohort', 'redirect_stats_seasonality',
+    'redirect_reports_variance')
+
+
+@app.route('/analytics/patterns')
+@login_required
+def analytics_patterns():
+    uid = current_user.id
+    conn = get_db(); cur = conn.cursor()
+
+    from collections import defaultdict
+    from datetime import datetime as _dt
+
+    # ── Cohorts ───────────────────────────────────────
+    cur.execute("""
+        WITH first_purchase AS (
+            SELECT customer_id, MIN(sale_date) AS first_date
+            FROM sales
+            WHERE user_id=%s AND customer_id IS NOT NULL
+            GROUP BY customer_id
+        ),
+        purchases AS (
+            SELECT s.customer_id,
+                   substr(fp.first_date, 1, 7) AS cohort_month,
+                   substr(s.sale_date, 1, 7) AS purchase_month
+            FROM sales s
+            JOIN first_purchase fp ON fp.customer_id = s.customer_id
+            WHERE s.user_id=%s
+        )
+        SELECT cohort_month, purchase_month,
+               COUNT(DISTINCT customer_id) AS customers
+        FROM purchases
+        GROUP BY cohort_month, purchase_month
+        ORDER BY cohort_month, purchase_month
+    """, (uid, uid))
+
+    cohort_data = defaultdict(dict)
+    cohort_sizes = defaultdict(int)
+    all_months = set()
+
+    for r in (cur.fetchall() or []):
+        cm = r['cohort_month']
+        pm = r['purchase_month']
+        cnt = int(r['customers'] or 0)
+        try:
+            cm_dt = _dt.strptime(cm + '-01', '%Y-%m-%d')
+            pm_dt = _dt.strptime(pm + '-01', '%Y-%m-%d')
+            offset = (pm_dt.year - cm_dt.year) * 12 + (pm_dt.month - cm_dt.month)
+        except (ValueError, TypeError):
+            offset = 0
+        if offset < 0:
+            continue
+        cohort_data[cm][offset] = cnt
+        if offset == 0:
+            cohort_sizes[cm] = cnt
+        all_months.add(offset)
+
+    cohort_rows = []
+    for cm in sorted(cohort_data.keys()):
+        size = cohort_sizes.get(cm, 0)
+        cells = []
+        for off in sorted(all_months):
+            n = cohort_data[cm].get(off, 0)
+            pct = round(n / size * 100, 1) if size > 0 else 0
+            cells.append({'offset': off, 'customers': n, 'pct': pct})
+        cohort_rows.append({'cohort': cm, 'size': size, 'cells': cells})
+    max_offset = (max(all_months) + 1) if all_months else 0
+
+    # ── Seasonality ───────────────────────────────────
+    cur.execute("""
+        SELECT EXTRACT(DOW FROM sale_date::date) AS dow,
+               AVG(daily_rev) AS avg_rev,
+               COUNT(*) AS days
+        FROM (
+            SELECT sale_date, SUM(total_amount) AS daily_rev
+            FROM sales WHERE user_id=%s
+            GROUP BY sale_date
+        ) daily
+        GROUP BY EXTRACT(DOW FROM sale_date::date)
+        ORDER BY dow
+    """, (uid,))
+    dow_names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    dow_rows = []
+    dow_max = 0
+    for r in (cur.fetchall() or []):
+        try:
+            idx = int(r.get('dow') or 0)
+        except (TypeError, ValueError):
+            idx = 0
+        avg = float(r.get('avg_rev') or 0)
+        dow_max = max(dow_max, avg)
+        dow_rows.append({
+            'name': dow_names[idx] if 0 <= idx < 7 else '?',
+            'avg': round(avg, 2),
+            'days': int(r.get('days') or 0),
+        })
+    for r in dow_rows:
+        r['bar_pct'] = round(r['avg'] / dow_max * 100, 1) if dow_max > 0 else 0
+
+    cur.execute("""
+        SELECT EXTRACT(MONTH FROM sale_date::date) AS mon,
+               AVG(daily_rev) AS avg_rev,
+               COUNT(*) AS days
+        FROM (
+            SELECT sale_date, SUM(total_amount) AS daily_rev
+            FROM sales WHERE user_id=%s
+            GROUP BY sale_date
+        ) daily
+        GROUP BY EXTRACT(MONTH FROM sale_date::date)
+        ORDER BY mon
+    """, (uid,))
+    mon_names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+    mon_rows = []
+    mon_max = 0
+    for r in (cur.fetchall() or []):
+        try:
+            idx = int(r.get('mon') or 1)
+        except (TypeError, ValueError):
+            idx = 1
+        avg = float(r.get('avg_rev') or 0)
+        mon_max = max(mon_max, avg)
+        mon_rows.append({
+            'name': mon_names[idx - 1] if 1 <= idx <= 12 else '?',
+            'avg': round(avg, 2),
+            'days': int(r.get('days') or 0),
+        })
+    for r in mon_rows:
+        r['bar_pct'] = round(r['avg'] / mon_max * 100, 1) if mon_max > 0 else 0
+
+    # ── Variance vs goal ──────────────────────────────
+    cur.execute("SELECT monthly_revenue_goal FROM settings WHERE user_id=%s", (uid,))
+    goal = float((cur.fetchone() or {}).get('monthly_revenue_goal') or 0)
+
+    cur.execute("""
+        SELECT substr(sale_date, 1, 7) AS month,
+               COALESCE(SUM(total_amount),0) AS revenue,
+               COALESCE(SUM(profit),0) AS profit
+        FROM sales
+        WHERE user_id=%s
+          AND sale_date >= to_char(CURRENT_DATE - INTERVAL '6 months','YYYY-MM-DD')
+        GROUP BY substr(sale_date, 1, 7)
+        ORDER BY month
+    """, (uid,))
+    variance_rows = []
+    for r in (cur.fetchall() or []):
+        rev = float(r.get('revenue') or 0)
+        var = rev - goal if goal else 0
+        variance_rows.append({
+            'month': r.get('month') or '?',
+            'revenue': rev,
+            'profit': float(r.get('profit') or 0),
+            'goal': goal,
+            'variance': round(var, 2),
+            'hit': (var >= 0) if goal else None,
+        })
+
+    cur.close(); conn.close()
+
+    return render_template('analytics_patterns.html',
+        cohort_rows=cohort_rows,
+        max_offset=max_offset,
+        dow_rows=dow_rows,
+        mon_rows=mon_rows,
+        variance_rows=variance_rows,
+        goal=goal,
+    )
+
+
+@app.route('/stats/cohort')
+@login_required
+def redirect_stats_cohort():
+    return redirect(url_for('analytics_patterns') + '#cohorts', code=301)
+
+
+@app.route('/stats/seasonality')
+@login_required
+def redirect_stats_seasonality():
+    return redirect(url_for('analytics_patterns') + '#seasonality', code=301)
+
+
+@app.route('/reports/variance')
+@login_required
+def redirect_reports_variance():
+    return redirect(url_for('analytics_patterns') + '#variance', code=301)
 
 
 if __name__ == '__main__':
