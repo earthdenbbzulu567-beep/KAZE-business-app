@@ -2011,6 +2011,7 @@ NAV_GROUPS = (
         ('Sales analytics', 'sales_analytics', 'bar-chart-3', 'sales', ('sales_analytics',)),
         ('Customer analytics', 'customers_analytics', 'users', 'customers', ('customers_analytics',)),
         ('Inventory analytics', 'stock_analytics', 'package-search', 'stock', ('stock_analytics',)),
+        ('Books health', 'accounts_health', 'book-open-check', 'accounts', ('accounts_health',)),
     )),
     ('Trade', (
         ('Shop', 'shop', 'store', 'shop', ('shop',)),
@@ -11642,10 +11643,6 @@ def supreme():
 _DISABLED_PATHS = frozenset({
     '/collections/schedule',
     '/collections/aging',
-    '/bookkeeping/anomaly-scan',
-    '/bookkeeping/duplicate-check',
-    '/accounts/integrity',
-    '/accounts/trial-balance',
     '/payments/fees',
     '/forecast/scenarios',
     '/health/priority',
@@ -12137,6 +12134,169 @@ def redirect_supplier_reliability():
 @login_required
 def redirect_po_autofill():
     return redirect(url_for('stock_reorder_optimizer'), code=301)
+
+
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Batch 2c — Books Health (consolidated from 4 disabled routes)
+# ═══════════════════════════════════════════════════════════════════════
+
+_bind_module('accounts',
+    'accounts_health',
+    'redirect_trial_balance', 'redirect_accounts_integrity',
+    'redirect_bookkeeping_anomaly', 'redirect_bookkeeping_duplicates')
+
+
+@app.route('/accounts/health')
+@login_required
+def accounts_health():
+    uid = current_user.id
+    conn = get_db(); cur = conn.cursor()
+
+    # ── Trial balance ────────────────────────────────────
+    cur.execute("""
+        SELECT account,
+               COALESCE(SUM(debit),0) AS dr,
+               COALESCE(SUM(credit),0) AS cr
+        FROM journal_entries
+        WHERE user_id=%s
+        GROUP BY account
+        ORDER BY account
+    """, (uid,))
+    tb_rows = []
+    for r in (cur.fetchall() or []):
+        tb_rows.append({
+            'account': r.get('account') or '—',
+            'dr': float(r.get('dr') or 0),
+            'cr': float(r.get('cr') or 0),
+            'net': float(r.get('dr') or 0) - float(r.get('cr') or 0),
+        })
+    tb_total_dr = sum(x['dr'] for x in tb_rows)
+    tb_total_cr = sum(x['cr'] for x in tb_rows)
+    tb_balanced = abs(tb_total_dr - tb_total_cr) < 0.01
+
+    # ── Integrity per book ───────────────────────────────
+    cur.execute("""
+        SELECT book,
+               COALESCE(SUM(debit),0) AS dr,
+               COALESCE(SUM(credit),0) AS cr,
+               COALESCE(SUM(debit),0) - COALESCE(SUM(credit),0) AS delta,
+               COUNT(*) AS n
+        FROM journal_entries
+        WHERE user_id=%s
+        GROUP BY book
+        ORDER BY book
+    """, (uid,))
+    integrity_rows = []
+    for r in (cur.fetchall() or []):
+        delta = float(r.get('delta') or 0)
+        integrity_rows.append({
+            'book': (r.get('book') or '—').replace('_', ' ').title(),
+            'dr': float(r.get('dr') or 0),
+            'cr': float(r.get('cr') or 0),
+            'delta': delta,
+            'entries': int(r.get('n') or 0),
+            'balanced': abs(delta) < 0.01,
+        })
+    integrity_failures = sum(1 for x in integrity_rows if not x['balanced'])
+
+    # ── Anomaly scan (cash book, 30d, > 3x median) ───────
+    cur.execute("""
+        WITH stats AS (
+            SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY amount) AS med,
+                   COUNT(*) AS n
+            FROM cash_books
+            WHERE user_id=%s
+              AND date >= to_char(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD')
+        )
+        SELECT cb.entry_type, cb.category, cb.description,
+               cb.amount, cb.date
+        FROM cash_books cb, stats
+        WHERE cb.user_id=%s
+          AND cb.date >= to_char(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD')
+          AND stats.n >= 5
+          AND cb.amount > 3 * stats.med
+        ORDER BY cb.amount DESC
+        LIMIT 25
+    """, (uid, uid))
+    anomaly_rows = []
+    for r in (cur.fetchall() or []):
+        anomaly_rows.append({
+            'type': (r.get('entry_type') or '').upper(),
+            'category': r.get('category') or '—',
+            'description': r.get('description') or '—',
+            'amount': float(r.get('amount') or 0),
+            'date': r.get('date') or '—',
+        })
+
+    # ── Duplicate bookkeeping docs ───────────────────────
+    cur.execute("""
+        SELECT kind, party, doc_date, amount,
+               COUNT(*) AS n,
+               STRING_AGG(id::text, ',' ORDER BY id) AS ids
+        FROM bookkeeping_docs
+        WHERE user_id=%s
+        GROUP BY kind, party, doc_date, amount
+        HAVING COUNT(*) > 1
+        ORDER BY n DESC, doc_date DESC
+        LIMIT 20
+    """, (uid,))
+    duplicate_rows = []
+    for r in (cur.fetchall() or []):
+        duplicate_rows.append({
+            'kind': (r.get('kind') or '').replace('_', ' ').title(),
+            'party': r.get('party') or '—',
+            'date': r.get('doc_date') or '—',
+            'amount': float(r.get('amount') or 0),
+            'count': int(r.get('n') or 0),
+            'ids': r.get('ids') or '',
+        })
+
+    # Top-of-page stats
+    cur.execute("SELECT COUNT(*) AS n FROM journal_entries WHERE user_id=%s", (uid,))
+    total_entries = int((cur.fetchone() or {}).get('n') or 0)
+    cur.execute("SELECT COUNT(*) AS n FROM bookkeeping_docs WHERE user_id=%s", (uid,))
+    total_docs = int((cur.fetchone() or {}).get('n') or 0)
+
+    cur.close(); conn.close()
+
+    return render_template('accounts_health.html',
+        tb_rows=tb_rows,
+        tb_total_dr=tb_total_dr,
+        tb_total_cr=tb_total_cr,
+        tb_balanced=tb_balanced,
+        integrity_rows=integrity_rows,
+        integrity_failures=integrity_failures,
+        anomaly_rows=anomaly_rows,
+        duplicate_rows=duplicate_rows,
+        total_entries=total_entries,
+        total_docs=total_docs,
+    )
+
+
+@app.route('/accounts/trial-balance')
+@login_required
+def redirect_trial_balance():
+    return redirect(url_for('accounts_health') + '#trialbalance', code=301)
+
+
+@app.route('/accounts/integrity')
+@login_required
+def redirect_accounts_integrity():
+    return redirect(url_for('accounts_health') + '#integrity', code=301)
+
+
+@app.route('/bookkeeping/anomaly-scan')
+@login_required
+def redirect_bookkeeping_anomaly():
+    return redirect(url_for('accounts_health') + '#anomaly', code=301)
+
+
+@app.route('/bookkeeping/duplicate-check')
+@login_required
+def redirect_bookkeeping_duplicates():
+    return redirect(url_for('accounts_health') + '#duplicate', code=301)
 
 
 if __name__ == '__main__':

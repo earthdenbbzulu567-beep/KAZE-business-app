@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}Books Health{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1><i data-lucide="book-open-check"></i> Books Health</h1>
+    <p>Trial balance, journal integrity, anomaly scan, and duplicate document check — all in one place.</p>
+  </div>
+</div>
+
+<div class="stat-grid">
+  <div class="stat-chip"><span>Journal entries</span><strong>{{ total_entries }}</strong></div>
+  <div class="stat-chip"><span>Bookkeeping docs</span><strong>{{ total_docs }}</strong></div>
+  <div class="stat-chip"><span>Trial balance</span>
+    <strong style="color:{% if tb_balanced %}var(--green){% else %}#e74c3c{% endif %};">
+      {{ 'Balanced' if tb_balanced else 'Off by ' + money(tb_total_dr - tb_total_cr) }}
+    </strong>
+  </div>
+  <div class="stat-chip"><span>Integrity issues</span>
+    <strong style="color:{% if integrity_failures %} #e74c3c {% else %}var(--green){% endif %};">
+      {{ integrity_failures }}
+    </strong>
+  </div>
+  <div class="stat-chip"><span>Anomalies</span><strong>{{ anomaly_rows|length }}</strong></div>
+  <div class="stat-chip"><span>Duplicates</span><strong>{{ duplicate_rows|length }}</strong></div>
+</div>
+
+<nav class="analytics-tabs" role="tablist">
+  <button type="button" data-tab="trialbalance" class="is-on">Trial balance</button>
+  <button type="button" data-tab="integrity">Integrity</button>
+  <button type="button" data-tab="anomaly">Anomaly scan</button>
+  <button type="button" data-tab="duplicate">Duplicates</button>
+</nav>
+
+<section class="analytics-panel is-on" id="panel-trialbalance">
+  {% if tb_rows %}
+  <h2>Trial balance (typed journal entries)</h2>
+  <p style="color:var(--text3);font-size:0.85rem;margin:-0.4rem 0 0.8rem;">
+    Account totals from manually typed journal entries. Auto-posted entries (sales journal, purchases journal) are not shown here — those are computed on the Account tracking page.
+  </p>
+  <div class="table-wrapper">
+    <table>
+      <thead><tr><th>Account</th><th style="text-align:right;">Debit</th><th style="text-align:right;">Credit</th><th style="text-align:right;">Net (DR−CR)</th></tr></thead>
+      <tbody>
+      {% for r in tb_rows %}
+      <tr>
+        <td>{{ r.account }}</td>
+        <td style="text-align:right;font-family:var(--mono);">{{ money(r.dr) }}</td>
+        <td style="text-align:right;font-family:var(--mono);">{{ money(r.cr) }}</td>
+        <td style="text-align:right;font-family:var(--mono);{% if r.net > 0 %}color:var(--green);{% elif r.net < 0 %}color:#e74c3c;{% endif %}">{{ money(r.net) }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+      <tfoot style="background:var(--surface2);font-weight:700;">
+        <tr>
+          <td>Total</td>
+          <td style="text-align:right;font-family:var(--mono);">{{ money(tb_total_dr) }}</td>
+          <td style="text-align:right;font-family:var(--mono);">{{ money(tb_total_cr) }}</td>
+          <td style="text-align:right;font-family:var(--mono);{% if not tb_balanced %}color:#e74c3c;{% endif %}">{{ money(tb_total_dr - tb_total_cr) }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {% if not tb_balanced %}
+  <div class="widget" style="border-color:#e74c3c;background:rgba(231,76,60,0.06);">
+    <strong style="color:#e74c3c;">Trial balance does not balance.</strong>
+    <p style="margin:0.35rem 0 0;color:var(--text2);">
+      Total debits ({{ money(tb_total_dr) }}) minus total credits ({{ money(tb_total_cr) }}) = {{ money(tb_total_dr - tb_total_cr) }}.
+      A real double-entry book must balance to zero. Check for mis-typed entries or missing counterparties.
+    </p>
+  </div>
+  {% endif %}
+  {% else %}
+  <div class="widget"><p style="color:var(--text3);">No journal entries yet. Open <a href="{{ url_for('accounts') }}">Account tracking</a> to add double-entry lines.</p></div>
+  {% endif %}
+</section>
+
+<section class="analytics-panel" id="panel-integrity">
+  {% if integrity_rows %}
+  <h2>Journal integrity (per book)</h2>
+  <p style="color:var(--text3);font-size:0.85rem;margin:-0.4rem 0 0.8rem;">
+    Each journal should net to zero (DR = CR). A non-zero delta means an entry was saved without its counterparty — that's a data error to fix.
+  </p>
+  <div class="table-wrapper">
+    <table>
+      <thead><tr><th>Book</th><th>Entries</th><th style="text-align:right;">DR</th><th style="text-align:right;">CR</th><th style="text-align:right;">Delta</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for r in integrity_rows %}
+      <tr {% if not r.balanced %}style="background:var(--danger-dim);"{% endif %}>
+        <td>{{ r.book }}</td>
+        <td>{{ r.entries }}</td>
+        <td style="text-align:right;font-family:var(--mono);">{{ money(r.dr) }}</td>
+        <td style="text-align:right;font-family:var(--mono);">{{ money(r.cr) }}</td>
+        <td style="text-align:right;font-family:var(--mono);{% if not r.balanced %}color:#e74c3c;font-weight:700;{% endif %}">{{ money(r.delta) }}</td>
+        <td>{% if r.balanced %}<span class="status-pill status-ok">Balanced</span>{% else %}<span class="status-pill status-warn" style="background:var(--danger-dim);color:#e74c3c;">Off</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="widget"><p style="color:var(--text3);">No journal entries to check yet.</p></div>
+  {% endif %}
+</section>
+
+<section class="analytics-panel" id="panel-anomaly">
+  {% if anomaly_rows %}
+  <h2>Anomaly scan (cash book, last 30 days)</h2>
+  <p style="color:var(--text3);font-size:0.85rem;margin:-0.4rem 0 0.8rem;">
+    Cash entries larger than 3× the median cash entry from the last 30 days. Usually indicates a typo or an unusual expense worth reviewing.
+    (Requires at least 5 cash entries in the last 30 days to be meaningful.)
+  </p>
+  <div class="table-wrapper">
+    <table>
+      <thead><tr><th>Date</th><th>Type</th><th>Category</th><th>Description</th><th style="text-align:right;">Amount</th></tr></thead>
+      <tbody>
+      {% for r in anomaly_rows %}
+      <tr {% if r.type == 'OUT' %}style="background:rgba(231,76,60,0.06);"{% endif %}>
+        <td>{{ r.date }}</td>
+        <td>{{ r.type }}</td>
+        <td>{{ r.category }}</td>
+        <td>{{ r.description }}</td>
+        <td style="text-align:right;font-family:var(--mono);">{{ money(r.amount) }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="widget"><p style="color:var(--text3);">No anomalies detected — or fewer than 5 cash entries in the last 30 days to compare against. Nothing suspicious right now.</p></div>
+  {% endif %}
+</section>
+
+<section class="analytics-panel" id="panel-duplicate">
+  {% if duplicate_rows %}
+  <h2>Suspected duplicate documents</h2>
+  <p style="color:var(--text3);font-size:0.85rem;margin:-0.4rem 0 0.8rem;">
+    Bookkeeping documents where kind, party, date, and amount are identical across 2 or more rows. Usually means a save was clicked twice, or a paper was entered twice.
+  </p>
+  <div class="table-wrapper">
+    <table>
+      <thead><tr><th>Kind</th><th>Party</th><th>Date</th><th style="text-align:right;">Amount</th><th>Copies</th><th>IDs</th></tr></thead>
+      <tbody>
+      {% for r in duplicate_rows %}
+      <tr style="background:rgba(224,160,48,0.08);">
+        <td>{{ r.kind }}</td>
+        <td>{{ r.party }}</td>
+        <td>{{ r.date }}</td>
+        <td style="text-align:right;font-family:var(--mono);">{{ money(r.amount) }}</td>
+        <td><strong>{{ r.count }}</strong></td>
+        <td style="font-size:0.8rem;color:var(--text3);">#{{ r.ids }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:0.85rem;color:var(--text3);margin-top:0.75rem;">Open <a href="{{ url_for('bookkeeping') }}">Book keeping</a> to review or delete duplicates.</p>
+  {% else %}
+  <div class="widget"><p style="color:var(--text3);">No duplicate bookkeeping documents detected. Your entries look unique.</p></div>
+  {% endif %}
+</section>
+
+<style>
+.analytics-tabs { display:flex; gap:0.4rem; margin:1rem 0 1.2rem; flex-wrap:wrap; border-bottom:1px solid var(--border); }
+.analytics-tabs button {
+  background: transparent; border: none; border-bottom: 2px solid transparent;
+  padding: 0.6rem 1rem; font-size: 0.9rem; font-weight: 700;
+  color: var(--text2); cursor: pointer; font-family: inherit;
+}
+.analytics-tabs button.is-on { color: var(--red-bright); border-bottom-color: var(--red-bright); }
+.analytics-tabs button:hover { color: var(--text); }
+.analytics-panel { display: none; }
+.analytics-panel.is-on { display: block; }
+</style>
+
+<script>
+(function(){
+  const tabs = document.querySelectorAll('.analytics-tabs button');
+  const panels = document.querySelectorAll('.analytics-panel');
+  function activate(name) {
+    tabs.forEach(t => t.classList.toggle('is-on', t.dataset.tab === name));
+    panels.forEach(p => p.classList.toggle('is-on', p.id === 'panel-' + name));
+  }
+  tabs.forEach(t => t.addEventListener('click', () => {
+    activate(t.dataset.tab);
+    history.replaceState(null, '', '#' + t.dataset.tab);
+  }));
+  const hash = (location.hash || '').replace('#', '');
+  if (['trialbalance','integrity','anomaly','duplicate'].includes(hash)) {
+    activate(hash);
+  }
+})();
+</script>
+{% endblock %}
