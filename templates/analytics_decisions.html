@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block title %}Decisions & Signals{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1><i data-lucide="lightbulb"></i> Decisions & Signals</h1>
+    <p>Scenarios, priorities, milestones, opportunities, and risks — everything that asks "what should I do next?".</p>
+  </div>
+</div>
+
+<nav class="analytics-tabs" role="tablist">
+  <button type="button" data-tab="scenarios" class="is-on">Scenarios</button>
+  <button type="button" data-tab="priority">Priority</button>
+  <button type="button" data-tab="milestones">Milestones</button>
+  <button type="button" data-tab="opportunities">Opportunities</button>
+  <button type="button" data-tab="risks">Risks</button>
+</nav>
+
+<section class="analytics-panel is-on" id="panel-scenarios">
+  <h2>Cash projection scenarios</h2>
+  <p style="color:var(--text3);font-size:0.85rem;margin:-0.4rem 0 0.8rem;">
+    Current cash: <strong>{{ money(current_cash) }}</strong> (from {{ cash_source }}).
+    Avg daily revenue: {{ money(avg_daily_revenue) }} · Avg daily expense: {{ money(avg_daily_expense) }} · Daily obligations: {{ money(daily_obligations) }}.
+  </p>
+  <div class="table-wrapper">
+    <table>
+      <thead><tr><th>Scenario</th><th style="text-align:right;">Daily net</th><th style="text-align:right;">Projected 30d</th><th style="text-align:right;">Projected 90d</th><th>Signal</th></tr></thead>
+      <tbody>
+      {% for s in scenarios %}
+      <tr {% if s.risk == 'danger' %}style="background:var(--danger-dim);"{% elif s.risk == 'warn' %}style="background:rgba(224,160,48,0.08);"{% endif %}>
+        <td><strong>{{ s.label }}</strong></td>
+        <td style="text-align:right;font-family:var(--mono);{% if s.daily_net < 0 %}color:#e74c3c;{% else %}color:var(--green);{% endif %}">{{ money(s.daily_net) }}</td>
+        <td style="text-align:right;font-family:var(--mono);">{{ money(s.projected_30) }}</td>
+        <td style="text-align:right;font-family:var(--mono);">{{ money(s.projected_90) }}</td>
+        <td>
+          {% if s.risk == 'danger' %}<span class="status-pill" style="background:var(--danger-dim);color:#e74c3c;">Cash squeeze</span>
+          {% elif s.risk == 'warn' %}<span class="status-pill" style="background:rgba(224,160,48,0.15);color:#e0a030;">Tight</span>
+          {% else %}<span class="status-pill status-ok">Healthy</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="analytics-panel" id="panel-priority">
+  <h2>What to fix first</h2>
+  <p style="color:var(--text3);font-size:0.85rem;margin:-0.4rem 0 0.8rem;">
+    Each health component below shows its current score (out of 100), how much room is left, and how much health-score impact closing that gap would give.
+    <strong>Sorted by impact</strong> — work top to bottom for maximum effect.
+  </p>
+  {% if priority_rows %}
+  <div class="table-wrapper">
+    <table>
+      <thead><tr><th>Component</th><th style="text-align:right;">Score</th><th style="text-align:right;">Gap</th><th style="text-align:right;">Weight</th><th style="text-align:right;">Impact</th><th>What to do</th></tr></thead>
+      <tbody>
+      {% for r in priority_rows %}
+      <tr {% if loop.first %}style="background:var(--green-dim);"{% endif %}>
+        <td><strong>{{ r.name }}</strong></td>
+        <td style="text-align:right;font-family:var(--mono);">{{ r.score }}/100</td>
+        <td style="text-align:right;font-family:var(--mono);">{{ r.gap }}</td>
+        <td style="text-align:right;">{{ r.weight }}%</td>
+        <td style="text-align:right;font-family:var(--mono);font-weight:700;color:var(--red-bright);">+{{ r.impact }}</td>
+        <td style="font-size:0.85rem;">{{ r.advice }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="widget"><p style="color:var(--text3);">No health data yet.</p></div>
+  {% endif %}
+</section>
+
+<section class="analytics-panel" id="panel-milestones">
+  <h2>Goal milestones — {{ day_of_month }} of {{ days_in_month }} days elapsed</h2>
+  {% if goal > 0 %}
+  <p style="color:var(--text3);font-size:0.85rem;margin:-0.4rem 0 0.8rem;">
+    Monthly goal: <strong>{{ money(goal) }}</strong>. Each checkpoint shows expected pace vs actual cumulative revenue at that day.
+  </p>
+  <div class="table-wrapper">
+    <table>
+      <thead><tr><th>Checkpoint</th><th style="text-align:right;">Expected</th><th style="text-align:right;">Actual</th><th style="text-align:right;">Difference</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for m in milestones %}
+      <tr {% if m.status == 'missed' %}style="background:var(--danger-dim);"{% elif m.status == 'behind' %}style="background:rgba(224,160,48,0.08);"{% elif m.status == 'hit' %}style="background:var(--green-dim);"{% endif %}>
+        <td>Day {{ m.day }}</td>
+        <td style="text-align:right;font-family:var(--mono);">{{ money(m.expected) }}</td>
+        <td style="text-align:right;font-family:var(--mono);">{{ money(m.actual) }}</td>
+        <td style="text-align:right;font-family:var(--mono);{% if m.diff < 0 %}color:#e74c3c;{% elif m.diff > 0 %}color:var(--green);{% endif %}">{{ money(m.diff) }}</td>
+        <td>
+          {% if m.status == 'hit' %}<span class="status-pill status-ok">Hit</span>
+          {% elif m.status == 'missed' %}<span class="status-pill" style="background:var(--danger-dim);color:#e74c3c;">Missed</span>
+          {% elif m.status == 'ontrack' %}<span class="status-pill status-ok">On track</span>
+          {% elif m.status == 'behind' %}<span class="status-pill" style="background:rgba(224,160,48,0.15);color:#e0a030;">Behind</span>
+          {% else %}<span class="status-pill" style="background:var(--surface2);color:var(--text3);">Pending</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="widget"><p style="color:var(--text3);">
+    Set a monthly revenue goal in <a href="{{ url_for('settings') }}">Settings</a> to unlock milestone tracking.
+  </p></div>
+  {% endif %}
+</section>
+
+<section class="analytics-panel" id="panel-opportunities">
+  <h2>Growth opportunities</h2>
+  {% if opportunities %}
+  {% for o in opportunities %}
+  <div class="widget" style="border-left:4px solid {% if o.severity == 'success' %}var(--green){% else %}#3498db{% endif %};">
+    <div style="display:flex;gap:0.75rem;align-items:flex-start;">
+      <div style="flex-shrink:0;width:32px;height:32px;display:grid;place-items:center;border-radius:8px;background:var(--surface2);">
+        <i data-lucide="{{ o.icon }}"></i>
+      </div>
+      <div style="flex:1;">
+        <strong>{{ o.title }}</strong>
+        <p style="margin:0.35rem 0 0;font-size:0.9rem;color:var(--text2);">{{ o.detail }}</p>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="widget"><p style="color:var(--text3);">No specific growth opportunities detected right now. This is a good sign — nothing obvious to chase.</p></div>
+  {% endif %}
+</section>
+
+<section class="analytics-panel" id="panel-risks">
+  <h2>Risk signals</h2>
+  {% if risks %}
+  {% for r in risks %}
+  <div class="widget" style="border-left:4px solid {% if r.severity == 'danger' %}#e74c3c{% elif r.severity == 'warn' %}#e0a030{% else %}#3498db{% endif %};">
+    <div style="display:flex;gap:0.75rem;align-items:flex-start;">
+      <div style="flex-shrink:0;width:32px;height:32px;display:grid;place-items:center;border-radius:8px;background:var(--surface2);">
+        <i data-lucide="{{ r.icon }}"></i>
+      </div>
+      <div style="flex:1;">
+        <strong>{{ r.title }}</strong>
+        <p style="margin:0.35rem 0 0;font-size:0.9rem;color:var(--text2);">{{ r.detail }}</p>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="widget"><p style="color:var(--green);">No risk signals detected. Your data looks healthy across all tracked signals.</p></div>
+  {% endif %}
+</section>
+
+<style>
+.analytics-tabs { display:flex; gap:0.4rem; margin:1rem 0 1.2rem; flex-wrap:wrap; border-bottom:1px solid var(--border); }
+.analytics-tabs button {
+  background: transparent; border: none; border-bottom: 2px solid transparent;
+  padding: 0.6rem 1rem; font-size: 0.9rem; font-weight: 700;
+  color: var(--text2); cursor: pointer; font-family: inherit;
+}
+.analytics-tabs button.is-on { color: var(--red-bright); border-bottom-color: var(--red-bright); }
+.analytics-tabs button:hover { color: var(--text); }
+.analytics-panel { display: none; }
+.analytics-panel.is-on { display: block; }
+</style>
+
+<script>
+(function(){
+  const tabs = document.querySelectorAll('.analytics-tabs button');
+  const panels = document.querySelectorAll('.analytics-panel');
+  function activate(name) {
+    tabs.forEach(t => t.classList.toggle('is-on', t.dataset.tab === name));
+    panels.forEach(p => p.classList.toggle('is-on', p.id === 'panel-' + name));
+  }
+  tabs.forEach(t => t.addEventListener('click', () => {
+    activate(t.dataset.tab);
+    history.replaceState(null, '', '#' + t.dataset.tab);
+  }));
+  const hash = (location.hash || '').replace('#', '');
+  if (['scenarios','priority','milestones','opportunities','risks'].includes(hash)) {
+    activate(hash);
+  }
+})();
+</script>
+{% endblock %}

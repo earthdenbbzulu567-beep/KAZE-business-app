@@ -2012,6 +2012,7 @@ NAV_GROUPS = (
         ('Customer analytics', 'customers_analytics', 'users', 'customers', ('customers_analytics',)),
         ('Inventory analytics', 'stock_analytics', 'package-search', 'stock', ('stock_analytics',)),
         ('Books health', 'accounts_health', 'book-open-check', 'accounts', ('accounts_health',)),
+        ('Decisions & signals', 'analytics_decisions', 'lightbulb', 'reports', ('analytics_decisions',)),
     )),
     ('Trade', (
         ('Shop', 'shop', 'store', 'shop', ('shop',)),
@@ -11644,15 +11645,10 @@ _DISABLED_PATHS = frozenset({
     '/collections/schedule',
     '/collections/aging',
     '/payments/fees',
-    '/forecast/scenarios',
-    '/health/priority',
     '/health/history',
-    '/goals/milestones',
     '/reports/variance',
     '/stats/cohort',
     '/stats/seasonality',
-    '/insights/opportunities',
-    '/insights/risks',
     '/team/permissions',
     '/team/activity',
     '/tasks/priority',
@@ -12297,6 +12293,427 @@ def redirect_bookkeeping_anomaly():
 @login_required
 def redirect_bookkeeping_duplicates():
     return redirect(url_for('accounts_health') + '#duplicate', code=301)
+
+
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Batch 2d — Decisions & Signals (consolidated from 5 disabled routes)
+# ═══════════════════════════════════════════════════════════════════════
+
+_bind_module('dashboard',
+    'analytics_decisions',
+    'redirect_forecast_scenarios', 'redirect_health_priority',
+    'redirect_goals_milestones', 'redirect_insights_opportunities',
+    'redirect_insights_risks')
+
+
+@app.route('/analytics/decisions')
+@login_required
+def analytics_decisions():
+    uid = current_user.id
+    conn = get_db(); cur = conn.cursor()
+
+    # ══════════════════════════════════════════════════════
+    # TAB 1 — Scenarios (cash projection at 3 multipliers)
+    # ══════════════════════════════════════════════════════
+    cur.execute("""
+        SELECT COALESCE(SUM(opening_balance),0) AS op FROM bank_accounts WHERE user_id=%s
+    """, (uid,))
+    opening = float((cur.fetchone() or {}).get('op') or 0)
+
+    cur.execute("""
+        SELECT COALESCE(SUM(CASE WHEN kind='in' THEN amount ELSE -amount END),0) AS mv
+        FROM bank_transactions WHERE user_id=%s
+    """, (uid,))
+    bank_mv = float((cur.fetchone() or {}).get('mv') or 0)
+
+    cur.execute("SELECT COUNT(*) AS n FROM bank_accounts WHERE user_id=%s", (uid,))
+    if int((cur.fetchone() or {}).get('n') or 0) > 0:
+        current_cash = opening + bank_mv
+        cash_source = 'bank accounts'
+    else:
+        cur.execute("""
+            SELECT COALESCE(SUM(CASE WHEN entry_type='in' THEN amount ELSE -amount END),0) AS net
+            FROM cash_books WHERE user_id=%s
+        """, (uid,))
+        current_cash = float((cur.fetchone() or {}).get('net') or 0)
+        cash_source = 'cash book'
+
+    cur.execute("""
+        SELECT COALESCE(AVG(daily_rev),0) AS a FROM (
+            SELECT SUM(total_amount) AS daily_rev FROM sales
+            WHERE user_id=%s AND sale_date >= to_char(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD')
+            GROUP BY sale_date
+        ) t
+    """, (uid,))
+    avg_daily_revenue = float((cur.fetchone() or {}).get('a') or 0)
+
+    cur.execute("""
+        SELECT COALESCE(AVG(daily_exp),0) AS a FROM (
+            SELECT SUM(amount) AS daily_exp FROM expenses
+            WHERE user_id=%s AND date >= to_char(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD')
+            GROUP BY date
+        ) t
+    """, (uid,))
+    avg_daily_expense = float((cur.fetchone() or {}).get('a') or 0)
+
+    cur.execute("""
+        SELECT COALESCE(SUM(amount),0) AS t FROM recurring_items
+        WHERE user_id=%s AND active=1 AND item_type='expense'
+          AND next_run_date <= to_char(CURRENT_DATE + INTERVAL '30 days','YYYY-MM-DD')
+    """, (uid,))
+    upcoming_recurring = float((cur.fetchone() or {}).get('t') or 0)
+
+    cur.execute("""
+        SELECT COALESCE(SUM(total_cost),0) AS t FROM purchase_orders
+        WHERE user_id=%s AND status='pending'
+    """, (uid,))
+    upcoming_pos = float((cur.fetchone() or {}).get('t') or 0)
+
+    net_daily_base = avg_daily_revenue - avg_daily_expense
+    daily_obligations = (upcoming_recurring + upcoming_pos) / 30.0
+
+    scenarios = []
+    for label, rev_mul, exp_mul in [
+        ('Worst case', 0.7, 1.2),
+        ('Conservative', 0.9, 1.1),
+        ('Base (current pace)', 1.0, 1.0),
+        ('Optimistic', 1.2, 0.95),
+        ('Best case', 1.4, 0.9),
+    ]:
+        daily_net = (avg_daily_revenue * rev_mul) - (avg_daily_expense * exp_mul) - daily_obligations
+        projected_30 = current_cash + daily_net * 30
+        projected_90 = current_cash + daily_net * 90
+        scenarios.append({
+            'label': label,
+            'daily_net': round(daily_net, 2),
+            'projected_30': round(projected_30, 2),
+            'projected_90': round(projected_90, 2),
+            'risk': ('danger' if projected_30 < 0 else
+                     'warn' if projected_30 < current_cash * 0.2 else 'ok'),
+        })
+
+    # ══════════════════════════════════════════════════════
+    # TAB 2 — Priority (health issues ranked by impact)
+    # ══════════════════════════════════════════════════════
+    cur.execute("""
+        SELECT COALESCE(SUM(total_amount),0) AS rev, COALESCE(SUM(profit),0) AS pft
+        FROM sales WHERE user_id=%s
+          AND sale_date >= to_char(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD')
+    """, (uid,))
+    r30 = cur.fetchone() or {}
+    sales_30 = float(r30.get('rev') or 0)
+    profit_30 = float(r30.get('pft') or 0)
+
+    cur.execute("""
+        SELECT COALESCE(SUM(total_amount),0) AS rev
+        FROM sales WHERE user_id=%s
+          AND sale_date >= to_char(CURRENT_DATE - INTERVAL '60 days','YYYY-MM-DD')
+          AND sale_date < to_char(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD')
+    """, (uid,))
+    sales_prev = float((cur.fetchone() or {}).get('rev') or 0)
+
+    cur.execute("""
+        SELECT COUNT(*) AS total,
+               SUM(CASE WHEN quantity <= COALESCE(
+                   (SELECT low_stock_threshold FROM settings WHERE user_id=%s), 10)
+                   THEN 1 ELSE 0 END) AS low
+        FROM stock WHERE user_id=%s
+    """, (uid, uid))
+    st = cur.fetchone() or {}
+    total_sku = int(st.get('total') or 0)
+    low_sku = int(st.get('low') or 0)
+
+    cur.execute("""
+        SELECT COALESCE(SUM(amount),0) AS m FROM expenses
+        WHERE user_id=%s AND date >= to_char(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD')
+    """, (uid,))
+    exp_30 = float((cur.fetchone() or {}).get('m') or 0)
+
+    cur.execute("""
+        SELECT COUNT(DISTINCT customer_id) AS buyers,
+               SUM(CASE WHEN c > 1 THEN 1 ELSE 0 END) AS repeaters
+        FROM (SELECT customer_id, COUNT(*) AS c FROM sales
+              WHERE user_id=%s AND customer_id IS NOT NULL
+              GROUP BY customer_id) t
+    """, (uid,))
+    rb = cur.fetchone() or {}
+    buyers = int(rb.get('buyers') or 0)
+    repeaters = int(rb.get('repeaters') or 0)
+
+    trend_pct = ((sales_30 - sales_prev) / sales_prev * 100) if sales_prev > 0 else (100 if sales_30 > 0 else 0)
+    trend_score = max(0, min(100, int(50 + trend_pct * 0.5)))
+    margin_pct = round((profit_30 / sales_30 * 100) if sales_30 > 0 else 0, 1)
+    margin_score = max(0, min(100, int(margin_pct * 2.5)))
+    stock_score = int(100 - (low_sku / total_sku) * 100) if total_sku > 0 else 100
+    monthly_exp = exp_30 if exp_30 > 0 else 1
+    months_covered = round(current_cash / monthly_exp, 1) if current_cash > 0 else 0
+    cash_score = max(0, min(100, int(months_covered * 50)))
+    retention_score = int((repeaters / buyers * 100) if buyers > 0 else 0)
+
+    priority_rows = []
+    for name, score, weight, advice in [
+        ('Sales trend', trend_score, 30,
+         f'30d vs prior 30d: {int(trend_pct):+d}%. Every 10% of trend improvement is worth ~5 health points.'),
+        ('Margin', margin_score, 25,
+         f'{margin_pct}% avg margin. Raise prices or reduce costs to lift this — each 4% margin is worth ~10 health points.'),
+        ('Stock health', stock_score, 15,
+         f'{low_sku} of {total_sku} SKUs low. Restock to close the gap.'),
+        ('Cash buffer', cash_score, 15,
+         f'{months_covered} months covered. Every 0.4 extra months of buffer is worth ~10 health points.'),
+        ('Customer retention', retention_score, 15,
+         f'{repeaters} of {buyers} customers repeat. Every 10% retention gain is worth ~1.5 health points.'),
+    ]:
+        gap = 100 - score
+        impact = round(gap * weight / 100, 1)
+        priority_rows.append({
+            'name': name,
+            'score': score,
+            'gap': gap,
+            'weight': weight,
+            'impact': impact,
+            'advice': advice,
+        })
+    priority_rows.sort(key=lambda x: -x['impact'])
+
+    # ══════════════════════════════════════════════════════
+    # TAB 3 — Milestones (goal pace checkpoints)
+    # ══════════════════════════════════════════════════════
+    cur.execute("SELECT monthly_revenue_goal FROM settings WHERE user_id=%s", (uid,))
+    goal = float((cur.fetchone() or {}).get('monthly_revenue_goal') or 0)
+
+    today = datetime.today()
+    month_start = today.replace(day=1)
+    days_in_month = ((month_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)).day
+    day_of_month = today.day
+    month_str = today.strftime('%Y-%m')
+
+    cur.execute("""
+        SELECT substr(sale_date,1,10) AS d, COALESCE(SUM(total_amount),0) AS t
+        FROM sales WHERE user_id=%s AND sale_date LIKE %s
+        GROUP BY substr(sale_date,1,10) ORDER BY d
+    """, (uid, month_str + '%'))
+    daily_map = {r['d']: float(r['t']) for r in cur.fetchall()}
+
+    milestones = []
+    checkpoints = [7, 14, 21, 28, days_in_month]
+    cumulative = 0.0
+    for d in range(1, days_in_month + 1):
+        key = f"{month_str}-{d:02d}"
+        cumulative += daily_map.get(key, 0) if d <= day_of_month else 0
+        if d in checkpoints:
+            expected = goal * (d / days_in_month) if goal else 0
+            actual = cumulative
+            diff = actual - expected
+            if d < day_of_month:
+                status = 'hit' if diff >= 0 else 'missed'
+            elif d == day_of_month or d < day_of_month + 7:
+                status = 'ontrack' if diff >= -goal * 0.05 else 'behind'
+            else:
+                status = 'pending'
+            milestones.append({
+                'day': d,
+                'expected': round(expected, 2),
+                'actual': round(actual, 2),
+                'diff': round(diff, 2),
+                'status': status,
+            })
+
+    # ══════════════════════════════════════════════════════
+    # TAB 4 — Opportunities (data-driven suggestions)
+    # ══════════════════════════════════════════════════════
+    opportunities = []
+
+    # High-margin low-velocity products
+    cur.execute("""
+        SELECT COALESCE(st.product_name, 'Item') AS name,
+               COALESCE(SUM(s.quantity_sold),0) AS units,
+               COALESCE(SUM(s.total_amount),0) AS revenue,
+               COALESCE(SUM(s.profit),0) AS profit
+        FROM sales s LEFT JOIN stock st ON st.id = s.stock_id
+        WHERE s.user_id=%s
+          AND s.sale_date >= to_char(CURRENT_DATE - INTERVAL '60 days','YYYY-MM-DD')
+        GROUP BY st.product_name
+        HAVING COUNT(*) >= 2
+    """, (uid,))
+    for r in (cur.fetchall() or []):
+        rev = float(r.get('revenue') or 0)
+        pft = float(r.get('profit') or 0)
+        units = float(r.get('units') or 0)
+        if rev > 0:
+            margin = pft / rev * 100
+            if margin >= 30 and units < 5:
+                opportunities.append({
+                    'icon': 'trending-up', 'severity': 'info',
+                    'title': f'High-margin, low-volume: {r.get("name") or "Item"}',
+                    'detail': f'{round(margin, 1)}% margin but only {int(units)} units sold in 60 days. '
+                              f'Bundle it with a faster seller or feature it prominently — margin is already good.',
+                })
+
+    # Lapsed repeaters (bought before, not in last 60 days)
+    cur.execute("""
+        SELECT c.name, MAX(s.sale_date) AS last_sale, COUNT(s.id) AS orders
+        FROM customers c JOIN sales s ON s.customer_id = c.id AND s.user_id = c.user_id
+        WHERE c.user_id=%s
+        GROUP BY c.id, c.name
+        HAVING COUNT(s.id) >= 2
+           AND MAX(s.sale_date) < to_char(CURRENT_DATE - INTERVAL '60 days','YYYY-MM-DD')
+        ORDER BY MAX(s.sale_date) ASC
+        LIMIT 5
+    """, (uid,))
+    lapsed = list(cur.fetchall() or [])
+    if lapsed:
+        names = ', '.join(r['name'] for r in lapsed[:3])
+        opportunities.append({
+            'icon': 'users', 'severity': 'info',
+            'title': f'{len(lapsed)} regular customer(s) have not bought in 60+ days',
+            'detail': f'Top lapsed: {names}. A small discount or reminder often reactivates them — '
+                      f'they have already shown they buy from you.',
+        })
+
+    # Best day of week
+    cur.execute("""
+        SELECT EXTRACT(DOW FROM sale_date::date) AS dow,
+               COALESCE(SUM(total_amount),0) AS rev
+        FROM sales WHERE user_id=%s
+          AND sale_date >= to_char(CURRENT_DATE - INTERVAL '90 days','YYYY-MM-DD')
+        GROUP BY EXTRACT(DOW FROM sale_date::date)
+        ORDER BY rev DESC LIMIT 1
+    """, (uid,))
+    dow_row = cur.fetchone()
+    if dow_row and float(dow_row.get('rev') or 0) > 0:
+        dow_names = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+        try:
+            dow_idx = int(dow_row.get('dow') or 0)
+            day_name = dow_names[dow_idx] if 0 <= dow_idx < 7 else 'a weekday'
+        except (ValueError, TypeError):
+            day_name = 'a weekday'
+        opportunities.append({
+            'icon': 'calendar', 'severity': 'success',
+            'title': f'{day_name} is your strongest sales day',
+            'detail': f'Based on last 90 days. Consider extra staff, longer hours, or targeted promos on {day_name}s.',
+        })
+
+    # ══════════════════════════════════════════════════════
+    # TAB 5 — Risks (warning signals)
+    # ══════════════════════════════════════════════════════
+    risks = []
+
+    # Low stock
+    if low_sku > 0:
+        risks.append({
+            'icon': 'alert-triangle', 'severity': 'danger' if low_sku >= 5 else 'warn',
+            'title': f'{low_sku} product(s) below stock threshold',
+            'detail': f'Of {total_sku} tracked SKUs. Restock soon to avoid stockouts.',
+        })
+
+    # Sales trend decline
+    if trend_pct < -15:
+        risks.append({
+            'icon': 'trending-down', 'severity': 'warn',
+            'title': f'Sales down {abs(int(trend_pct))}% vs prior 30 days',
+            'detail': f'Last 30 days: {round(sales_30, 2)} vs prior 30: {round(sales_prev, 2)}. Investigate cause before it becomes a pattern.',
+        })
+
+    # Negative-margin products
+    cur.execute("""
+        SELECT COALESCE(st.product_name, 'Item') AS name,
+               COALESCE(SUM(s.total_amount),0) AS revenue,
+               COALESCE(SUM(s.profit),0) AS profit
+        FROM sales s LEFT JOIN stock st ON st.id = s.stock_id
+        WHERE s.user_id=%s AND s.sale_date >= to_char(CURRENT_DATE - INTERVAL '90 days','YYYY-MM-DD')
+        GROUP BY st.product_name HAVING COUNT(*) >= 2 AND SUM(s.profit) < 0
+        ORDER BY SUM(s.profit) ASC LIMIT 5
+    """, (uid,))
+    losing = list(cur.fetchall() or [])
+    if losing:
+        names = ', '.join(r['name'] for r in losing[:3])
+        risks.append({
+            'icon': 'alert-circle', 'severity': 'danger',
+            'title': f'{len(losing)} product(s) with negative margin',
+            'detail': f'Losing money on: {names}. Either raise the price or stop selling.',
+        })
+
+    # Top customer gone quiet
+    cur.execute("""
+        SELECT c.name, MAX(s.sale_date) AS last_sale,
+               COALESCE(SUM(s.total_amount),0) AS spent
+        FROM customers c JOIN sales s ON s.customer_id = c.id AND s.user_id = c.user_id
+        WHERE c.user_id=%s
+        GROUP BY c.id, c.name
+        ORDER BY spent DESC LIMIT 1
+    """, (uid,))
+    top_cust = cur.fetchone()
+    if top_cust:
+        last = (top_cust.get('last_sale') or '')[:10]
+        try:
+            days = (today.date() - datetime.strptime(last, '%Y-%m-%d').date()).days if last else 9999
+        except ValueError:
+            days = 9999
+        if days >= 60:
+            risks.append({
+                'icon': 'users', 'severity': 'warn',
+                'title': f'Top customer has gone quiet ({days}d)',
+                'detail': f'{top_cust.get("name")} was your highest-spending customer. Reach out before they are lost.',
+            })
+
+    # Cash concern
+    if current_cash < monthly_exp * 1.5 and current_cash > 0:
+        risks.append({
+            'icon': 'wallet', 'severity': 'warn' if months_covered >= 1 else 'danger',
+            'title': f'Cash buffer is {months_covered} months',
+            'detail': f'Current cash {round(current_cash, 2)} vs monthly expenses ~{round(monthly_exp, 2)}. '
+                      f'Below 3 months of buffer is tight — watch collections and defer non-critical spend.',
+        })
+
+    cur.close(); conn.close()
+
+    return render_template('analytics_decisions.html',
+        scenarios=scenarios,
+        current_cash=current_cash,
+        cash_source=cash_source,
+        avg_daily_revenue=avg_daily_revenue,
+        avg_daily_expense=avg_daily_expense,
+        daily_obligations=round(daily_obligations, 2),
+        priority_rows=priority_rows,
+        goal=goal,
+        milestones=milestones,
+        day_of_month=day_of_month,
+        days_in_month=days_in_month,
+        opportunities=opportunities,
+        risks=risks,
+    )
+
+
+@app.route('/forecast/scenarios')
+@login_required
+def redirect_forecast_scenarios():
+    return redirect(url_for('analytics_decisions') + '#scenarios', code=301)
+
+
+@app.route('/health/priority')
+@login_required
+def redirect_health_priority():
+    return redirect(url_for('analytics_decisions') + '#priority', code=301)
+
+
+@app.route('/goals/milestones')
+@login_required
+def redirect_goals_milestones():
+    return redirect(url_for('analytics_decisions') + '#milestones', code=301)
+
+
+@app.route('/insights/opportunities')
+@login_required
+def redirect_insights_opportunities():
+    return redirect(url_for('analytics_decisions') + '#opportunities', code=301)
+
+
+@app.route('/insights/risks')
+@login_required
+def redirect_insights_risks():
+    return redirect(url_for('analytics_decisions') + '#risks', code=301)
 
 
 if __name__ == '__main__':
