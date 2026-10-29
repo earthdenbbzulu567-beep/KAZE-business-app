@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% block title %}Workflow Signals{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1><i data-lucide="check-square"></i> Workflow Signals</h1>
+    <p>Task priority, note actions, upcoming context, overdue escalations, and calendar load.</p>
+  </div>
+</div>
+
+<nav class="analytics-tabs" role="tablist">
+  <button type="button" data-tab="taskpriority" class="is-on">Task priority</button>
+  <button type="button" data-tab="noteactions">Note actions</button>
+  <button type="button" data-tab="context">Reminder context</button>
+  <button type="button" data-tab="escalation">Escalation</button>
+  <button type="button" data-tab="conflicts">Conflicts</button>
+  <button type="button" data-tab="calandar">Free/busy</button>
+</nav>
+
+<section class="analytics-panel is-on" id="panel-taskpriority">
+  <h2>Task priority (scored)</h2>
+  <p style="color:var(--text3);font-size:0.85rem;margin:-0.4rem 0 0.8rem;">
+    Open tasks ranked by priority × urgency. High-priority overdue tasks score highest. Work top to bottom for maximum effect.
+  </p>
+  {% if task_rows %}
+  <div class="table-wrapper">
+    <table>
+      <thead><tr><th>Task</th><th>Priority</th><th>Due</th><th>Urgency</th><th>Score</th></tr></thead>
+      <tbody>
+      {% for r in task_rows %}
+      <tr {% if r.score >= 7 %}style="background:var(--danger-dim);"{% elif r.score >= 4 %}style="background:rgba(224,160,48,0.08);"{% endif %}>
+        <td><strong>{{ r.title }}</strong></td>
+        <td>{{ r.priority }}</td>
+        <td>{{ r.due_date }}</td>
+        <td>{{ r.urgency }}</td>
+        <td style="font-family:var(--mono);font-weight:700;">{{ r.score }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="widget"><p style="color:var(--text3);">No open tasks. Nice.</p></div>
+  {% endif %}
+</section>
+
+<section class="analytics-panel" id="panel-noteactions">
+  <h2>Note actions</h2>
+  <p style="color:var(--text3);font-size:0.85rem;margin:-0.4rem 0 0.8rem;">
+    Extracted from notes: lines starting with <code>- [ ]</code>, <code>[ ]</code>, <code>todo:</code>, or <code>action:</code>. Use these markers in your notes to make action items visible here.
+  </p>
+  {% if note_actions %}
+  <div class="table-wrapper">
+    <table>
+      <thead><tr><th>Note</th><th>Action</th><th>Updated</th></tr></thead>
+      <tbody>
+      {% for r in note_actions %}
+      <tr>
+        <td style="font-size:0.85rem;color:var(--text2);">{{ r.note_title }}</td>
+        <td>{{ r.action }}</td>
+        <td style="font-size:0.85rem;color:var(--text3);">{{ r.updated }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="widget"><p style="color:var(--text3);">No action items found in notes. Start a line with <code>- [ ]</code> or <code>TODO:</code> to mark a task.</p></div>
+  {% endif %}
+</section>
+
+<section class="analytics-panel" id="panel-context">
+  <h2>Upcoming items (next 14 days)</h2>
+  <p style="color:var(--text3);font-size:0.85rem;margin:-0.4rem 0 0.8rem;">
+    Everything with a date in the next two weeks: tasks, recurring items, purchase orders. One list, sorted by date.
+  </p>
+  {% if context_items %}
+  <div class="table-wrapper">
+    <table>
+      <thead><tr><th>Date</th><th>Kind</th><th>Label</th><th>Detail</th></tr></thead>
+      <tbody>
+      {% for r in context_items %}
+      <tr>
+        <td>{{ r.date }}</td>
+        <td><span class="status-pill">{{ r.kind }}</span></td>
+        <td><strong>{{ r.label }}</strong></td>
+        <td style="font-size:0.85rem;color:var(--text2);">{{ r.detail }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="widget"><p style="color:var(--text3);">Nothing scheduled in the next 14 days.</p></div>
+  {% endif %}
+</section>
+
+<section class="analytics-panel" id="panel-escalation">
+  <h2>Overdue escalations</h2>
+  <p style="color:var(--text3);font-size:0.85rem;margin:-0.4rem 0 0.8rem;">
+    Tasks and purchase orders past their expected date. Red = 14+ days overdue, amber = 3-13 days.
+  </p>
+  {% if escalation_items %}
+  <div class="table-wrapper">
+    <table>
+      <thead><tr><th>Kind</th><th>Item</th><th>Due</th><th>Days overdue</th><th>Severity</th></tr></thead>
+      <tbody>
+      {% for r in escalation_items %}
+      <tr {% if r.severity == 'danger' %}style="background:var(--danger-dim);"{% elif r.severity == 'warn' %}style="background:rgba(224,160,48,0.08);"{% endif %}>
+        <td>{{ r.kind }}</td>
+        <td><strong>{{ r.label }}</strong></td>
+        <td>{{ r.due }}</td>
+        <td style="font-family:var(--mono);font-weight:700;">{{ r.days_overdue }}d</td>
+        <td>
+          {% if r.severity == 'danger' %}<span class="status-pill" style="background:var(--danger-dim);color:#e74c3c;">Critical</span>
+          {% elif r.severity == 'warn' %}<span class="status-pill" style="background:rgba(224,160,48,0.15);color:#e0a030;">Overdue</span>
+          {% else %}<span class="status-pill">Recent</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="widget"><p style="color:var(--green);">Nothing overdue. All tasks and POs are on schedule.</p></div>
+  {% endif %}
+</section>
+
+<section class="analytics-panel" id="panel-conflicts">
+  <h2>Calendar conflicts (next 30 days)</h2>
+  <p style="color:var(--text3);font-size:0.85rem;margin:-0.4rem 0 0.8rem;">
+    Days where you have 2+ commitments scheduled: tasks, purchase orders, or service sessions.
+  </p>
+  {% if conflict_rows %}
+  {% for c in conflict_rows %}
+  <div class="widget" style="border-left:4px solid #e0a030;padding:0.9rem 1.1rem;">
+    <strong>{{ c.date }}</strong> — {{ c.count }} commitments:
+    <ul style="margin:0.5rem 0 0;padding-left:1.5rem;color:var(--text2);font-size:0.88rem;">
+      {% for i in c.items %}
+      <li><span class="status-pill">{{ i.kind }}</span> {{ i.label }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="widget"><p style="color:var(--text3);">No conflicts. Every day has at most one commitment.</p></div>
+  {% endif %}
+</section>
+
+<section class="analytics-panel" id="panel-calandar">
+  <h2>Free/busy (next 30 days)</h2>
+  <div class="stat-grid" style="margin:0.5rem 0 1rem;">
+    <div class="stat-chip"><span>Busy days</span><strong>{{ busy_count }}</strong></div>
+    <div class="stat-chip"><span>Free days</span><strong>{{ free_count }}</strong></div>
+    <div class="stat-chip"><span>Total</span><strong>30</strong></div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:0.4rem;">
+    {% for d in calendar_days %}
+    <div style="padding:0.5rem 0.6rem;border-radius:8px;text-align:center;font-size:0.82rem;font-family:var(--mono);{% if d.busy %}background:var(--danger-dim);border:1px solid rgba(231,76,60,0.3);{% else %}background:var(--surface2);border:1px solid var(--border);{% endif %}">
+      {{ d.date[5:] }}
+      {% if d.busy %}<div style="font-weight:700;color:#e74c3c;">{{ d.count }}</div>{% else %}<div style="color:var(--text3);">—</div>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<style>
+.analytics-tabs { display:flex; gap:0.4rem; margin:1rem 0 1.2rem; flex-wrap:wrap; border-bottom:1px solid var(--border); }
+.analytics-tabs button {
+  background: transparent; border: none; border-bottom: 2px solid transparent;
+  padding: 0.6rem 1rem; font-size: 0.9rem; font-weight: 700;
+  color: var(--text2); cursor: pointer; font-family: inherit;
+}
+.analytics-tabs button.is-on { color: var(--red-bright); border-bottom-color: var(--red-bright); }
+.analytics-tabs button:hover { color: var(--text); }
+.analytics-panel { display: none; }
+.analytics-panel.is-on { display: block; }
+</style>
+
+<script>
+(function(){
+  const tabs = document.querySelectorAll('.analytics-tabs button');
+  const panels = document.querySelectorAll('.analytics-panel');
+  function activate(name) {
+    tabs.forEach(t => t.classList.toggle('is-on', t.dataset.tab === name));
+    panels.forEach(p => p.classList.toggle('is-on', p.id === 'panel-' + name));
+  }
+  tabs.forEach(t => t.addEventListener('click', () => {
+    activate(t.dataset.tab);
+    history.replaceState(null, '', '#' + t.dataset.tab);
+  }));
+  const hash = (location.hash || '').replace('#', '');
+  if (['taskpriority','noteactions','context','escalation','conflicts','calandar'].includes(hash)) {
+    activate(hash);
+  }
+})();
+</script>
+{% endblock %}

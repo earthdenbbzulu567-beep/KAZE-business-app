@@ -2014,6 +2014,8 @@ NAV_GROUPS = (
         ('Books health', 'accounts_health', 'book-open-check', 'accounts', ('accounts_health',)),
         ('Decisions & signals', 'analytics_decisions', 'lightbulb', 'reports', ('analytics_decisions',)),
         ('Patterns', 'analytics_patterns', 'activity', 'reports', ('analytics_patterns',)),
+        ('Team health', 'team_health', 'users-round', 'workspace', ('team_health',)),
+        ('Workflow signals', 'workflow_signals', 'check-square', 'workspace', ('workflow_signals',)),
     )),
     ('Trade', (
         ('Shop', 'shop', 'store', 'shop', ('shop',)),
@@ -11647,16 +11649,7 @@ _DISABLED_PATHS = frozenset({
     '/collections/aging',
     '/payments/fees',
     '/health/history',
-    '/team/permissions',
-    '/team/activity',
-    '/tasks/priority',
     '/tasks/blockers',
-    '/notes/actions',
-    '/reminders/context',
-    '/reminders/escalation',
-    '/calendar/conflicts',
-    '/calendar/free',
-    '/settings/health',
     '/settings/audit',
     '/rfm/actions',
     '/whatsapp/log',
@@ -12906,6 +12899,364 @@ def redirect_stats_seasonality():
 @login_required
 def redirect_reports_variance():
     return redirect(url_for('analytics_patterns') + '#variance', code=301)
+
+
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Batch 2f — Team & Workflow (consolidated from 9 disabled routes)
+# ═══════════════════════════════════════════════════════════════════════
+
+_bind_module('workspace',
+    'workflow_signals',
+    'redirect_tasks_priority', 'redirect_notes_actions',
+    'redirect_reminders_context', 'redirect_reminders_escalation',
+    'redirect_calendar_conflicts', 'redirect_calendar_free')
+
+
+@app.route('/team/health')
+@login_required
+def team_health():
+    uid = current_user.id
+    conn = get_db(); cur = conn.cursor()
+
+    # ── Permissions ─────────────────────────────────────
+    cur.execute("""
+        SELECT id, username, email, role
+        FROM users
+        WHERE id=%s OR owner_id=%s
+        ORDER BY CASE WHEN role='owner' THEN 0 ELSE 1 END, username
+    """, (uid, uid))
+    team_rows = []
+    for r in (cur.fetchall() or []):
+        role = (r.get('role') or 'staff').lower()
+        is_owner = (role == 'owner')
+        team_rows.append({
+            'id': r.get('id'),
+            'username': r.get('username') or '—',
+            'email': r.get('email') or '—',
+            'role': role,
+            'is_owner': is_owner,
+        })
+
+    # ── Activity (recent 30 across account) ─────────────
+    cur.execute("""
+        SELECT username, action, details, created_at
+        FROM activities
+        WHERE user_id=%s
+        ORDER BY created_at DESC
+        LIMIT 30
+    """, (uid,))
+    activity_rows = []
+    for r in (cur.fetchall() or []):
+        activity_rows.append({
+            'username': r.get('username') or '—',
+            'action': r.get('action') or '—',
+            'details': r.get('details') or '',
+            'when': r.get('created_at') or '',
+        })
+
+    # ── Config audit ────────────────────────────────────
+    cur.execute("""
+        SELECT business_name, currency_code, currency_symbol, tax_rate,
+               monthly_revenue_goal, low_stock_threshold,
+               stripe_secret_key, stripe_webhook_secret
+        FROM settings WHERE user_id=%s
+    """, (uid,))
+    s = cur.fetchone() or {}
+    config_checks = [
+        {'item': 'Business name',
+         'status': 'ok' if (s.get('business_name') or '').strip() else 'warn',
+         'detail': (s.get('business_name') or 'Not set — appears on PDF headers')},
+        {'item': 'Currency code',
+         'status': 'ok' if s.get('currency_code') else 'warn',
+         'detail': str(s.get('currency_code') or 'Not set')},
+        {'item': 'Currency symbol',
+         'status': 'ok' if s.get('currency_symbol') else 'warn',
+         'detail': str(s.get('currency_symbol') or 'Not set')},
+        {'item': 'Low stock threshold',
+         'status': 'ok' if float(s.get('low_stock_threshold') or 0) > 0 else 'warn',
+         'detail': str(s.get('low_stock_threshold') or 0) + ' units'},
+        {'item': 'Monthly revenue goal',
+         'status': 'ok' if float(s.get('monthly_revenue_goal') or 0) > 0 else 'info',
+         'detail': ('Goal = ' + str(s.get('monthly_revenue_goal'))) if float(s.get('monthly_revenue_goal') or 0) > 0 else 'Optional — enables goal tracking'},
+        {'item': 'Tax rate',
+         'status': 'info',
+         'detail': str(s.get('tax_rate') or 0) + '% (0 means no tax applied)'},
+        {'item': 'Stripe secret key',
+         'status': 'ok' if s.get('stripe_secret_key') else 'warn',
+         'detail': 'Configured' if s.get('stripe_secret_key') else 'Missing — subscriptions cannot start'},
+        {'item': 'Stripe webhook secret',
+         'status': 'ok' if s.get('stripe_webhook_secret') else 'warn',
+         'detail': 'Configured' if s.get('stripe_webhook_secret') else 'Missing — payments will not activate'},
+    ]
+
+    cur.close(); conn.close()
+    return render_template('team_health.html',
+        team_rows=team_rows,
+        activity_rows=activity_rows,
+        config_checks=config_checks,
+    )
+
+
+@app.route('/workflow/signals')
+@login_required
+def workflow_signals():
+    uid = current_user.id
+    today_dt = datetime.today()
+    today = today_dt.strftime('%Y-%m-%d')
+    horizon_14 = (today_dt + timedelta(days=14)).strftime('%Y-%m-%d')
+    horizon_30 = (today_dt + timedelta(days=30)).strftime('%Y-%m-%d')
+    three_days = (today_dt + timedelta(days=3)).strftime('%Y-%m-%d')
+    seven_days = (today_dt + timedelta(days=7)).strftime('%Y-%m-%d')
+
+    conn = get_db(); cur = conn.cursor()
+
+    # ── TAB 1: Task priority (scored) ───────────────────
+    cur.execute("""
+        SELECT id, title, priority, due_date, done
+        FROM tasks WHERE user_id=%s AND done=0
+    """, (uid,))
+    priority_weight = {'high': 3, 'medium': 2, 'low': 1}
+    task_rows = []
+    for r in (cur.fetchall() or []):
+        pw = priority_weight.get((r.get('priority') or 'medium').lower(), 2)
+        due = (r.get('due_date') or '')[:10]
+        if due and due < today:
+            urgency, label = 3.0, 'Overdue'
+        elif due == today:
+            urgency, label = 3.0, 'Due today'
+        elif due and due <= three_days:
+            urgency, label = 2.0, 'Due in 3 days'
+        elif due and due <= seven_days:
+            urgency, label = 1.5, 'Due this week'
+        else:
+            urgency, label = 1.0, 'No rush'
+        task_rows.append({
+            'id': r.get('id'),
+            'title': r.get('title') or '—',
+            'priority': r.get('priority') or 'medium',
+            'due_date': due or 'no due date',
+            'urgency': label,
+            'score': round(pw * urgency, 1),
+        })
+    task_rows.sort(key=lambda x: -x['score'])
+
+    # ── TAB 2: Note actions (extract TODO / - [ ] lines) ─
+    cur.execute("SELECT id, title, body, updated_date FROM notes WHERE user_id=%s", (uid,))
+    note_actions = []
+    for r in (cur.fetchall() or []):
+        body = r.get('body') or ''
+        for line in body.split('\n'):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            action_text = None
+            if stripped.startswith('- [ ]') or stripped.startswith('* [ ]'):
+                action_text = stripped[5:].strip()
+            elif stripped.startswith('[ ]'):
+                action_text = stripped[3:].strip()
+            else:
+                low = stripped.lower()
+                if low.startswith('todo:'):
+                    action_text = stripped[5:].strip()
+                elif low.startswith('action:'):
+                    action_text = stripped[7:].strip()
+            if action_text and len(action_text) > 2:
+                note_actions.append({
+                    'note_id': r.get('id'),
+                    'note_title': r.get('title') or 'Note',
+                    'action': action_text,
+                    'updated': r.get('updated_date') or '',
+                })
+    note_actions = note_actions[:40]
+
+    # ── TAB 3: Reminder context (unified upcoming 14d) ──
+    context_items = []
+    cur.execute("""
+        SELECT title, due_date, priority FROM tasks
+        WHERE user_id=%s AND done=0 AND due_date != ''
+          AND due_date >= %s AND due_date <= %s
+    """, (uid, today, horizon_14))
+    for r in (cur.fetchall() or []):
+        context_items.append({
+            'date': r.get('due_date'),
+            'kind': 'Task',
+            'label': r.get('title') or '—',
+            'detail': r.get('priority') or 'medium',
+        })
+    cur.execute("""
+        SELECT name, next_run_date, item_type, amount FROM recurring_items
+        WHERE user_id=%s AND active=1
+          AND next_run_date >= %s AND next_run_date <= %s
+    """, (uid, today, horizon_14))
+    for r in (cur.fetchall() or []):
+        context_items.append({
+            'date': r.get('next_run_date'),
+            'kind': 'Recurring',
+            'label': r.get('name') or '—',
+            'detail': (r.get('item_type') or 'item') + ' · ' + _format_money(r.get('amount') or 0),
+        })
+    cur.execute("""
+        SELECT item_description, expected_date, status FROM purchase_orders
+        WHERE user_id=%s AND status != 'received'
+          AND expected_date != '' AND expected_date >= %s AND expected_date <= %s
+    """, (uid, today, horizon_14))
+    for r in (cur.fetchall() or []):
+        context_items.append({
+            'date': r.get('expected_date'),
+            'kind': 'Purchase order',
+            'label': r.get('item_description') or '—',
+            'detail': r.get('status') or 'pending',
+        })
+    context_items.sort(key=lambda x: x['date'] or '9999')
+
+    # ── TAB 4: Reminder escalation (overdue) ────────────
+    escalation_items = []
+    cur.execute("""
+        SELECT id, title, due_date, priority FROM tasks
+        WHERE user_id=%s AND done=0 AND due_date != '' AND due_date < %s
+    """, (uid, today))
+    for r in (cur.fetchall() or []):
+        due = (r.get('due_date') or '')[:10]
+        try:
+            days_over = (today_dt.date() - datetime.strptime(due, '%Y-%m-%d').date()).days
+        except (ValueError, TypeError):
+            days_over = 0
+        escalation_items.append({
+            'kind': 'Task', 'label': r.get('title') or '—',
+            'due': due, 'days_overdue': days_over,
+            'priority': r.get('priority') or 'medium',
+            'severity': 'danger' if days_over >= 14 else 'warn' if days_over >= 3 else 'info',
+        })
+    cur.execute("""
+        SELECT id, item_description, expected_date FROM purchase_orders
+        WHERE user_id=%s AND status != 'received'
+          AND expected_date != '' AND expected_date < %s
+    """, (uid, today))
+    for r in (cur.fetchall() or []):
+        due = (r.get('expected_date') or '')[:10]
+        try:
+            days_over = (today_dt.date() - datetime.strptime(due, '%Y-%m-%d').date()).days
+        except (ValueError, TypeError):
+            days_over = 0
+        escalation_items.append({
+            'kind': 'PO', 'label': r.get('item_description') or '—',
+            'due': due, 'days_overdue': days_over,
+            'priority': 'medium',
+            'severity': 'danger' if days_over >= 14 else 'warn' if days_over >= 3 else 'info',
+        })
+    escalation_items.sort(key=lambda x: -x['days_overdue'])
+
+    # ── TAB 5+6: Calendar conflicts + free/busy (30d) ──
+    cur.execute("""
+        WITH dated_items AS (
+            SELECT due_date AS item_date, 'Task' AS kind, title AS label
+            FROM tasks WHERE user_id=%s AND done=0 AND due_date != ''
+            UNION ALL
+            SELECT expected_date, 'PO', item_description
+            FROM purchase_orders WHERE user_id=%s AND status != 'received' AND expected_date != ''
+            UNION ALL
+            SELECT session_date, 'Service', customer_name
+            FROM service_sessions WHERE user_id=%s AND status != 'cancelled'
+        )
+        SELECT item_date, kind, label FROM dated_items
+        WHERE item_date >= %s AND item_date <= %s
+        ORDER BY item_date, kind
+    """, (uid, uid, uid, today, horizon_30))
+
+    by_date = {}
+    for r in (cur.fetchall() or []):
+        d = r.get('item_date')
+        if not d:
+            continue
+        by_date.setdefault(d, []).append({
+            'kind': r.get('kind') or '?',
+            'label': r.get('label') or '—',
+        })
+
+    conflict_rows = []
+    for d in sorted(by_date.keys()):
+        items = by_date[d]
+        if len(items) >= 2:
+            conflict_rows.append({
+                'date': d, 'items': items, 'count': len(items),
+            })
+
+    calendar_days = []
+    for i in range(30):
+        d = (today_dt + timedelta(days=i)).strftime('%Y-%m-%d')
+        n = len(by_date.get(d, []))
+        calendar_days.append({'date': d, 'busy': n > 0, 'count': n})
+    free_count = sum(1 for d in calendar_days if not d['busy'])
+    busy_count = len(calendar_days) - free_count
+
+    cur.close(); conn.close()
+
+    return render_template('workflow_signals.html',
+        task_rows=task_rows,
+        note_actions=note_actions,
+        context_items=context_items,
+        escalation_items=escalation_items,
+        conflict_rows=conflict_rows,
+        calendar_days=calendar_days,
+        free_count=free_count,
+        busy_count=busy_count,
+    )
+
+
+@app.route('/team/permissions')
+@login_required
+def redirect_team_permissions():
+    return redirect(url_for('team_health') + '#permissions', code=301)
+
+
+@app.route('/team/activity')
+@login_required
+def redirect_team_activity():
+    return redirect(url_for('team_health') + '#activity', code=301)
+
+
+@app.route('/settings/health')
+@login_required
+def redirect_settings_health():
+    return redirect(url_for('team_health') + '#config', code=301)
+
+
+@app.route('/tasks/priority')
+@login_required
+def redirect_tasks_priority():
+    return redirect(url_for('workflow_signals') + '#taskpriority', code=301)
+
+
+@app.route('/notes/actions')
+@login_required
+def redirect_notes_actions():
+    return redirect(url_for('workflow_signals') + '#noteactions', code=301)
+
+
+@app.route('/reminders/context')
+@login_required
+def redirect_reminders_context():
+    return redirect(url_for('workflow_signals') + '#context', code=301)
+
+
+@app.route('/reminders/escalation')
+@login_required
+def redirect_reminders_escalation():
+    return redirect(url_for('workflow_signals') + '#escalation', code=301)
+
+
+@app.route('/calendar/conflicts')
+@login_required
+def redirect_calendar_conflicts():
+    return redirect(url_for('workflow_signals') + '#conflicts', code=301)
+
+
+@app.route('/calendar/free')
+@login_required
+def redirect_calendar_free():
+    return redirect(url_for('workflow_signals') + '#calendar', code=301)
 
 
 if __name__ == '__main__':
