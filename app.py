@@ -2016,6 +2016,7 @@ NAV_GROUPS = (
         ('Patterns', 'analytics_patterns', 'activity', 'reports', ('analytics_patterns',)),
         ('Team health', 'team_health', 'users-round', 'workspace', ('team_health',)),
         ('Workflow signals', 'workflow_signals', 'check-square', 'workspace', ('workflow_signals',)),
+        ('Services analytics', 'services_analytics', 'graduation-cap', 'services', ('services_analytics',)),
     )),
     ('Trade', (
         ('Shop', 'shop', 'store', 'shop', ('shop',)),
@@ -11651,16 +11652,11 @@ _DISABLED_PATHS = frozenset({
     '/health/history',
     '/tasks/blockers',
     '/settings/audit',
-    '/rfm/actions',
     '/whatsapp/log',
     '/whatsapp/templates',
     '/documents/approval',
     '/documents/versions',
     '/banking/reconcile',
-    '/investments/risk',
-    '/services/utilization',
-    '/services/yield',
-    '/day-close/variance',
 })
 
 
@@ -13257,6 +13253,184 @@ def redirect_calendar_conflicts():
 @login_required
 def redirect_calendar_free():
     return redirect(url_for('workflow_signals') + '#calendar', code=301)
+
+
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Batch 2g — Folds & Services Analytics
+# ═══════════════════════════════════════════════════════════════════════
+
+@app.template_global()
+def rfm_segment_actions(groups, segment_order):
+    """Computed actions per RFM segment based on group sizes.
+    Called from rfm.html. No route changes needed."""
+    try:
+        if not groups or not segment_order:
+            return []
+        counts = {s: len(groups.get(s, []) or []) for s in segment_order}
+        actions = []
+        if counts.get('Champion', 0) > 0:
+            actions.append({
+                'segment': 'Champion', 'count': counts['Champion'],
+                'title': 'Thank and ask',
+                'detail': 'Personally thank these customers. Ask for referrals or testimonials — happy champions convert at the highest rate.',
+            })
+        if counts.get('Loyal', 0) > 0:
+            actions.append({
+                'segment': 'Loyal', 'count': counts['Loyal'],
+                'title': 'Nudge to Champion',
+                'detail': 'Offer a bundle, upgrade, or premium tier. They buy regularly — a small upsell is likely to land.',
+            })
+        if counts.get('New', 0) > 0:
+            actions.append({
+                'segment': 'New', 'count': counts['New'],
+                'title': 'Welcome and follow up',
+                'detail': 'First purchase in the last few days. Check in. A good second experience locks them in.',
+            })
+        if counts.get('At Risk', 0) > 0:
+            actions.append({
+                'segment': 'At Risk', 'count': counts['At Risk'],
+                'title': 'Re-engagement offer',
+                'detail': 'Were repeat buyers, now slowed. Send a discount or personal reminder. Recovery is cheaper than acquisition.',
+            })
+        if counts.get('Needs Attention', 0) > 0:
+            actions.append({
+                'segment': 'Needs Attention', 'count': counts['Needs Attention'],
+                'title': 'Check in',
+                'detail': 'Buying occasionally but fading. A small offer or message may reactivate them.',
+            })
+        if counts.get('Lost', 0) > 0:
+            actions.append({
+                'segment': 'Lost', 'count': counts['Lost'],
+                'title': 'Decide: win back or let go',
+                'detail': 'No purchase in 90+ days. A win-back campaign may work for a few. Otherwise focus on the rest.',
+            })
+        return actions
+    except Exception:
+        return []
+
+
+@app.template_global()
+def portfolio_risk_metrics(holdings):
+    """Portfolio concentration + diversification from holdings list.
+    Called from investments.html. No route changes needed."""
+    try:
+        if not holdings:
+            return {'has_data': False, 'message': 'Add at least one holding to see portfolio risk.'}
+        total_value = sum(float(h.get('value') or 0) for h in holdings)
+        if total_value <= 0:
+            return {'has_data': False, 'message': 'Holdings have zero current value.'}
+        weights = [float(h.get('value') or 0) / total_value for h in holdings]
+        top_weight = max(weights)
+        top_holding = holdings[weights.index(top_weight)]
+        hhi = sum(w * w for w in weights)
+        n = len(holdings)
+        if n == 1:
+            div_score = 0.0
+        else:
+            div_score = round(max(0, min(100, (1 - hhi) / (1 - 1/n) * 100)), 1)
+        if top_weight >= 0.6:
+            risk, risk_label = 'high', 'High concentration'
+        elif top_weight >= 0.4:
+            risk, risk_label = 'medium', 'Moderate concentration'
+        else:
+            risk, risk_label = 'low', 'Well diversified'
+        return {
+            'has_data': True,
+            'total_value': total_value,
+            'top_pct': round(top_weight * 100, 1),
+            'top_name': top_holding.get('name') or 'Holding',
+            'hhi': round(hhi, 3),
+            'diversification_score': div_score,
+            'risk': risk,
+            'risk_label': risk_label,
+            'count': n,
+        }
+    except Exception:
+        return {'has_data': False, 'message': 'Could not compute portfolio risk.'}
+
+
+@app.route('/services/analytics')
+@login_required
+def services_analytics():
+    uid = current_user.id
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("""
+        SELECT sv.id, sv.name, sv.price, sv.duration_minutes,
+               COUNT(ss.id) AS sessions_booked,
+               COALESCE(SUM(CASE WHEN ss.status='done' THEN 1 ELSE 0 END), 0) AS sessions_done,
+               COALESCE(SUM(CASE WHEN ss.status='cancelled' THEN 1 ELSE 0 END), 0) AS sessions_cancelled,
+               COALESCE(SUM(CASE WHEN ss.status='done' THEN ss.price ELSE 0 END), 0) AS revenue
+        FROM services sv
+        LEFT JOIN service_sessions ss ON ss.service_id = sv.id AND ss.user_id = sv.user_id
+        WHERE sv.user_id = %s
+        GROUP BY sv.id, sv.name, sv.price, sv.duration_minutes
+        ORDER BY revenue DESC, sessions_booked DESC
+    """, (uid,))
+    util_rows = []
+    for r in (cur.fetchall() or []):
+        booked = int(r.get('sessions_booked') or 0)
+        done = int(r.get('sessions_done') or 0)
+        cancelled = int(r.get('sessions_cancelled') or 0)
+        hours = float(r.get('duration_minutes') or 60) / 60.0
+        revenue = float(r.get('revenue') or 0)
+        util_pct = round(done / booked * 100, 1) if booked > 0 else 0.0
+        rev_per_hour = round(revenue / (done * hours), 2) if (done > 0 and hours > 0) else 0.0
+        util_rows.append({
+            'name': r.get('name') or '—',
+            'price': float(r.get('price') or 0),
+            'duration': int(r.get('duration_minutes') or 60),
+            'booked': booked,
+            'done': done,
+            'cancelled': cancelled,
+            'revenue': revenue,
+            'util_pct': util_pct,
+            'rev_per_hour': rev_per_hour,
+        })
+    total_booked = sum(x['booked'] for x in util_rows)
+    total_done = sum(x['done'] for x in util_rows)
+    total_revenue = sum(x['revenue'] for x in util_rows)
+    overall_util = round(total_done / total_booked * 100, 1) if total_booked > 0 else 0.0
+    cur.close(); conn.close()
+    return render_template('services_analytics.html',
+        util_rows=util_rows,
+        total_booked=total_booked,
+        total_done=total_done,
+        total_revenue=total_revenue,
+        overall_util=overall_util,
+    )
+
+
+# Redirects
+@app.route('/rfm/actions')
+@login_required
+def redirect_rfm_actions():
+    return redirect(url_for('rfm') + '#actions', code=301)
+
+
+@app.route('/day-close/variance')
+@login_required
+def redirect_day_close_variance():
+    return redirect(url_for('day_close'), code=301)
+
+
+@app.route('/investments/risk')
+@login_required
+def redirect_investments_risk():
+    return redirect(url_for('investments') + '#risk', code=301)
+
+
+@app.route('/services/utilization')
+@login_required
+def redirect_services_utilization():
+    return redirect(url_for('services_analytics') + '#utilization', code=301)
+
+
+@app.route('/services/yield')
+@login_required
+def redirect_services_yield():
+    return redirect(url_for('services_analytics') + '#yield', code=301)
 
 
 if __name__ == '__main__':

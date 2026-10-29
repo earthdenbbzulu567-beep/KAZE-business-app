@@ -46,4 +46,25 @@
 .rfm-pill-needs-attention {background: rgba(230,126,34,0.15); color: #e67e22;}
 .rfm-pill-lost {background: rgba(231,76,60,0.15); color: #e74c3c;}
 </style>
+
+<h2 id="actions" style="margin-top:2rem;">Segment actions</h2>
+<p style="color:var(--text3);font-size:0.85rem;margin:-0.4rem 0 0.8rem;">
+  Suggested next step for each segment you currently have customers in.
+</p>
+{% set segment_actions = rfm_segment_actions(groups, segment_order) %}
+{% if segment_actions %}
+  {% for a in segment_actions %}
+  <div class="widget" style="border-left:4px solid {% if a.segment == 'Champion' %}var(--green){% elif a.segment == 'Loyal' %}#3498db{% elif a.segment == 'New' %}#9b59b6{% elif a.segment == 'At Risk' %}#e0a030{% elif a.segment == 'Needs Attention' %}#e67e22{% else %}#e74c3c{% endif %};">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;flex-wrap:wrap;">
+      <div>
+        <strong style="font-size:1.05rem;">{{ a.title }}</strong>
+        <span class="status-pill" style="margin-left:0.4rem;background:var(--surface2);color:var(--text2);">{{ a.segment }} · {{ a.count }} customer{{ '' if a.count == 1 else 's' }}</span>
+      </div>
+    </div>
+    <p style="margin:0.5rem 0 0;font-size:0.9rem;color:var(--text2);">{{ a.detail }}</p>
+  </div>
+  {% endfor %}
+{% else %}
+  <div class="widget"><p style="color:var(--text3);">No customers segmented yet. Segment actions appear once you have customers with sales history.</p></div>
+{% endif %}
 {% endblock %}

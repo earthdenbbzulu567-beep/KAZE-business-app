@@ -87,4 +87,46 @@ table.data { width:100%; border-collapse:collapse; }
 table.data th, table.data td { text-align:left; padding:.55rem .4rem; border-bottom:1px solid var(--border); vertical-align:middle; }
 .inline-form { display:flex; gap:.35rem; align-items:center; }
 </style>
+
+<h2 id="risk" style="margin-top:2rem;">Portfolio risk</h2>
+{% set risk = portfolio_risk_metrics(holdings) %}
+{% if risk.has_data %}
+<div class="stat-grid" style="margin:0.5rem 0 1rem;">
+  <div class="stat-chip">
+    <span>Concentration</span>
+    <strong style="color:{% if risk.risk == 'high' %}#e74c3c{% elif risk.risk == 'medium' %}#e0a030{% else %}var(--green){% endif %};">
+      {{ risk.top_pct }}%
+    </strong>
+    <small style="display:block;color:var(--text3);font-size:0.75rem;">top holding = {{ risk.top_name }}</small>
+  </div>
+  <div class="stat-chip">
+    <span>Diversification</span>
+    <strong>{{ risk.diversification_score }}/100</strong>
+    <small style="display:block;color:var(--text3);font-size:0.75rem;">{{ risk.count }} holding{{ '' if risk.count == 1 else 's' }}</small>
+  </div>
+  <div class="stat-chip">
+    <span>Risk level</span>
+    <strong style="color:{% if risk.risk == 'high' %}#e74c3c{% elif risk.risk == 'medium' %}#e0a030{% else %}var(--green){% endif %};">
+      {{ risk.risk_label }}
+    </strong>
+  </div>
+</div>
+<div class="widget">
+  <p style="color:var(--text2);font-size:0.9rem;margin:0;">
+    {% if risk.risk == 'high' %}
+    <strong style="color:#e74c3c;">Concentration is high.</strong>
+    Over {{ risk.top_pct }}% of portfolio value is in one holding. If that holding underperforms, most of your portfolio feels it. Consider spreading future investment across more assets.
+    {% elif risk.risk == 'medium' %}
+    <strong style="color:#e0a030;">Moderate concentration.</strong>
+    {{ risk.top_pct }}% of value in {{ risk.top_name }}. Reasonable, but there's room to diversify further.
+    {% else %}
+    <strong style="color:var(--green);">Well diversified.</strong>
+    No single holding dominates. This is a healthy allocation.
+    {% endif %}
+    (Herfindahl index: {{ risk.hhi }} — lower is more diversified.)
+  </p>
+</div>
+{% else %}
+<div class="widget"><p style="color:var(--text3);">{{ risk.message }}</p></div>
+{% endif %}
 {% endblock %}
