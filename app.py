@@ -1051,6 +1051,8 @@ def init_db():
     cur.execute("ALTER TABLE stripe_payments ADD COLUMN IF NOT EXISTS stripe_net REAL DEFAULT 0")
     cur.execute("ALTER TABLE stripe_payments ADD COLUMN IF NOT EXISTS stripe_fee_currency TEXT DEFAULT ''")
     cur.execute("ALTER TABLE stripe_payments ADD COLUMN IF NOT EXISTS stripe_fee_fetched_at TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE stripe_payments ADD COLUMN IF NOT EXISTS invoice_id TEXT DEFAULT ''")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_stripe_invoice ON stripe_payments (user_id, invoice_id)")
     cur.execute('''
         CREATE OR REPLACE FUNCTION kaze_snapshot_bookkeeping_doc() RETURNS TRIGGER AS $$
         DECLARE

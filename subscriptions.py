@@ -297,7 +297,11 @@ def handle_invoice_succeeded(get_db, event):
     inv = event['data']['object']
     sub_id = inv.get('subscription')
     customer_id = inv.get('customer')
-    user_id = _find_user(get_db, 'subscription', sub_id) if sub_id else None
+    # Skip non-subscription invoices (those are handled by
+    # checkout.session.completed / _fulfill_stripe_payment)
+    if not sub_id:
+        return
+    user_id = _find_user(get_db, 'subscription', sub_id)
     if not user_id:
         user_id = _find_user(get_db, 'customer', customer_id)
     if not user_id:
@@ -310,18 +314,62 @@ def handle_invoice_succeeded(get_db, event):
             import time as _time
             period_end = int(_time.time()) + 365 * 86400
     expires_iso = _unix_to_iso(period_end)
+    today_iso = datetime.today().strftime('%Y-%m-%d')
+
+    # Extract invoice details for /payments log
+    inv_id = inv.get('id') or ''
+    pi_id = inv.get('payment_intent') or ''
+    try:
+        amount_raw = float(inv.get('amount_paid') or inv.get('total') or 0)
+    except (TypeError, ValueError):
+        amount_raw = 0.0
+    currency = (inv.get('currency') or 'usd').upper()
+    import stripe_payments as _sp
+    amount_display = _sp.from_stripe_amount(int(amount_raw), currency)
+    title = ''
+    try:
+        lines = inv['lines']['data']
+        if lines:
+            title = (lines[0].get('description') or '')[:160]
+    except (KeyError, IndexError, TypeError):
+        title = ''
+    if not title:
+        title = 'KAZE subscription'
+
     conn = get_db()
     cur = conn.cursor()
-    cur.execute('''
+
+    # 1. Extend plan_expires_at (existing behavior)
+    cur.execute("""
         UPDATE settings SET
             plan_expires_at=%s,
             subscription_status='active',
             grace_expires_at=''
         WHERE user_id=%s
-    ''', (expires_iso, user_id))
+    """, (expires_iso, user_id))
+
+    # 2. Record the payment in stripe_payments (idempotent by invoice_id)
+    if inv_id:
+        cur.execute(
+            "SELECT id FROM stripe_payments WHERE user_id=%s AND invoice_id=%s LIMIT 1",
+            (user_id, inv_id))
+        existing = cur.fetchone()
+        if not existing:
+            cur.execute(
+                "INSERT INTO stripe_payments "
+                "(user_id, kind, record_id, amount, currency, status, "
+                " checkout_id, payment_intent, invoice_id, title, "
+                " provider, created_date, paid_date) "
+                "VALUES (%s, 'subscription', 0, %s, %s, 'paid', "
+                " %s, %s, %s, %s, 'stripe', %s, %s)",
+                (user_id, amount_display, currency,
+                 inv_id, pi_id, inv_id, title,
+                 today_iso, today_iso))
+
     conn.commit()
     cur.close()
     conn.close()
+
 
 
 def handle_invoice_failed(get_db, event):
