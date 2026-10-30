@@ -71,7 +71,7 @@
 </div>
 <div class="table-wrapper">
 <table>
-<thead><tr><th></th><th>Status</th><th>Task</th><th>Priority</th><th>Due</th><th>Action</th></tr></thead>
+<thead><tr><th></th><th>Status</th><th>Task</th><th>Priority</th><th>Due</th><th>Blocker</th><th>Action</th></tr></thead>
 <tbody>
 {% for item in items %}
 <tr>
@@ -81,12 +81,18 @@
     <td>{{ item.priority }}</td>
     <td>{{ item.due_date or '—' }}</td>
     <td>
+        <form method="POST" action="{{ url_for('save_task_blocker', id=item.id) }}" style="display:flex;gap:0.3rem;align-items:center;">
+            <input type="text" name="blocker_note" value="{{ item.blocker_note or '' }}" placeholder="—" maxlength="500" style="font-size:0.82rem;padding:4px 6px;min-width:120px;">
+            <button type="submit" class="btn-secondary" style="padding:2px 8px;font-size:0.75rem;">Save</button>
+        </form>
+    </td>
+    <td>
         <a href="{{ url_for('toggle_task', id=item.id) }}">{% if item.done %}Reopen{% else %}Complete{% endif %}</a>
         <a href="{{ url_for('delete_task', id=item.id) }}" class="delete-btn" onclick="return confirm('Delete this task?')">Delete</a>
     </td>
 </tr>
 {% else %}
-<tr><td colspan="6">No tasks yet.</td></tr>
+<tr><td colspan="7">No tasks yet.</td></tr>
 {% endfor %}
 </tbody>
 </table>

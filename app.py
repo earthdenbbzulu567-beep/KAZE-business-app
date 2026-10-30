@@ -968,6 +968,13 @@ def init_db():
     cur.execute("ALTER TABLE bookkeeping_docs ADD COLUMN IF NOT EXISTS stripe_checkout_id TEXT DEFAULT ''")
     cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS stripe_checkout_id TEXT DEFAULT ''")
     cur.execute("ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS received_date TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE bank_transactions ADD COLUMN IF NOT EXISTS reconciled INTEGER DEFAULT 0")
+    cur.execute("ALTER TABLE bank_transactions ADD COLUMN IF NOT EXISTS reconciled_date TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS blocker_note TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE bookkeeping_docs ADD COLUMN IF NOT EXISTS approval_status TEXT DEFAULT 'none'")
+    cur.execute("ALTER TABLE bookkeeping_docs ADD COLUMN IF NOT EXISTS approval_notes TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE bookkeeping_docs ADD COLUMN IF NOT EXISTS approved_by TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE bookkeeping_docs ADD COLUMN IF NOT EXISTS approved_at TEXT DEFAULT ''")
 
     conn.commit()
     cur.close()
@@ -11650,13 +11657,10 @@ _DISABLED_PATHS = frozenset({
     '/collections/aging',
     '/payments/fees',
     '/health/history',
-    '/tasks/blockers',
     '/settings/audit',
     '/whatsapp/log',
     '/whatsapp/templates',
-    '/documents/approval',
     '/documents/versions',
-    '/banking/reconcile',
 })
 
 
@@ -13431,6 +13435,104 @@ def redirect_services_utilization():
 @login_required
 def redirect_services_yield():
     return redirect(url_for('services_analytics') + '#yield', code=301)
+
+
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Batch 3a — Fold-ins with schema
+# ═══════════════════════════════════════════════════════════════════════
+
+@app.route('/banking/tx/<int:id>/reconcile', methods=['POST'])
+@login_required
+def reconcile_bank_tx(id):
+    conn = get_db(); cur = conn.cursor()
+    cur.execute(
+        "SELECT id, reconciled FROM bank_transactions WHERE id=%s AND user_id=%s",
+        (id, current_user.id))
+    row = cur.fetchone()
+    if not row:
+        cur.close(); conn.close()
+        flash('Transaction not found.', 'danger')
+        return redirect(url_for('banking'))
+    new_val = 0 if (row.get('reconciled') or 0) == 1 else 1
+    date_val = datetime.today().strftime('%Y-%m-%d') if new_val == 1 else ''
+    cur.execute(
+        "UPDATE bank_transactions SET reconciled=%s, reconciled_date=%s "
+        "WHERE id=%s AND user_id=%s",
+        (new_val, date_val, id, current_user.id))
+    conn.commit()
+    cur.close(); conn.close()
+    flash('Marked reconciled.' if new_val else 'Un-reconciled.', 'success')
+    return redirect(url_for('banking'))
+
+
+@app.route('/tasks/<int:id>/blocker', methods=['POST'])
+@login_required
+def save_task_blocker(id):
+    note = (request.form.get('blocker_note') or '').strip()[:500]
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("SELECT id FROM tasks WHERE id=%s AND user_id=%s", (id, current_user.id))
+    if not cur.fetchone():
+        cur.close(); conn.close()
+        flash('Task not found.', 'danger')
+        return redirect(url_for('tasks'))
+    cur.execute(
+        "UPDATE tasks SET blocker_note=%s WHERE id=%s AND user_id=%s",
+        (note, id, current_user.id))
+    conn.commit()
+    cur.close(); conn.close()
+    flash('Blocker updated.' if note else 'Blocker cleared.', 'success')
+    return redirect(url_for('tasks'))
+
+
+@app.route('/bookkeeping/doc/<int:id>/approve', methods=['POST'])
+@login_required
+def approve_book_doc(id):
+    decision = (request.form.get('decision') or 'approved').lower()
+    if decision not in ('approved', 'rejected', 'none'):
+        decision = 'approved'
+    note = (request.form.get('approval_notes') or '').strip()[:500]
+    conn = get_db(); cur = conn.cursor()
+    cur.execute(
+        "SELECT id, kind FROM bookkeeping_docs WHERE id=%s AND user_id=%s",
+        (id, current_user.id))
+    row = cur.fetchone()
+    if not row:
+        cur.close(); conn.close()
+        flash('Document not found.', 'danger')
+        return redirect(url_for('bookkeeping'))
+    now = datetime.today().strftime('%Y-%m-%d %H:%M') if decision != 'none' else ''
+    cur.execute(
+        "UPDATE bookkeeping_docs SET approval_status=%s, approval_notes=%s, "
+        "approved_by=%s, approved_at=%s WHERE id=%s AND user_id=%s",
+        (decision, note,
+         current_user.username if decision != 'none' else '',
+         now, id, current_user.id))
+    conn.commit()
+    kind = row.get('kind') or 'invoice'
+    cur.close(); conn.close()
+    flash('Approval status updated.', 'success')
+    return redirect(url_for('bookkeeping_type', kind=kind))
+
+
+# Redirects from original disabled routes
+@app.route('/banking/reconcile')
+@login_required
+def redirect_banking_reconcile():
+    return redirect(url_for('banking') + '#reconcile', code=301)
+
+
+@app.route('/tasks/blockers')
+@login_required
+def redirect_tasks_blockers():
+    return redirect(url_for('tasks') + '#blockers', code=301)
+
+
+@app.route('/documents/approval')
+@login_required
+def redirect_documents_approval():
+    return redirect(url_for('bookkeeping'), code=301)
 
 
 if __name__ == '__main__':

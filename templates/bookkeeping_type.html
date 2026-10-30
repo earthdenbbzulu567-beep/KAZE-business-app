@@ -85,7 +85,7 @@
 
 <div class="table-wrapper">
 <table>
-<thead><tr><th>Title</th><th>Party</th><th>Ref</th><th>Date</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead>
+<thead><tr><th>Title</th><th>Party</th><th>Ref</th><th>Date</th><th>Amount</th><th>Status</th><th>Approval</th><th>Action</th></tr></thead>
 <tbody>
 {% for item in items %}
 <tr>
@@ -95,6 +95,16 @@
     <td>{{ item.doc_date }}</td>
     <td>{{ money(item.amount or 0) }}</td>
     <td><span class="status-pill">{{ item.status }}</span></td>
+    <td>
+        <form method="POST" action="{{ url_for('approve_book_doc', id=item.id) }}" style="display:flex;gap:0.3rem;align-items:center;flex-wrap:wrap;">
+            <select name="decision" style="font-size:0.8rem;padding:3px 5px;">
+                <option value="none" {% if item.approval_status == 'none' %}selected{% endif %}>—</option>
+                <option value="approved" {% if item.approval_status == 'approved' %}selected{% endif %}>✓ Approved</option>
+                <option value="rejected" {% if item.approval_status == 'rejected' %}selected{% endif %}>✗ Rejected</option>
+            </select>
+            <button type="submit" class="btn-secondary" style="padding:2px 8px;font-size:0.75rem;">Set</button>
+        </form>
+    </td>
     <td>
         <a href="{{ url_for('bookkeeping_pdf', id=item.id) }}">PDF</a>
         <a href="{{ url_for('duplicate_book_doc', id=item.id) }}">Copy</a>
@@ -106,7 +116,7 @@
     </td>
 </tr>
 {% else %}
-<tr><td colspan="7">None yet. Create the first {{ label }} above.</td></tr>
+<tr><td colspan="8">None yet. Create the first {{ label }} above.</td></tr>
 {% endfor %}
 </tbody>
 </table>
