@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Payment Fees{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1><i data-lucide="percent"></i> Payment Fees</h1>
+    <p>Stripe processing fees per payment. Fees are pulled on demand from Stripe — click Sync to reconcile.</p>
+  </div>
+  <a href="{{ url_for('payments') }}" class="btn-secondary">← Back to payments</a>
+</div>
+
+<div class="stat-grid">
+  <div class="stat-chip"><span>Gross collected</span><strong>{{ money(total_gross) }}</strong></div>
+  <div class="stat-chip"><span>Stripe fees</span><strong>{{ money(total_fee) }}</strong></div>
+  <div class="stat-chip"><span>Net received</span><strong>{{ money(total_net) }}</strong></div>
+  <div class="stat-chip"><span>Effective fee %</span><strong>{{ fee_pct }}%</strong></div>
+  <div class="stat-chip"><span>Pending sync</span><strong>{{ unfetched }}</strong></div>
+</div>
+
+{% if unfetched > 0 %}
+<div class="widget" style="border-left:4px solid #e0a030;">
+  <strong>Fees pending for {{ unfetched }} payment(s)</strong>
+  <p style="margin:0.4rem 0 0.8rem;color:var(--text2);font-size:0.9rem;">Click Sync to pull fee data from Stripe for the most recent 20. Repeat until pending hits 0.</p>
+  <form method="POST" action="{{ url_for('payments_fees_sync') }}" style="display:inline;">
+    <button type="submit">Sync fees from Stripe</button>
+  </form>
+</div>
+{% endif %}
+
+<h2>All payments</h2>
+{% if rows %}
+<div class="table-wrapper">
+<table>
+<thead><tr>
+  <th>Date</th>
+  <th>What</th>
+  <th>Gross</th>
+  <th>Fee</th>
+  <th>Net</th>
+  <th>Fee status</th>
+  <th></th>
+</tr></thead>
+<tbody>
+{% for r in rows %}
+<tr>
+  <td style="font-size:0.85rem;color:var(--text3);">{{ r.paid_date or r.created_date }}</td>
+  <td>
+    <strong>{{ r.kind|title }}</strong>
+    {% if r.record_id %}<span style="color:var(--text3);font-size:0.8rem;">#{{ r.record_id }}</span>{% endif %}
+    <span style="color:var(--text3);font-size:0.78rem;">({{ r.provider }})</span>
+  </td>
+  <td style="font-family:var(--mono);">{{ money(r.amount) }}</td>
+  <td style="font-family:var(--mono);">
+    {% if r.fetched_at %}{{ money(r.fee) }}{% else %}<span style="color:var(--text3);">—</span>{% endif %}
+  </td>
+  <td style="font-family:var(--mono);">
+    {% if r.fetched_at %}{{ money(r.net) }}{% else %}<span style="color:var(--text3);">—</span>{% endif %}
+  </td>
+  <td>
+    {% if r.fetched_at %}<span class="status-pill status-ok">Synced {{ r.fetched_at }}</span>
+    {% elif r.payment_intent %}<span class="status-pill status-warn">Pending</span>
+    {% else %}<span class="status-pill" style="background:var(--surface2);color:var(--text3);">No PI</span>{% endif %}
+  </td>
+  <td>
+    {% if r.payment_intent and not r.fetched_at %}
+    <form method="POST" action="{{ url_for('payments_fees_reconcile_one', pay_id=r.id) }}" style="display:inline;">
+      <button type="submit" class="btn-secondary" style="padding:4px 10px;font-size:0.78rem;">Reconcile</button>
+    </form>
+    {% endif %}
+  </td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% else %}
+<div class="widget">
+  <p style="color:var(--text3);">No paid payments recorded yet. Take a payment on <a href="{{ url_for('payments') }}">Payments</a> to see fees here.</p>
+</div>
+{% endif %}
+
+<p style="margin-top:1rem;font-size:0.85rem;color:var(--text3);">
+  Fee source: Stripe <code>balance_transaction</code> for each payment. If fees show "—", the payment may be too recent (wait a few seconds and Sync again) or was a bank transfer (no Stripe processing fee applies).
+</p>
+<p style="margin-top:0.6rem;font-size:0.85rem;color:var(--text3);">
+  <strong>Only Stripe payments appear here.</strong> Flutterwave, PayPal, and bank transfer payments have fees too, but they are charged by those providers and tracked separately. This page reconciles Stripe processing costs only.
+</p>
+{% endblock %}

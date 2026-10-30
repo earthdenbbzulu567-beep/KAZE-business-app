@@ -1047,6 +1047,10 @@ def init_db():
         )
     ''')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_bdv_user_doc ON bookkeeping_doc_versions (user_id, doc_id, version_number DESC)')
+    cur.execute("ALTER TABLE stripe_payments ADD COLUMN IF NOT EXISTS stripe_fee REAL DEFAULT 0")
+    cur.execute("ALTER TABLE stripe_payments ADD COLUMN IF NOT EXISTS stripe_net REAL DEFAULT 0")
+    cur.execute("ALTER TABLE stripe_payments ADD COLUMN IF NOT EXISTS stripe_fee_currency TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE stripe_payments ADD COLUMN IF NOT EXISTS stripe_fee_fetched_at TEXT DEFAULT ''")
     cur.execute('''
         CREATE OR REPLACE FUNCTION kaze_snapshot_bookkeeping_doc() RETURNS TRIGGER AS $$
         DECLARE
@@ -2141,6 +2145,7 @@ NAV_GROUPS = (
         ('Account tracking', 'accounts', 'book-marked', 'accounts', ('accounts', 'account_book')),
         ('Banking', 'banking', 'landmark', 'banking', ('banking',)),
         ('Payments', 'payments', 'credit-card', None, ('payments',)),
+        ('Payment fees', 'payments_fees', 'percent', None, ('payments_fees',)),
     )),
     ('Analytics', (
         ('Sales analytics', 'sales_analytics', 'bar-chart-3', 'sales', ('sales_analytics',)),
@@ -8981,6 +8986,43 @@ def stripe_webhook():
         return subscriptions.handle_webhook(get_db, event)
     if etype in ('invoice.payment_succeeded', 'invoice.payment_failed'):
         return subscriptions.handle_webhook(get_db, event)
+    if etype == 'charge.succeeded':
+        # Best-effort fee capture. Silently no-ops if the payment row does
+        # not exist yet (e.g., charge fires before checkout.session.completed
+        # fulfillment). Manual Sync button handles those.
+        try:
+            charge = event['data']['object']
+            pi_id = charge.get('payment_intent') or ''
+            bt_id = charge.get('balance_transaction') or ''
+            if pi_id and bt_id:
+                fcur = get_db().cursor()
+                fcur.execute(
+                    "SELECT id, user_id FROM stripe_payments WHERE payment_intent=%s LIMIT 1",
+                    (pi_id,))
+                pay_row = fcur.fetchone()
+                if pay_row:
+                    fee_user_id = pay_row.get('user_id')
+                    fee_settings = _stripe_settings(fee_user_id)
+                    fee_secret, _, _ = stripe_payments.keys_from(fee_settings)
+                    if fee_secret:
+                        import stripe as _stripe_mod
+                        _stripe_mod.api_key = fee_secret
+                        bt = _stripe_mod.BalanceTransaction.retrieve(bt_id)
+                        f_fee = float(bt.get('fee') or 0)
+                        f_net = float(bt.get('net') or 0)
+                        f_cur = (bt.get('currency') or 'usd').upper()
+                        fee_amt = stripe_payments.from_stripe_amount(f_fee, f_cur)
+                        net_amt = stripe_payments.from_stripe_amount(f_net, f_cur)
+                        fetched_iso = datetime.today().strftime('%Y-%m-%d')
+                        fcur.execute(
+                            "UPDATE stripe_payments SET stripe_fee=%s, stripe_net=%s, "
+                            "stripe_fee_currency=%s, stripe_fee_fetched_at=%s WHERE id=%s",
+                            (fee_amt, net_amt, f_cur, fetched_iso, pay_row['id']))
+                        fcur.connection.commit()
+                fcur.close()
+        except Exception as _fee_err:
+            print('charge.succeeded fee capture error:', _fee_err)
+        return ('', 200)
     if etype in ('checkout.session.completed', 'checkout.session.async_payment_succeeded'):
         # Skip subscription checkouts — subscription lifecycle events
         # (customer.subscription.created, invoice.payment_succeeded) are
@@ -11462,10 +11504,7 @@ def settings_health():
 
 
 
-@app.route('/payments/fees')
-@login_required
-def payments_fees():
-    return render_template('payments.html', rows=[], fees=8.4)
+
 
 
 @app.route('/shop/conversion')
@@ -11817,7 +11856,6 @@ def supreme():
 _DISABLED_PATHS = frozenset({
     '/collections/schedule',
     '/collections/aging',
-    '/payments/fees',
 })
 
 
@@ -13991,6 +14029,178 @@ def documents_version_detail(doc_id):
     doc_title = rows[0]['title'] or f'Document #{doc_id}'
     return render_template('documents_version_detail.html',
         rows=rows, doc_id=doc_id, doc_title=doc_title)
+
+
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Batch 3b part 2c — Payment fees + manual reconcile
+# ═══════════════════════════════════════════════════════════════════════
+
+def _fetch_stripe_fee_for_row(pay_row, settings):
+    """Fetch fee from Stripe for one stripe_payments row.
+    Returns (fee, net, currency, error) or (None, None, None, 'reason')."""
+    try:
+        import stripe as _stripe_mod
+    except ImportError:
+        return None, None, None, 'stripe package not installed'
+    secret, _, _ = stripe_payments.keys_from(settings)
+    if not secret:
+        return None, None, None, 'Stripe secret key not set'
+    pi_id = (pay_row.get('payment_intent') or '').strip()
+    if not pi_id:
+        return None, None, None, 'no payment_intent on record'
+    _stripe_mod.api_key = secret
+    try:
+        pi = _stripe_mod.PaymentIntent.retrieve(pi_id, expand=['latest_charge.balance_transaction'])
+        charge = pi.get('latest_charge') or {}
+        bt = charge.get('balance_transaction')
+        if isinstance(bt, str):
+            bt = _stripe_mod.BalanceTransaction.retrieve(bt)
+        if not isinstance(bt, dict):
+            return None, None, None, 'no balance_transaction'
+        raw_fee = float(bt.get('fee') or 0)
+        raw_net = float(bt.get('net') or 0)
+        cur = (bt.get('currency') or 'usd').upper()
+        fee_amt = stripe_payments.from_stripe_amount(raw_fee, cur)
+        net_amt = stripe_payments.from_stripe_amount(raw_net, cur)
+        return fee_amt, net_amt, cur, None
+    except Exception as exc:
+        return None, None, None, str(exc)[:150]
+
+
+@app.route('/payments/fees')
+@login_required
+def payments_fees():
+    uid = current_user.id
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("""
+        SELECT id, kind, record_id, amount, currency, status, provider,
+               COALESCE(payment_intent, '') AS payment_intent,
+               created_date, paid_date,
+               COALESCE(stripe_fee, 0) AS stripe_fee,
+               COALESCE(stripe_net, 0) AS stripe_net,
+               COALESCE(stripe_fee_currency, '') AS stripe_fee_currency,
+               COALESCE(stripe_fee_fetched_at, '') AS stripe_fee_fetched_at
+        FROM stripe_payments
+        WHERE user_id=%s AND status='paid'
+          AND COALESCE(NULLIF(provider, ''), 'stripe') = 'stripe'
+        ORDER BY id DESC LIMIT 200
+    """, (uid,))
+    rows = []
+    for r in (cur.fetchall() or []):
+        amt = float(r.get('amount') or 0)
+        fee = float(r.get('stripe_fee') or 0)
+        net = float(r.get('stripe_net') or 0) if r.get('stripe_fee_fetched_at') else 0
+        rows.append({
+            'id': r.get('id'),
+            'kind': r.get('kind') or '',
+            'record_id': r.get('record_id'),
+            'amount': amt,
+            'currency': r.get('currency') or 'USD',
+            'provider': r.get('provider') or 'stripe',
+            'payment_intent': r.get('payment_intent') or '',
+            'created_date': r.get('created_date') or '',
+            'paid_date': r.get('paid_date') or '',
+            'fee': fee,
+            'net': net,
+            'fee_currency': r.get('stripe_fee_currency') or '',
+            'fetched_at': r.get('stripe_fee_fetched_at') or '',
+        })
+    cur.close(); conn.close()
+
+    total_gross = sum(r['amount'] for r in rows)
+    total_fee = sum(r['fee'] for r in rows)
+    total_net = sum(r['net'] for r in rows)
+    unfetched = sum(1 for r in rows if not r['fetched_at'] and r['payment_intent'])
+    fee_pct = round(total_fee / total_gross * 100, 2) if total_gross > 0 else 0
+
+    return render_template('payments_fees.html',
+        rows=rows,
+        total_gross=total_gross,
+        total_fee=total_fee,
+        total_net=total_net,
+        unfetched=unfetched,
+        fee_pct=fee_pct,
+    )
+
+
+@app.route('/payments/fees/sync', methods=['POST'])
+@login_required
+def payments_fees_sync():
+    """Bulk reconcile: fetch fees for up to 20 unfetched paid payments."""
+    uid = current_user.id
+    settings = _stripe_settings()
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("""
+        SELECT id, payment_intent, amount, currency
+        FROM stripe_payments
+        WHERE user_id=%s AND status='paid'
+          AND COALESCE(NULLIF(provider, ''), 'stripe') = 'stripe'
+          AND COALESCE(stripe_fee_fetched_at, '') = ''
+          AND COALESCE(payment_intent, '') != ''
+        ORDER BY id DESC LIMIT 20
+    """, (uid,))
+    pending = list(cur.fetchall() or [])
+    fetched = 0
+    errors = []
+    for row in pending:
+        fee, net, cur_c, err = _fetch_stripe_fee_for_row(row, settings)
+        if err:
+            errors.append(f"#{row['id']}: {err}")
+            continue
+        today_iso = datetime.today().strftime('%Y-%m-%d')
+        cur.execute("""
+            UPDATE stripe_payments
+            SET stripe_fee=%s, stripe_net=%s, stripe_fee_currency=%s, stripe_fee_fetched_at=%s
+            WHERE id=%s AND user_id=%s
+        """, (fee, net, cur_c, today_iso, row['id'], uid))
+        fetched += 1
+    conn.commit(); cur.close(); conn.close()
+
+    remaining = max(0, len(pending) - fetched - len(errors))
+    if fetched:
+        flash(f'Synced fees for {fetched} payment(s).' +
+              (f' {remaining} more pending — click Sync again.' if remaining else ''), 'success')
+    if errors:
+        flash('Some failed: ' + '; '.join(errors[:3]), 'danger')
+    if not fetched and not errors:
+        flash('Nothing to sync — all paid payments already have fee info, or none have payment_intent.', 'info')
+    return redirect(url_for('payments_fees'))
+
+
+@app.route('/payments/fees/<int:pay_id>/reconcile', methods=['POST'])
+@login_required
+def payments_fees_reconcile_one(pay_id):
+    uid = current_user.id
+    settings = _stripe_settings()
+    conn = get_db(); cur = conn.cursor()
+    cur.execute(
+        "SELECT id, payment_intent, amount, provider FROM stripe_payments WHERE id=%s AND user_id=%s",
+        (pay_id, uid))
+    row = cur.fetchone()
+    if not row:
+        cur.close(); conn.close()
+        flash('Payment not found.', 'danger')
+        return redirect(url_for('payments_fees'))
+    prov = (row.get('provider') or 'stripe').strip().lower() or 'stripe'
+    if prov != 'stripe':
+        cur.close(); conn.close()
+        flash(f'Only Stripe payments can be reconciled here (this is {prov}).', 'danger')
+        return redirect(url_for('payments_fees'))
+    fee, net, cur_c, err = _fetch_stripe_fee_for_row(row, settings)
+    if err:
+        cur.close(); conn.close()
+        flash(f'Could not fetch fee: {err}', 'danger')
+        return redirect(url_for('payments_fees'))
+    today_iso = datetime.today().strftime('%Y-%m-%d')
+    cur.execute(
+        "UPDATE stripe_payments SET stripe_fee=%s, stripe_net=%s, stripe_fee_currency=%s, "
+        "stripe_fee_fetched_at=%s WHERE id=%s AND user_id=%s",
+        (fee, net, cur_c, today_iso, pay_id, uid))
+    conn.commit(); cur.close(); conn.close()
+    flash(f'Fee synced: {_format_money(fee)} fee, {_format_money(net)} net.', 'success')
+    return redirect(url_for('payments_fees'))
 
 
 if __name__ == '__main__':
