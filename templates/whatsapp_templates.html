@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}WhatsApp Templates{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1><i data-lucide="message-circle"></i> WhatsApp Templates</h1>
+    <p>Reusable message bodies. Use <code>{{ '{{name}}' }}</code> in the body and it gets replaced with the customer's name when you send.</p>
+  </div>
+  <a href="{{ url_for('whatsapp') }}" class="btn-secondary">← Back to WhatsApp</a>
+</div>
+
+<details open style="margin-bottom:1.5rem;">
+  <summary>New template</summary>
+  <div>
+    <form method="POST" action="{{ url_for('whatsapp_template_add') }}">
+      <div class="form-group">
+        <label>Name</label>
+        <input type="text" name="name" required maxlength="120" placeholder="e.g. Payment reminder, Restock notice">
+      </div>
+      <div class="form-group" style="display:block;width:100%;">
+        <label>Body</label>
+        <textarea name="body" rows="4" required maxlength="2000" style="width:100%;max-width:640px;" placeholder="Hi {{ '{{name}}' }}, just a friendly reminder that your invoice is due."></textarea>
+        <p style="font-size:0.8rem;color:var(--text3);margin:4px 0 0;">Use <code>{{ '{{name}}' }}</code> for the customer's name. Keep it under 500 chars — WhatsApp URL length is limited.</p>
+      </div>
+      <button type="submit">Save template</button>
+    </form>
+  </div>
+</details>
+
+<h2>Saved templates</h2>
+{% if templates %}
+<div class="table-wrapper">
+<table>
+<thead><tr><th>Name</th><th>Body preview</th><th>Updated</th><th>Actions</th></tr></thead>
+<tbody>
+{% for t in templates %}
+<tr>
+  <td><strong>{{ t.name }}</strong></td>
+  <td style="font-size:0.85rem;color:var(--text2);max-width:400px;">{{ t.body[:120] }}{% if t.body|length > 120 %}…{% endif %}</td>
+  <td style="font-size:0.85rem;color:var(--text3);">{{ t.updated_date }}</td>
+  <td>
+    <form method="POST" action="{{ url_for('whatsapp_template_delete', id=t.id) }}" onsubmit="return confirm('Delete this template?');" style="display:inline;">
+      <button type="submit" class="btn-secondary">Delete</button>
+    </form>
+  </td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% else %}
+<div class="widget"><p style="color:var(--text3);">No templates saved yet. Add one above, then use it from the WhatsApp page.</p></div>
+{% endif %}
+{% endblock %}

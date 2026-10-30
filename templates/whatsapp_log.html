@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}WhatsApp Log{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1><i data-lucide="list"></i> WhatsApp Log</h1>
+    <p>Each row is a click on the "Send WhatsApp" button from the WhatsApp page. This logs the click, not WhatsApp's actual delivery status.</p>
+  </div>
+  <a href="{{ url_for('whatsapp') }}" class="btn-secondary">← Back to WhatsApp</a>
+</div>
+
+<div class="stat-grid">
+  <div class="stat-chip"><span>Shown</span><strong>{{ rows|length }}</strong></div>
+</div>
+
+{% if rows %}
+<div class="table-wrapper">
+<table>
+<thead><tr><th>When</th><th>Customer</th><th>Phone</th><th>Message sent</th></tr></thead>
+<tbody>
+{% for r in rows %}
+<tr>
+  <td style="font-size:0.85rem;color:var(--text3);">{{ r.sent_at }}</td>
+  <td>{{ r.customer_name or '—' }}</td>
+  <td style="font-family:var(--mono);font-size:0.85rem;">{{ r.phone }}</td>
+  <td style="font-size:0.85rem;color:var(--text2);">{{ r.body or '(no template used)' }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% else %}
+<div class="widget"><p style="color:var(--text3);">No WhatsApp sends logged yet. Send a message from the <a href="{{ url_for('whatsapp') }}">WhatsApp Hub</a> to see it here.</p></div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Settings Audit{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1><i data-lucide="history"></i> Settings Audit</h1>
+    <p>Every change to your settings, when it happened, and what changed. Sensitive fields (Stripe keys, PayPal secrets) show "changed" but not the values.</p>
+  </div>
+</div>
+
+<div class="stat-grid">
+  <div class="stat-chip"><span>Total changes</span><strong>{{ rows|length }}</strong></div>
+</div>
+
+{% if rows %}
+<div class="table-wrapper">
+<table>
+<thead><tr><th>When</th><th>Field</th><th>Old value</th><th>New value</th></tr></thead>
+<tbody>
+{% for r in rows %}
+<tr>
+  <td style="font-size:0.85rem;color:var(--text3);">{{ r.changed_at }}</td>
+  <td><code>{{ r.field_name }}</code></td>
+  <td style="font-size:0.85rem;color:var(--text2);">{{ r.old_value or '—' }}</td>
+  <td style="font-size:0.85rem;color:var(--text2);">{{ r.new_value or '—' }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% else %}
+<div class="widget"><p style="color:var(--text3);">No settings changes recorded yet. When you change a setting and save, it appears here.</p></div>
+{% endif %}
+{% endblock %}

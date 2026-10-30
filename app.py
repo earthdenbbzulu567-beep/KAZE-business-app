@@ -975,6 +975,39 @@ def init_db():
     cur.execute("ALTER TABLE bookkeeping_docs ADD COLUMN IF NOT EXISTS approval_notes TEXT DEFAULT ''")
     cur.execute("ALTER TABLE bookkeeping_docs ADD COLUMN IF NOT EXISTS approved_by TEXT DEFAULT ''")
     cur.execute("ALTER TABLE bookkeeping_docs ADD COLUMN IF NOT EXISTS approved_at TEXT DEFAULT ''")
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS settings_audit (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            field_name TEXT NOT NULL,
+            old_value TEXT DEFAULT '',
+            new_value TEXT DEFAULT '',
+            changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_settings_audit_user ON settings_audit (user_id, changed_at DESC)')
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS whatsapp_templates (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            body TEXT NOT NULL,
+            created_date TEXT NOT NULL,
+            updated_date TEXT NOT NULL
+        )
+    ''')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_whatsapp_templates_user ON whatsapp_templates (user_id)')
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS whatsapp_messages (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            customer_id INTEGER,
+            phone TEXT NOT NULL,
+            body TEXT DEFAULT '',
+            sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_user ON whatsapp_messages (user_id, sent_at DESC)')
 
     conn.commit()
     cur.close()
@@ -2024,6 +2057,7 @@ NAV_GROUPS = (
         ('Team health', 'team_health', 'users-round', 'workspace', ('team_health',)),
         ('Workflow signals', 'workflow_signals', 'check-square', 'workspace', ('workflow_signals',)),
         ('Services analytics', 'services_analytics', 'graduation-cap', 'services', ('services_analytics',)),
+        ('Settings audit', 'settings_audit', 'history', None, ('settings_audit',)),
     )),
     ('Trade', (
         ('Shop', 'shop', 'store', 'shop', ('shop',)),
@@ -3921,12 +3955,7 @@ def settings():
         ui_device = (request.form.get('ui_device') or 'auto').strip()
         if ui_device not in UI_DEVICES:
             ui_device = 'auto'
-        cur.execute(
-            'SELECT stripe_secret_key, stripe_webhook_secret, plan_tier, '
-            'flutterwave_secret_key, flutterwave_webhook_hash, alpha_vantage_key '
-            'FROM settings WHERE user_id=%s',
-            (current_user.id,),
-        )
+        cur.execute('SELECT * FROM settings WHERE user_id=%s', (current_user.id,))
         prior_keys = cur.fetchone() or {}
         stripe_publishable_key = (request.form.get('stripe_publishable_key') or '').strip()
         stripe_secret_key = (request.form.get('stripe_secret_key') or '').strip()
@@ -4007,6 +4036,48 @@ def settings():
               paypal_client_id, paypal_secret, paypal_mode,
               bank_name, bank_account_name, bank_account_number, bank_branch,
               current_user.id))
+        # Audit: log what changed (savepoint so an audit failure never blocks save)
+        try:
+            cur.execute('SAVEPOINT kaze_audit_sp')
+            cur.execute('SELECT * FROM settings WHERE user_id=%s', (current_user.id,))
+            new_row = cur.fetchone() or {}
+            AUDIT_NORMAL = [
+                'plan_tier', 'business_name', 'currency_code', 'currency_symbol',
+                'tax_rate', 'monthly_revenue_goal', 'app_mode', 'ui_device',
+                'theme', 'low_stock_threshold', 'items_per_page', 'date_format',
+                'fiscal_year_start', 'number_decimals', 'invoice_prefix',
+                'business_phone', 'business_address', 'font_family', 'font_size',
+                'density', 'accent_color',
+            ]
+            AUDIT_SENSITIVE = [
+                'stripe_secret_key', 'stripe_publishable_key', 'stripe_webhook_secret',
+                'paypal_client_id', 'paypal_secret', 'flutterwave_public_key',
+                'flutterwave_secret_key', 'flutterwave_webhook_hash',
+                'alpha_vantage_key',
+            ]
+            for field in AUDIT_NORMAL:
+                o = str((prior_keys or {}).get(field) or '')
+                n = str(new_row.get(field) or '')
+                if o != n:
+                    cur.execute(
+                        "INSERT INTO settings_audit (user_id, field_name, old_value, new_value) VALUES (%s, %s, %s, %s)",
+                        (current_user.id, field, o[:200], n[:200]))
+            for field in AUDIT_SENSITIVE:
+                o = str((prior_keys or {}).get(field) or '')
+                n = str(new_row.get(field) or '')
+                if o != n:
+                    cur.execute(
+                        "INSERT INTO settings_audit (user_id, field_name, old_value, new_value) VALUES (%s, %s, %s, %s)",
+                        (current_user.id, field,
+                         '(changed)' if o else '(set)',
+                         '(changed)' if n else '(cleared)'))
+            cur.execute('RELEASE SAVEPOINT kaze_audit_sp')
+        except Exception as exc:
+            print('settings audit error:', exc)
+            try:
+                cur.execute('ROLLBACK TO SAVEPOINT kaze_audit_sp')
+            except Exception:
+                pass
         conn.commit()
         cur.close()
         conn.close()
@@ -10289,13 +10360,18 @@ def scanner():
 @app.route('/whatsapp')
 @login_required
 def whatsapp():
-    # List recent invoices/customers for quick WhatsApp share
+    uid = current_user.id
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT id, name, phone FROM customers WHERE user_id=%s AND phone != '' LIMIT 20", (current_user.id,))
-    customers = cur.fetchall()
+    cur.execute("SELECT id, name, phone FROM customers WHERE user_id=%s AND phone != '' ORDER BY name LIMIT 100", (uid,))
+    customers = list(cur.fetchall() or [])
+    cur.execute(
+        "SELECT id, name FROM whatsapp_templates WHERE user_id=%s ORDER BY name",
+        (uid,))
+    templates = list(cur.fetchall() or [])
+    cur.close()
     conn.close()
-    return render_template('whatsapp.html', customers=customers)
+    return render_template('whatsapp.html', customers=customers, templates=templates)
 
 @app.route('/credit_scores')
 @login_required
@@ -11195,20 +11271,9 @@ def insights_risks():
     return render_template('insights.html', tips=['2 suppliers late','Cash cover under 10 days'], recent_sales=0, low_stock=0)
 
 # --- WHATSAPP / SCANNER / VOICE / BATCHES / CREDIT (2-3 each) ---
-@app.route('/whatsapp/templates')
-@login_required
-def whatsapp_templates():
-    templates = [
-        {'name':'Reminder','body':'Hi {name}, balance {amount} is due.'},
-        {'name':'Restock','body':'{product} is back. Reply YES to reserve.'},
-        {'name':'Thanks','body':'Thank you {name} for {amount}.'},
-    ]
-    return render_template('whatsapp.html', customers=[], templates=templates)
 
-@app.route('/whatsapp/log')
-@login_required
-def whatsapp_log():
-    return render_template('whatsapp.html', customers=[], log=[])
+
+
 
 
 @app.route('/tasks/blockers')
@@ -11290,12 +11355,7 @@ def settings_health():
     cur.close(); conn.close()
     return render_template('settings.html', config_issues=issues)
 
-@app.route('/settings/audit')
-@login_required
-def settings_audit():
-    return render_template('settings.html', audit=['Threshold updated','Currency set'])
 
-# --- PAYMENTS / SHOP / MARKET / DOCUMENTS / BUDGETS / RECURRING / BANKING (2-3 each) ---
 
 @app.route('/payments/fees')
 @login_required
@@ -11657,9 +11717,6 @@ _DISABLED_PATHS = frozenset({
     '/collections/aging',
     '/payments/fees',
     '/health/history',
-    '/settings/audit',
-    '/whatsapp/log',
-    '/whatsapp/templates',
     '/documents/versions',
 })
 
@@ -13533,6 +13590,135 @@ def redirect_tasks_blockers():
 @login_required
 def redirect_documents_approval():
     return redirect(url_for('bookkeeping'), code=301)
+
+
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Batch 3b part 1 — Settings audit + WhatsApp templates + WhatsApp log
+# ═══════════════════════════════════════════════════════════════════════
+
+@app.route('/settings/audit')
+@login_required
+def settings_audit():
+    uid = current_user.id
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("""
+        SELECT field_name, old_value, new_value, changed_at
+        FROM settings_audit
+        WHERE user_id=%s
+        ORDER BY changed_at DESC, id DESC
+        LIMIT 200
+    """, (uid,))
+    rows = list(cur.fetchall() or [])
+    cur.close(); conn.close()
+    return render_template('settings_audit.html', rows=rows)
+
+
+@app.route('/whatsapp/templates')
+@login_required
+def whatsapp_templates():
+    uid = current_user.id
+    conn = get_db(); cur = conn.cursor()
+    cur.execute(
+        "SELECT id, name, body, created_date, updated_date FROM whatsapp_templates "
+        "WHERE user_id=%s ORDER BY updated_date DESC",
+        (uid,))
+    templates = list(cur.fetchall() or [])
+    cur.close(); conn.close()
+    return render_template('whatsapp_templates.html', templates=templates)
+
+
+@app.route('/whatsapp/templates/add', methods=['POST'])
+@login_required
+def whatsapp_template_add():
+    name = (request.form.get('name') or '').strip()[:120]
+    body = (request.form.get('body') or '').strip()[:2000]
+    if not name or not body:
+        flash('Name and body are required.', 'danger')
+        return redirect(url_for('whatsapp_templates'))
+    now = datetime.today().strftime('%Y-%m-%d %H:%M')
+    conn = get_db(); cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO whatsapp_templates (user_id, name, body, created_date, updated_date) VALUES (%s, %s, %s, %s, %s)",
+        (current_user.id, name, body, now, now))
+    conn.commit(); cur.close(); conn.close()
+    flash('Template saved.', 'success')
+    return redirect(url_for('whatsapp_templates'))
+
+
+@app.route('/whatsapp/templates/<int:id>/delete', methods=['POST'])
+@login_required
+def whatsapp_template_delete(id):
+    conn = get_db(); cur = conn.cursor()
+    cur.execute(
+        "DELETE FROM whatsapp_templates WHERE id=%s AND user_id=%s",
+        (id, current_user.id))
+    conn.commit(); cur.close(); conn.close()
+    flash('Template deleted.', 'success')
+    return redirect(url_for('whatsapp_templates'))
+
+
+@app.route('/whatsapp/log')
+@login_required
+def whatsapp_log():
+    uid = current_user.id
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("""
+        SELECT wm.sent_at, wm.phone, wm.body, c.name AS customer_name
+        FROM whatsapp_messages wm
+        LEFT JOIN customers c ON c.id = wm.customer_id
+        WHERE wm.user_id=%s
+        ORDER BY wm.sent_at DESC
+        LIMIT 200
+    """, (uid,))
+    rows = list(cur.fetchall() or [])
+    cur.close(); conn.close()
+    return render_template('whatsapp_log.html', rows=rows)
+
+
+@app.route('/whatsapp/send/<int:customer_id>')
+@login_required
+def whatsapp_send(customer_id):
+    """Log the send attempt then redirect to wa.me. We cannot track actual
+    delivery via wa.me, so we log the user's action of clicking Send."""
+    import urllib.parse
+    uid = current_user.id
+    conn = get_db(); cur = conn.cursor()
+    cur.execute(
+        "SELECT id, name, phone FROM customers WHERE id=%s AND user_id=%s",
+        (customer_id, uid))
+    cust = cur.fetchone()
+    if not cust:
+        cur.close(); conn.close()
+        flash('Customer not found.', 'danger')
+        return redirect(url_for('whatsapp'))
+    phone = (cust.get('phone') or '').strip()
+    if not phone:
+        cur.close(); conn.close()
+        flash('This customer has no phone number.', 'danger')
+        return redirect(url_for('whatsapp'))
+    template_id = request.args.get('template_id', type=int) or 0
+    body = ''
+    if template_id:
+        cur.execute(
+            "SELECT body FROM whatsapp_templates WHERE id=%s AND user_id=%s",
+            (template_id, uid))
+        trow = cur.fetchone()
+        if trow:
+            body = trow.get('body') or ''
+    if '{{name}}' in body:
+        body = body.replace('{{name}}', cust.get('name') or '')
+    cur.execute(
+        "INSERT INTO whatsapp_messages (user_id, customer_id, phone, body) VALUES (%s, %s, %s, %s)",
+        (uid, customer_id, phone, body[:500]))
+    conn.commit()
+    cur.close(); conn.close()
+    phone_clean = phone.replace('+', '').replace(' ', '').replace('-', '')
+    url = 'https://wa.me/' + phone_clean
+    if body:
+        url += '?text=' + urllib.parse.quote(body)
+    return redirect(url, code=302)
 
 
 if __name__ == '__main__':

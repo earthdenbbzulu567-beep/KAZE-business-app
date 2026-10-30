@@ -2,9 +2,63 @@
 {% block title %}WhatsApp Hub{% endblock %}
 {% block content %}
 <div class="page-header">
-  <h1><i data-lucide="message-circle"></i> WhatsApp Hub</h1>
-  <p>Quickly share invoices and reminders via WhatsApp</p>
+  <div>
+    <h1><i data-lucide="message-circle"></i> WhatsApp Hub</h1>
+    <p>Send invoice links and reminders via WhatsApp. Sends are logged automatically.</p>
+  </div>
+  <div style="display:flex;gap:0.4rem;flex-wrap:wrap;">
+    <a href="{{ url_for('whatsapp_templates') }}" class="btn-secondary">Manage templates</a>
+    <a href="{{ url_for('whatsapp_log') }}" class="btn-secondary">View log</a>
+  </div>
 </div>
+
+<div class="stat-grid">
+  <div class="stat-chip"><span>Customers with phone</span><strong>{{ customers|length }}</strong></div>
+  <div class="stat-chip"><span>Saved templates</span><strong>{{ templates|length }}</strong></div>
+</div>
+
+{% if templates %}
+<div class="widget">
+  <h2 style="margin-top:0;">Quick send with template</h2>
+  <p style="color:var(--text2);font-size:0.9rem;">Pick a customer and a template. The message body opens in WhatsApp with <code>{{ '{{name}}' }}</code> replaced by the customer's name.</p>
+  <form method="GET" action="" id="quickSendForm" onsubmit="return quickSendRedirect();">
+    <div class="form-group">
+      <label>Customer</label>
+      <select name="customer_id" required>
+        <option value="">— Choose —</option>
+        {% for c in customers %}
+        <option value="{{ c.id }}">{{ c.name }} ({{ c.phone }})</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Template</label>
+      <select name="template_id" required>
+        {% for t in templates %}
+        <option value="{{ t.id }}">{{ t.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit">Send via WhatsApp</button>
+  </form>
+  <script>
+    function quickSendRedirect() {
+      var f = document.getElementById('quickSendForm');
+      var cid = f.customer_id.value;
+      var tid = f.template_id.value;
+      if (!cid) { alert('Choose a customer.'); return false; }
+      window.open('/whatsapp/send/' + cid + '?template_id=' + tid, '_blank');
+      return false;
+    }
+  </script>
+</div>
+{% else %}
+<div class="widget">
+  <p style="color:var(--text2);margin:0;">No templates yet. <a href="{{ url_for('whatsapp_templates') }}">Create one</a> to enable quick send, or use the direct buttons below.</p>
+</div>
+{% endif %}
+
+<h2>Customers</h2>
 <div class="card">
   <table class="data-table">
     <thead><tr><th>Customer</th><th>Phone</th><th>Action</th></tr></thead>
@@ -12,11 +66,19 @@
       {% for c in customers %}
       <tr>
         <td>{{ c.name }}</td>
-        <td>{{ c.phone }}</td>
-        <td><a class="btn-sm" href="https://wa.me/{{ c.phone | replace('+','') }}?text=Hello%20{{ c.name }},%20this%20is%20your%20invoice%20from%20KAZE." target="_blank">Send WhatsApp</a></td>
+        <td style="font-family:var(--mono);font-size:0.88rem;">{{ c.phone }}</td>
+        <td>
+          <a class="btn-sm" href="{{ url_for('whatsapp_send', customer_id=c.id) }}" target="_blank">Send WhatsApp</a>
+        </td>
       </tr>
+      {% else %}
+      <tr><td colspan="3" style="color:var(--text3);">No customers with phone numbers yet. <a href="{{ url_for('customers') }}">Add one</a>.</td></tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
+
+<p style="margin-top:1rem;font-size:0.85rem;color:var(--text3);">
+  Each click is logged in your <a href="{{ url_for('whatsapp_log') }}">WhatsApp Log</a>. KAZE cannot confirm that WhatsApp delivered the message — it only records the send action.
+</p>
 {% endblock %}
