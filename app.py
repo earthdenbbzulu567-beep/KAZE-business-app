@@ -1008,6 +1008,21 @@ def init_db():
         )
     ''')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_user ON whatsapp_messages (user_id, sent_at DESC)')
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS score_snapshots (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            snapshot_date TEXT NOT NULL,
+            overall_score INTEGER NOT NULL,
+            trend_score INTEGER DEFAULT 0,
+            margin_score INTEGER DEFAULT 0,
+            stock_score INTEGER DEFAULT 0,
+            cash_score INTEGER DEFAULT 0,
+            retention_score INTEGER DEFAULT 0,
+            UNIQUE(user_id, snapshot_date)
+        )
+    ''')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_score_snapshots_user ON score_snapshots (user_id, snapshot_date DESC)')
 
     conn.commit()
     cur.close()
@@ -10488,6 +10503,21 @@ def health():
         {'name': 'Cash buffer', 'score': cash_score, 'weight': 15, 'detail': f'{months_covered} months covered'},
         {'name': 'Retention', 'score': retention_score, 'weight': 15, 'detail': f'{repeaters}/{buyers} repeat'},
     ]
+    # Write snapshot for /health/history (once per day per user)
+    try:
+        today_iso = datetime.today().strftime('%Y-%m-%d')
+        snap_cur = conn.cursor()
+        snap_cur.execute(
+            "INSERT INTO score_snapshots (user_id, snapshot_date, overall_score, "
+            "trend_score, margin_score, stock_score, cash_score, retention_score) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
+            "ON CONFLICT (user_id, snapshot_date) DO NOTHING",
+            (uid, today_iso, final, trend_score, margin_score, stock_score, cash_score, retention_score),
+        )
+        conn.commit()
+        snap_cur.close()
+    except Exception as _snap_err:
+        print("health snapshot write error:", _snap_err)
     return render_template('health.html', score=final, status=status, components=components,
         sales=sales_30, low=low_sku, trend_pct=round(trend_pct, 1),
         margin_pct=margin_pct, months_covered=months_covered,
@@ -11076,13 +11106,7 @@ def health_priority():
     actions.append({'action': 'Review top margins', 'impact': '+4'})
     return render_template('health.html', score=71, actions=actions)
 
-@app.route('/health/history')
-@login_required
-def health_history():
-    return render_template('health.html', score=71, history=[66,68,70,71])
 
-
-# --- COLLECTIONS / RFM / LOYALTY (3 each) ---
 @app.route('/collections/schedule')
 @login_required
 def collections_schedule():
@@ -11716,7 +11740,6 @@ _DISABLED_PATHS = frozenset({
     '/collections/schedule',
     '/collections/aging',
     '/payments/fees',
-    '/health/history',
     '/documents/versions',
 })
 
@@ -13719,6 +13742,67 @@ def whatsapp_send(customer_id):
     if body:
         url += '?text=' + urllib.parse.quote(body)
     return redirect(url, code=302)
+
+
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Batch 3b part 2a — Health history
+# ═══════════════════════════════════════════════════════════════════════
+
+@app.route('/health/history')
+@login_required
+def health_history():
+    uid = current_user.id
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("""
+        SELECT snapshot_date, overall_score, trend_score, margin_score,
+               stock_score, cash_score, retention_score
+        FROM score_snapshots
+        WHERE user_id=%s
+        ORDER BY snapshot_date ASC
+        LIMIT 180
+    """, (uid,))
+    rows = []
+    for r in (cur.fetchall() or []):
+        rows.append({
+            'date': r.get('snapshot_date') or '?',
+            'overall': int(r.get('overall_score') or 0),
+            'trend': int(r.get('trend_score') or 0),
+            'margin': int(r.get('margin_score') or 0),
+            'stock': int(r.get('stock_score') or 0),
+            'cash': int(r.get('cash_score') or 0),
+            'retention': int(r.get('retention_score') or 0),
+        })
+    cur.close(); conn.close()
+
+    has_data = len(rows) > 0
+    first_score = rows[0]['overall'] if has_data else 0
+    last_score = rows[-1]['overall'] if has_data else 0
+    delta = last_score - first_score if has_data else 0
+
+    labels = [r['date'] for r in rows]
+    overalls = [r['overall'] for r in rows]
+    trends = [r['trend'] for r in rows]
+    margins = [r['margin'] for r in rows]
+    stocks = [r['stock'] for r in rows]
+    cashes = [r['cash'] for r in rows]
+    retentions = [r['retention'] for r in rows]
+
+    return render_template('health_history.html',
+        rows=rows,
+        has_data=has_data,
+        first_score=first_score,
+        last_score=last_score,
+        delta=delta,
+        labels=labels,
+        overalls=overalls,
+        trends=trends,
+        margins=margins,
+        stocks=stocks,
+        cashes=cashes,
+        retentions=retentions,
+    )
 
 
 if __name__ == '__main__':

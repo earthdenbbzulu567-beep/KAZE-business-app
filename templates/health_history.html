@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Health History{% endblock %}
+{% block charts_js %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1><i data-lucide="history"></i> Health History</h1>
+    <p>Your business health score over time. A snapshot is recorded each day you visit the <a href="{{ url_for('health') }}">Health Score</a> page.</p>
+  </div>
+  <a href="{{ url_for('health') }}" class="btn-secondary">← Current score</a>
+</div>
+
+{% if has_data %}
+<div class="stat-grid">
+  <div class="stat-chip"><span>Snapshots</span><strong>{{ rows|length }}</strong></div>
+  <div class="stat-chip"><span>First score</span><strong>{{ first_score }}/100</strong></div>
+  <div class="stat-chip"><span>Latest score</span><strong>{{ last_score }}/100</strong></div>
+  <div class="stat-chip">
+    <span>Change</span>
+    <strong style="color:{% if delta > 0 %}var(--green){% elif delta < 0 %}#e74c3c{% else %}var(--text3){% endif %};">
+      {{ '%+d'|format(delta) }}
+    </strong>
+  </div>
+</div>
+
+<h2>Overall score trend</h2>
+<div class="chart-container">
+  <canvas id="overallChart" height="140"></canvas>
+</div>
+
+<h2>Component trends</h2>
+<div class="chart-container">
+  <canvas id="componentsChart" height="150"></canvas>
+</div>
+
+<h2>All snapshots</h2>
+<div class="table-wrapper">
+<table>
+<thead><tr>
+  <th>Date</th><th>Overall</th><th>Trend</th><th>Margin</th>
+  <th>Stock</th><th>Cash</th><th>Retention</th>
+</tr></thead>
+<tbody>
+{% for r in rows|reverse %}
+<tr>
+  <td>{{ r.date }}</td>
+  <td style="font-family:var(--mono);font-weight:700;color:{% if r.overall >= 80 %}var(--green){% elif r.overall >= 60 %}var(--red-bright){% elif r.overall >= 40 %}#e0a030{% else %}#e74c3c{% endif %};">{{ r.overall }}</td>
+  <td style="font-family:var(--mono);">{{ r.trend }}</td>
+  <td style="font-family:var(--mono);">{{ r.margin }}</td>
+  <td style="font-family:var(--mono);">{{ r.stock }}</td>
+  <td style="font-family:var(--mono);">{{ r.cash }}</td>
+  <td style="font-family:var(--mono);">{{ r.retention }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+
+<script>
+(function(){
+  const labels = {{ labels|tojson }};
+  const overalls = {{ overalls|tojson }};
+  const trends = {{ trends|tojson }};
+  const margins = {{ margins|tojson }};
+  const stocks = {{ stocks|tojson }};
+  const cashes = {{ cashes|tojson }};
+  const retentions = {{ retentions|tojson }};
+
+  new Chart(document.getElementById('overallChart'), {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Overall health',
+        data: overalls,
+        borderColor: '#2ecc71',
+        backgroundColor: 'rgba(46,204,113,0.12)',
+        tension: 0.25,
+        fill: true,
+        borderWidth: 3,
+        pointRadius: 5,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        title: { display: true, text: 'Overall score over time' },
+        tooltip: { callbacks: { label: c => 'Overall: ' + c.raw + '/100' } }
+      },
+      scales: { y: { min: 0, max: 100, ticks: { stepSize: 20 } } }
+    }
+  });
+
+  new Chart(document.getElementById('componentsChart'), {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'Trend', data: trends, borderColor: '#e0a030', tension: 0.25, fill: false, borderWidth: 2 },
+        { label: 'Margin', data: margins, borderColor: '#2ecc71', tension: 0.25, fill: false, borderWidth: 2 },
+        { label: 'Stock', data: stocks, borderColor: '#3498db', tension: 0.25, fill: false, borderWidth: 2 },
+        { label: 'Cash', data: cashes, borderColor: '#9b59b6', tension: 0.25, fill: false, borderWidth: 2 },
+        { label: 'Retention', data: retentions, borderColor: '#e74c3c', tension: 0.25, fill: false, borderWidth: 2 },
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: { title: { display: true, text: 'Component scores (each 0-100)' } },
+      scales: { y: { min: 0, max: 100, ticks: { stepSize: 20 } } }
+    }
+  });
+})();
+</script>
+
+{% else %}
+<div class="widget">
+  <p style="color:var(--text3);">
+    No snapshots yet. Visit the <a href="{{ url_for('health') }}">Health Score</a> page —
+    a snapshot is recorded once per day, so the trend builds over the next few days/weeks
+    as you use the app.
+  </p>
+</div>
+{% endif %}
+{% endblock %}
