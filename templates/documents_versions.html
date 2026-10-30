@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Document Versions{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1><i data-lucide="file-text"></i> Document Versions</h1>
+    <p>Every edit, approval, and deletion of a bookkeeping document is automatically snapshotted. Click any document to see its full history.</p>
+  </div>
+</div>
+
+<div class="stat-grid">
+  <div class="stat-chip"><span>Documents tracked</span><strong>{{ docs|length }}</strong></div>
+</div>
+
+{% if docs %}
+<div class="table-wrapper">
+<table>
+<thead><tr><th>Document</th><th>Kind</th><th>Versions</th><th>Last change</th><th>Latest action</th><th></th></tr></thead>
+<tbody>
+{% for d in docs %}
+<tr {% if d.latest_reason == 'deleted' %}style="opacity:0.7;"{% endif %}>
+  <td><strong>{{ d.title }}</strong>{% if d.latest_reason == 'deleted' %} <span class="status-pill" style="background:var(--danger-dim);color:#e74c3c;">deleted</span>{% endif %}</td>
+  <td>{{ d.kind }}</td>
+  <td style="font-family:var(--mono);">{{ d.version_count }}</td>
+  <td style="font-size:0.85rem;color:var(--text3);">{{ d.last_change }}</td>
+  <td>
+    {% if d.latest_reason == 'insert' %}<span class="status-pill">Created</span>
+    {% elif d.latest_reason == 'update' %}<span class="status-pill status-warn">Edited</span>
+    {% elif d.latest_reason == 'deleted' %}<span class="status-pill" style="background:var(--danger-dim);color:#e74c3c;">Deleted</span>
+    {% else %}<span class="status-pill">{{ d.latest_reason|title }}</span>{% endif %}
+  </td>
+  <td><a href="{{ url_for('documents_version_detail', doc_id=d.doc_id) }}">History</a></td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% else %}
+<div class="widget">
+  <p style="color:var(--text3);">
+    No version history yet. Any new, edited, approved, or deleted bookkeeping document from now on
+    will automatically appear here. Existing documents created before this feature was enabled are not
+    retroactively tracked — try editing one on <a href="{{ url_for('bookkeeping') }}">Book keeping</a>
+    to see it appear.
+  </p>
+</div>
+{% endif %}
+{% endblock %}

@@ -1024,6 +1024,86 @@ def init_db():
     ''')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_score_snapshots_user ON score_snapshots (user_id, snapshot_date DESC)')
 
+    # bookkeeping_doc_versions + trigger (auto-snapshot every mutation)
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS bookkeeping_doc_versions (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            doc_id INTEGER NOT NULL,
+            version_number INTEGER NOT NULL,
+            kind TEXT DEFAULT '',
+            title TEXT DEFAULT '',
+            party TEXT DEFAULT '',
+            reference TEXT DEFAULT '',
+            doc_date TEXT DEFAULT '',
+            amount REAL DEFAULT 0,
+            status TEXT DEFAULT '',
+            approval_status TEXT DEFAULT 'none',
+            approval_notes TEXT DEFAULT '',
+            notes TEXT DEFAULT '',
+            line_items TEXT DEFAULT '',
+            snapshot_reason TEXT DEFAULT '',
+            snapshot_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_bdv_user_doc ON bookkeeping_doc_versions (user_id, doc_id, version_number DESC)')
+    cur.execute('''
+        CREATE OR REPLACE FUNCTION kaze_snapshot_bookkeeping_doc() RETURNS TRIGGER AS $$
+        DECLARE
+            v_user_id INTEGER;
+            v_doc_id INTEGER;
+            v_next_version INTEGER;
+            v_reason TEXT;
+        BEGIN
+            IF TG_OP = 'DELETE' THEN
+                v_user_id := OLD.user_id;
+                v_doc_id := OLD.id;
+                v_reason := 'deleted';
+                INSERT INTO bookkeeping_doc_versions (
+                    user_id, doc_id, version_number, kind, title, party, reference,
+                    doc_date, amount, status, approval_status, approval_notes,
+                    notes, line_items, snapshot_reason
+                ) VALUES (
+                    v_user_id, v_doc_id, 0,
+                    COALESCE(OLD.kind, ''), COALESCE(OLD.title, ''), COALESCE(OLD.party, ''),
+                    COALESCE(OLD.reference, ''), COALESCE(OLD.doc_date, ''),
+                    COALESCE(OLD.amount, 0), COALESCE(OLD.status, ''),
+                    COALESCE(OLD.approval_status, 'none'), COALESCE(OLD.approval_notes, ''),
+                    COALESCE(OLD.notes, ''), COALESCE(OLD.line_items, ''), v_reason
+                );
+                RETURN OLD;
+            ELSE
+                v_user_id := NEW.user_id;
+                v_doc_id := NEW.id;
+                v_reason := LOWER(TG_OP);
+                SELECT COALESCE(MAX(version_number), 0) + 1 INTO v_next_version
+                FROM bookkeeping_doc_versions
+                WHERE user_id = v_user_id AND doc_id = v_doc_id
+                  AND snapshot_reason != 'deleted';
+                INSERT INTO bookkeeping_doc_versions (
+                    user_id, doc_id, version_number, kind, title, party, reference,
+                    doc_date, amount, status, approval_status, approval_notes,
+                    notes, line_items, snapshot_reason
+                ) VALUES (
+                    v_user_id, v_doc_id, v_next_version,
+                    COALESCE(NEW.kind, ''), COALESCE(NEW.title, ''), COALESCE(NEW.party, ''),
+                    COALESCE(NEW.reference, ''), COALESCE(NEW.doc_date, ''),
+                    COALESCE(NEW.amount, 0), COALESCE(NEW.status, ''),
+                    COALESCE(NEW.approval_status, 'none'), COALESCE(NEW.approval_notes, ''),
+                    COALESCE(NEW.notes, ''), COALESCE(NEW.line_items, ''), v_reason
+                );
+                RETURN NEW;
+            END IF;
+        END;
+        $$ LANGUAGE plpgsql
+    ''')
+    cur.execute('DROP TRIGGER IF EXISTS trg_kaze_snapshot_bookkeeping ON bookkeeping_docs')
+    cur.execute('''
+        CREATE TRIGGER trg_kaze_snapshot_bookkeeping
+        AFTER INSERT OR UPDATE OR DELETE ON bookkeeping_docs
+        FOR EACH ROW EXECUTE FUNCTION kaze_snapshot_bookkeeping_doc()
+    ''')
+
     conn.commit()
     cur.close()
     conn.close()
@@ -2073,6 +2153,7 @@ NAV_GROUPS = (
         ('Workflow signals', 'workflow_signals', 'check-square', 'workspace', ('workflow_signals',)),
         ('Services analytics', 'services_analytics', 'graduation-cap', 'services', ('services_analytics',)),
         ('Settings audit', 'settings_audit', 'history', None, ('settings_audit',)),
+        ('Document versions', 'documents_versions', 'file-text', None, ('documents_versions',)),
     )),
     ('Trade', (
         ('Shop', 'shop', 'store', 'shop', ('shop',)),
@@ -11403,10 +11484,7 @@ def documents_approval():
     cur.close(); conn.close()
     return render_template('docs.html', docs=rows)
 
-@app.route('/documents/versions')
-@login_required
-def documents_versions():
-    return render_template('docs.html', docs=[], versions=3)
+
 
 @app.route('/budgets/variance')
 @login_required
@@ -11740,7 +11818,6 @@ _DISABLED_PATHS = frozenset({
     '/collections/schedule',
     '/collections/aging',
     '/payments/fees',
-    '/documents/versions',
 })
 
 
@@ -13803,6 +13880,117 @@ def health_history():
         cashes=cashes,
         retentions=retentions,
     )
+
+
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Batch 3b part 2b — Document version history (via Postgres trigger)
+# ═══════════════════════════════════════════════════════════════════════
+
+@app.route('/documents/versions')
+@login_required
+def documents_versions():
+    uid = current_user.id
+    conn = get_db(); cur = conn.cursor()
+    # List docs that have at least one version
+    cur.execute("""
+        SELECT bv.doc_id,
+               COUNT(*) AS version_count,
+               MAX(bv.snapshot_at) AS last_change,
+               MAX(CASE WHEN bv.snapshot_reason != 'deleted' THEN bv.title ELSE NULL END) AS current_title,
+               MAX(CASE WHEN bv.snapshot_reason != 'deleted' THEN bv.kind ELSE NULL END) AS current_kind,
+               MAX(bv.snapshot_reason) FILTER (WHERE bv.snapshot_at = (
+                   SELECT MAX(snapshot_at) FROM bookkeeping_doc_versions bv2
+                   WHERE bv2.user_id = bv.user_id AND bv2.doc_id = bv.doc_id
+               )) AS latest_reason
+        FROM bookkeeping_doc_versions bv
+        WHERE bv.user_id=%s
+        GROUP BY bv.doc_id
+        ORDER BY MAX(bv.snapshot_at) DESC
+        LIMIT 200
+    """, (uid,))
+    docs = []
+    for r in (cur.fetchall() or []):
+        title = r.get('current_title')
+        kind = r.get('current_kind')
+        if not title:
+            # Deleted doc — get kind/title from the deleted snapshot
+            cur.execute(
+                "SELECT title, kind FROM bookkeeping_doc_versions "
+                "WHERE user_id=%s AND doc_id=%s AND snapshot_reason='deleted' "
+                "ORDER BY id DESC LIMIT 1",
+                (uid, r.get('doc_id')))
+            drow = cur.fetchone()
+            if drow:
+                title = drow.get('title')
+                kind = drow.get('kind')
+        docs.append({
+            'doc_id': r.get('doc_id'),
+            'title': title or '(deleted)',
+            'kind': (kind or '').replace('_', ' ').title() or '—',
+            'version_count': int(r.get('version_count') or 0),
+            'last_change': r.get('last_change') or '?',
+            'latest_reason': (r.get('latest_reason') or '').lower(),
+        })
+    cur.close(); conn.close()
+    return render_template('documents_versions.html', docs=docs)
+
+
+@app.route('/documents/versions/<int:doc_id>')
+@login_required
+def documents_version_detail(doc_id):
+    uid = current_user.id
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("""
+        SELECT id, version_number, kind, title, party, reference, doc_date,
+               amount, status, approval_status, approval_notes, notes,
+               line_items, snapshot_reason, snapshot_at
+        FROM bookkeeping_doc_versions
+        WHERE user_id=%s AND doc_id=%s
+        ORDER BY snapshot_at DESC, id DESC
+    """, (uid, doc_id))
+    rows = []
+    for r in (cur.fetchall() or []):
+        rows.append({
+            'id': r.get('id'),
+            'version_number': int(r.get('version_number') or 0),
+            'kind': (r.get('kind') or '').replace('_', ' ').title(),
+            'title': r.get('title') or '',
+            'party': r.get('party') or '',
+            'reference': r.get('reference') or '',
+            'doc_date': r.get('doc_date') or '',
+            'amount': float(r.get('amount') or 0),
+            'status': r.get('status') or '',
+            'approval_status': r.get('approval_status') or 'none',
+            'approval_notes': r.get('approval_notes') or '',
+            'notes': r.get('notes') or '',
+            'line_items': r.get('line_items') or '',
+            'snapshot_reason': (r.get('snapshot_reason') or '').lower(),
+            'snapshot_at': r.get('snapshot_at') or '?',
+        })
+    cur.close(); conn.close()
+
+    # Detect which fields changed between consecutive versions
+    for i, row in enumerate(rows):
+        if i + 1 < len(rows):
+            older = rows[i + 1]
+            changes = []
+            for field in ('title', 'party', 'reference', 'amount', 'status',
+                          'approval_status', 'notes', 'line_items'):
+                if row.get(field) != older.get(field):
+                    changes.append(field)
+            row['changed_fields'] = changes
+        else:
+            row['changed_fields'] = []
+
+    if not rows:
+        flash('No version history found for that document.', 'info')
+        return redirect(url_for('documents_versions'))
+
+    doc_title = rows[0]['title'] or f'Document #{doc_id}'
+    return render_template('documents_version_detail.html',
+        rows=rows, doc_id=doc_id, doc_title=doc_title)
 
 
 if __name__ == '__main__':

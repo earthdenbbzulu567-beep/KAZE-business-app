@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Version history — {{ doc_title }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1><i data-lucide="clock"></i> {{ doc_title }}</h1>
+    <p>Every version of this document, newest first. Document ID #{{ doc_id }}.</p>
+  </div>
+  <a href="{{ url_for('documents_versions') }}" class="btn-secondary">← All documents</a>
+</div>
+
+{% if rows %}
+<div class="widget" style="padding:1rem 1.1rem;">
+  <p style="margin:0;font-size:0.9rem;color:var(--text2);">
+    <strong>{{ rows|length }}</strong> version{{ '' if rows|length == 1 else 's' }} recorded.
+    Each row shows what the document looked like at that point.
+  </p>
+</div>
+
+{% for r in rows %}
+<div class="widget" style="border-left:4px solid {% if r.snapshot_reason == 'deleted' %}#e74c3c{% elif r.snapshot_reason == 'insert' %}var(--green){% else %}#e0a030{% endif %};">
+  <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:0.5rem;">
+    <div>
+      <span class="status-pill" style="background:var(--surface2);color:var(--text2);">
+        v{{ r.version_number if r.version_number > 0 else '—' }}
+      </span>
+      <span class="status-pill" style="margin-left:0.4rem;
+        {% if r.snapshot_reason == 'deleted' %}background:var(--danger-dim);color:#e74c3c;
+        {% elif r.snapshot_reason == 'insert' %}background:var(--green-dim);color:var(--green);
+        {% else %}background:rgba(224,160,48,0.15);color:#e0a030;{% endif %}">
+        {{ r.snapshot_reason|title }}
+      </span>
+      <span style="margin-left:0.4rem;font-size:0.82rem;color:var(--text3);">{{ r.snapshot_at }}</span>
+    </div>
+    {% if r.changed_fields %}
+    <span style="font-size:0.8rem;color:var(--text3);">
+      changed: {{ r.changed_fields|join(', ') }}
+    </span>
+    {% endif %}
+  </div>
+  <table style="width:100%;margin-top:0.8rem;font-size:0.88rem;border-collapse:collapse;">
+    <tbody>
+      <tr><td style="padding:4px 8px 4px 0;color:var(--text3);width:120px;">Kind</td><td>{{ r.kind or '—' }}</td></tr>
+      <tr><td style="padding:4px 8px 4px 0;color:var(--text3);">Title</td><td>{{ r.title or '—' }}</td></tr>
+      <tr><td style="padding:4px 8px 4px 0;color:var(--text3);">Party</td><td>{{ r.party or '—' }}</td></tr>
+      <tr><td style="padding:4px 8px 4px 0;color:var(--text3);">Reference</td><td>{{ r.reference or '—' }}</td></tr>
+      <tr><td style="padding:4px 8px 4px 0;color:var(--text3);">Date</td><td>{{ r.doc_date or '—' }}</td></tr>
+      <tr><td style="padding:4px 8px 4px 0;color:var(--text3);">Amount</td><td>{{ money(r.amount) }}</td></tr>
+      <tr><td style="padding:4px 8px 4px 0;color:var(--text3);">Status</td><td>{{ r.status or '—' }}</td></tr>
+      <tr><td style="padding:4px 8px 4px 0;color:var(--text3);">Approval</td><td>{{ r.approval_status or 'none' }}{% if r.approval_notes %} — {{ r.approval_notes }}{% endif %}</td></tr>
+      {% if r.notes %}<tr><td style="padding:4px 8px 4px 0;color:var(--text3);">Notes</td><td>{{ r.notes }}</td></tr>{% endif %}
+      {% if r.line_items %}<tr><td style="padding:4px 8px 4px 0;color:var(--text3);">Lines</td><td><pre style="white-space:pre-wrap;font-size:0.82rem;margin:0;">{{ r.line_items }}</pre></td></tr>{% endif %}
+    </tbody>
+  </table>
+</div>
+{% endfor %}
+{% else %}
+<div class="widget"><p style="color:var(--text3);">No versions found.</p></div>
+{% endif %}
+{% endblock %}
