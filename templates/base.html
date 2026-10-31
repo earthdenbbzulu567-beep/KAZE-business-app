@@ -1846,6 +1846,241 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     </script>
 
 
+<style id="kaze-fintech-tokens">
+/* =================================================================
+   KAZE FINTECH DESIGN SYSTEM — Phase 4b Foundation
+   Light-first, green accent. Compatible with existing dark theme.
+   ================================================================= */
+
+:root {
+    /* Brand colors */
+    --kz-brand: #1a8f3c;
+    --kz-brand-hover: #157432;
+    --kz-brand-light: #e8f5e9;
+    --kz-brand-glow: rgba(26, 143, 60, 0.15);
+    --kz-accent: #10b981;
+
+    /* Light theme (default for new design) */
+    --kz-bg: #f9fafb;
+    --kz-surface: #ffffff;
+    --kz-surface-hover: #f3f4f6;
+    --kz-border: #e5e7eb;
+    --kz-border-strong: #d1d5db;
+    --kz-text: #111827;
+    --kz-text-muted: #6b7280;
+    --kz-text-light: #9ca3af;
+
+    /* Typography */
+    --kz-font: 'Inter', 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --kz-radius-sm: 8px;
+    --kz-radius: 12px;
+    --kz-radius-lg: 20px;
+    --kz-radius-pill: 999px;
+
+    /* Shadows */
+    --kz-shadow-sm: 0 1px 2px 0 rgba(0,0,0,0.05);
+    --kz-shadow: 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px -1px rgba(0,0,0,0.1);
+    --kz-shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1);
+    --kz-shadow-xl: 0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1);
+}
+
+/* Dark theme overrides */
+html.theme-dark {
+    --kz-bg: #0f172a;
+    --kz-surface: #1e293b;
+    --kz-surface-hover: #334155;
+    --kz-border: #334155;
+    --kz-border-strong: #475569;
+    --kz-text: #f8fafc;
+    --kz-text-muted: #94a3b8;
+    --kz-text-light: #64748b;
+    --kz-brand-light: rgba(26, 143, 60, 0.15);
+}
+
+/* -----------------------------------------------------------------
+   Components
+   ----------------------------------------------------------------- */
+
+.kz-card {
+    background: var(--kz-surface);
+    border: 1px solid var(--kz-border);
+    border-radius: var(--kz-radius);
+    box-shadow: var(--kz-shadow);
+    padding: 1.5rem;
+    color: var(--kz-text);
+}
+
+.kz-card-hover:hover {
+    box-shadow: var(--kz-shadow-lg);
+    transform: translateY(-2px);
+    transition: all 0.2s ease;
+}
+
+.kz-stat-card {
+    background: var(--kz-surface);
+    border-radius: var(--kz-radius);
+    padding: 1.25rem;
+    border: 1px solid var(--kz-border);
+    box-shadow: var(--kz-shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.kz-stat-label {
+    font-size: 0.8rem;
+    color: var(--kz-text-muted);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.kz-stat-value {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--kz-text);
+    line-height: 1.2;
+}
+
+.kz-stat-delta {
+    font-size: 0.8rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+}
+.kz-stat-delta.up { color: #059669; }
+.kz-stat-delta.down { color: #dc2626; }
+
+.kz-btn {
+    background: var(--kz-brand);
+    color: #ffffff;
+    border: none;
+    border-radius: var(--kz-radius-pill);
+    padding: 0.65rem 1.3rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    text-decoration: none;
+}
+.kz-btn:hover {
+    background: var(--kz-brand-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--kz-shadow);
+}
+.kz-btn:active { transform: translateY(0); }
+
+.kz-btn-secondary {
+    background: transparent;
+    color: var(--kz-text);
+    border: 1px solid var(--kz-border-strong);
+}
+.kz-btn-secondary:hover {
+    background: var(--kz-surface-hover);
+    border-color: var(--kz-text-muted);
+}
+
+.kz-input {
+    width: 100%;
+    padding: 0.65rem 0.9rem;
+    border: 1px solid var(--kz-border-strong);
+    border-radius: var(--kz-radius-sm);
+    background: var(--kz-surface);
+    color: var(--kz-text);
+    font-size: 0.9rem;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+.kz-input:focus {
+    outline: none;
+    border-color: var(--kz-brand);
+    box-shadow: 0 0 0 3px var(--kz-brand-glow);
+}
+
+.kz-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 1rem;
+    border-radius: var(--kz-radius-pill);
+    color: var(--kz-text-muted);
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.9rem;
+    transition: all 0.15s ease;
+    margin-bottom: 2px;
+}
+.kz-nav-item:hover {
+    background: var(--kz-surface-hover);
+    color: var(--kz-text);
+}
+.kz-nav-item.active {
+    background: var(--kz-brand);
+    color: #ffffff;
+}
+.kz-nav-item svg, .kz-nav-item i { width: 18px; height: 18px; }
+
+.kz-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.6rem;
+    border-radius: var(--kz-radius-pill);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+.kz-badge.success { background: #d1fae5; color: #065f46; }
+.kz-badge.warn { background: #fef3c7; color: #92400e; }
+.kz-badge.danger { background: #fee2e2; color: #991b1b; }
+.kz-badge.info { background: #dbeafe; color: #1e40af; }
+
+html.theme-dark .kz-badge.success { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
+html.theme-dark .kz-badge.warn { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
+html.theme-dark .kz-badge.danger { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
+html.theme-dark .kz-badge.info { background: rgba(59, 130, 246, 0.2); color: #93c5fd; }
+
+.kz-overlay-header {
+    background: var(--kz-surface);
+    border-radius: var(--kz-radius);
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--kz-border);
+    box-shadow: var(--kz-shadow-sm);
+}
+.kz-overlay-header h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--kz-text);
+}
+.kz-overlay-stats {
+    display: flex;
+    gap: 2rem;
+    flex-wrap: wrap;
+    margin-top: 0.5rem;
+}
+.kz-overlay-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+.kz-overlay-stat span {
+    font-size: 0.72rem;
+    color: var(--kz-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.kz-overlay-stat strong {
+    font-size: 1.1rem;
+    color: var(--kz-text);
+    font-family: var(--mono);
+}
+</style>
+
 </head>
 <body class="ui-{{ ui_device or 'auto' }}">
 
@@ -1860,7 +2095,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
             </a>
         </div>
 
-        <nav class="sidebar-nav">
+        <nav class="sidebar-nav" id="kz-sidebar-nav">
             {% for group in nav_groups or [] %}
             <div class="nav-section">
                 <div class="nav-section-title">{{ group.title }}</div>

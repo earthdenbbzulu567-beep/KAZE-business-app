@@ -245,6 +245,17 @@
     </div>
     <p style="font-size:0.85rem;"><a href="{{ url_for('plans') }}">Compare packages</a></p>
 
+    {% if is_developer %}
+    <h2>Developer Settings</h2>
+    <div class="widget" style="border-left:4px solid var(--kz-brand, #1a8f3c);">
+        <p style="color:var(--text2);max-width:40rem;margin-bottom:1rem;">You are listed in KAZE_DEVELOPER_EMAILS. Developer mode gives you unlimited Founder's Premium access for testing. Turn it off to test the paywall and checkout flow as a regular user.</p>
+        <div class="form-group" style="display:flex;align-items:center;gap:0.75rem;margin:0;">
+            <label style="margin:0;">Developer mode</label>
+            <input type="checkbox" name="developer_mode_enabled" {% if settings.developer_mode_enabled == 1 %}checked{% endif %} style="width:20px;height:20px;">
+        </div>
+    </div>
+    {% endif %}
+
     <h2>Stripe payments</h2>
     <p style="color:var(--text2);max-width:40rem;margin-bottom:1rem;">Used for service sessions, invoices, sales, and custom payment links. Prefer test keys until you are ready to take live money. Environment variables override these fields if set on the host.</p>
     <div class="form-group">

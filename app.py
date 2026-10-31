@@ -1052,6 +1052,8 @@ def init_db():
     cur.execute("ALTER TABLE stripe_payments ADD COLUMN IF NOT EXISTS stripe_fee_currency TEXT DEFAULT ''")
     cur.execute("ALTER TABLE stripe_payments ADD COLUMN IF NOT EXISTS stripe_fee_fetched_at TEXT DEFAULT ''")
     cur.execute("ALTER TABLE stripe_payments ADD COLUMN IF NOT EXISTS invoice_id TEXT DEFAULT ''")
+    cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS developer_mode_enabled INTEGER DEFAULT 0")
+    cur.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS developer_mode_enabled INTEGER DEFAULT 0")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_stripe_invoice ON stripe_payments (user_id, invoice_id)")
     cur.execute('''
         CREATE OR REPLACE FUNCTION kaze_snapshot_bookkeeping_doc() RETURNS TRIGGER AS $$
@@ -2013,6 +2015,13 @@ def subscription_info(settings=None):
 def effective_plan(settings=None):
     settings = settings or {}
     today = datetime.today().strftime('%Y-%m-%d')
+
+    # Developer bypass
+    dev_emails_raw = os.environ.get('KAZE_DEVELOPER_EMAILS', '')
+    dev_emails = [e.strip().lower() for e in dev_emails_raw.split(',') if e.strip()]
+    if current_user.is_authenticated and current_user.email.lower() in dev_emails:
+        if int(settings.get('developer_mode_enabled') or 0) == 1:
+            return 'founder'
 
     expires = str(settings.get('plan_expires_at') or '')[:10]
     if expires and expires >= today:
@@ -4096,6 +4105,12 @@ def settings():
 
         package_prices = ''
 
+        # Developer mode: only owners in env var can enable it
+        dev_emails_raw = os.environ.get('KAZE_DEVELOPER_EMAILS', '')
+        dev_emails = [e.strip().lower() for e in dev_emails_raw.split(',') if e.strip()]
+        is_developer = (current_user.email.lower() in dev_emails)
+        developer_mode_enabled = 1 if (is_developer and request.form.get('developer_mode_enabled') == 'on') else 0
+
         if font_size not in ('xsmall', 'small', 'medium', 'large', 'xlarge'):
             font_size = 'medium'
         if items_per_page not in (10, 25, 50, 100):
@@ -4121,7 +4136,8 @@ def settings():
                 flutterwave_public_key=%s, flutterwave_secret_key=%s, flutterwave_webhook_hash=%s,
                 alpha_vantage_key=%s,
                 paypal_client_id=%s, paypal_secret=%s, paypal_mode=%s,
-                bank_name=%s, bank_account_name=%s, bank_account_number=%s, bank_branch=%s
+                bank_name=%s, bank_account_name=%s, bank_account_number=%s, bank_branch=%s,
+                developer_mode_enabled=%s
             WHERE user_id=%s
         ''', (low_stock_threshold, email_notifications, notify_email,
               theme, font_family, font_size, default_chart_type,
@@ -4138,6 +4154,7 @@ def settings():
               alpha_vantage_key,
               paypal_client_id, paypal_secret, paypal_mode,
               bank_name, bank_account_name, bank_account_number, bank_branch,
+              developer_mode_enabled,
               current_user.id))
         # Audit: log what changed (savepoint so an audit failure never blocks save)
         try:
@@ -4204,7 +4221,10 @@ def settings():
     except Exception:
         totp_on, totp_secret = 0, ''
     backup_codes = session.pop('totp_backup_show', None) if totp_on else (session.get('totp_backup_show') or [])
-    return render_template('settings.html', settings=settings_row, custom_modules=custom_modules, totp_on=totp_on, totp_secret=totp_secret, totp_qr=_qr_svg(_otpauth_uri(totp_secret, current_user.username)) if totp_secret else '', backup_codes=backup_codes or [])
+    dev_emails_raw = os.environ.get('KAZE_DEVELOPER_EMAILS', '')
+    dev_emails = [e.strip().lower() for e in dev_emails_raw.split(',') if e.strip()]
+    is_developer = (current_user.email.lower() in dev_emails)
+    return render_template('settings.html', settings=settings_row, custom_modules=custom_modules, totp_on=totp_on, totp_secret=totp_secret, totp_qr=_qr_svg(_otpauth_uri(totp_secret, current_user.username)) if totp_secret else '', backup_codes=backup_codes or [], is_developer=is_developer)
 
 
 # ======================== Cash Book ========================
