@@ -2081,6 +2081,252 @@ html.theme-dark .kz-badge.info { background: rgba(59, 130, 246, 0.2); color: #93
 }
 </style>
 
+<style id="kaze-fintech-sidebar">
+/* Phase 4c — Sidebar + topbar visual */
+
+.sidebar {
+    background: var(--kz-surface, var(--surface)) !important;
+    border-right: 1px solid var(--kz-border, var(--border)) !important;
+}
+.sidebar-brand {
+    background: transparent !important;
+    border-bottom: 1px solid var(--kz-border, var(--border)) !important;
+    padding: 1.1rem 1rem !important;
+}
+.sidebar-brand .wordmark b {
+    color: var(--kz-text, var(--text)) !important;
+    font-family: var(--display);
+}
+.sidebar-brand .plan-badge {
+    background: var(--kz-brand-light, var(--accent-wash)) !important;
+    border-color: var(--kz-brand, var(--red-bright)) !important;
+    color: var(--kz-brand, var(--red-bright)) !important;
+}
+
+.sidebar-nav.kz-sidebar {
+    padding: 0.75rem 0.6rem !important;
+    background: transparent !important;
+}
+.kz-nav-pinned { display: flex; flex-direction: column; gap: 2px; margin-bottom: 0.3rem; }
+.kz-nav-divider {
+    height: 1px;
+    background: var(--kz-border, var(--border));
+    margin: 0.5rem 0.4rem;
+}
+
+.kz-nav-item {
+    display: flex !important;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.6rem 0.8rem !important;
+    border-radius: 10px !important;
+    color: var(--kz-text-muted, var(--text2)) !important;
+    text-decoration: none !important;
+    font-size: 0.88rem !important;
+    font-weight: 500 !important;
+    margin: 1px 0 !important;
+    transition: background 0.15s ease, color 0.15s ease !important;
+    overflow: hidden !important;
+}
+.kz-nav-item:hover {
+    background: var(--kz-surface-hover, var(--surface2)) !important;
+    color: var(--kz-text, var(--text)) !important;
+}
+.kz-nav-item.active {
+    background: var(--kz-brand, var(--red-bright)) !important;
+    color: #ffffff !important;
+    font-weight: 600 !important;
+}
+.kz-nav-item.active i, .kz-nav-item.active svg {
+    color: #ffffff !important;
+    stroke: #ffffff !important;
+}
+.kz-nav-item i, .kz-nav-item svg {
+    width: 17px !important;
+    height: 17px !important;
+    min-width: 17px !important;
+    color: var(--kz-text-muted, var(--text2)) !important;
+    stroke-width: 1.8;
+    flex-shrink: 0 !important;
+}
+.kz-nav-item span {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Collapsible groups — override existing details styling */
+.kz-nav-group {
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin: 2px 0 !important;
+    box-shadow: none !important;
+}
+.kz-nav-group[open] {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+.kz-nav-group > summary {
+    padding: 0.55rem 0.75rem !important;
+    cursor: pointer;
+    list-style: none;
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.7rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--kz-text-muted, var(--text3)) !important;
+    border-radius: 8px;
+    transition: color 0.15s, background 0.15s;
+}
+.kz-nav-group > summary:hover {
+    color: var(--kz-text, var(--text)) !important;
+    background: var(--kz-surface-hover, var(--surface2)) !important;
+}
+.kz-nav-group > summary::-webkit-details-marker { display: none; }
+.kz-nav-group > summary::after { display: none !important; content: none !important; }
+.kz-chevron {
+    width: 13px !important;
+    height: 13px !important;
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+    opacity: 0.6;
+}
+.kz-nav-group[open] .kz-chevron {
+    transform: rotate(180deg);
+    opacity: 1;
+}
+.kz-nav-group-body {
+    padding: 0.15rem 0 0.35rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+/* ── Topbar ── */
+.topbar.kz-topbar {
+    padding: 0.6rem 1.5rem !important;
+    background: var(--kz-surface, var(--surface)) !important;
+    border-bottom: 1px solid var(--kz-border, var(--border)) !important;
+    backdrop-filter: none !important;
+    display: flex !important;
+    align-items: center;
+    gap: 1rem;
+}
+.search-form.kz-search {
+    flex: 1 1 auto !important;
+    max-width: 480px !important;
+    margin: 0 auto !important;
+    position: relative;
+}
+.search-form.kz-search input {
+    width: 100% !important;
+    border-radius: 999px !important;
+    padding: 0.55rem 1rem 0.55rem 2.5rem !important;
+    background: var(--kz-bg, var(--surface2)) !important;
+    border: 1px solid var(--kz-border, var(--border)) !important;
+    color: var(--kz-text, var(--text)) !important;
+    font-size: 0.88rem !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E") !important;
+    background-repeat: no-repeat !important;
+    background-position: 0.9rem center !important;
+}
+.search-form.kz-search input:focus {
+    outline: none !important;
+    border-color: var(--kz-brand, var(--red-bright)) !important;
+    box-shadow: 0 0 0 3px var(--kz-brand-glow, var(--red-glow)) !important;
+}
+.search-form.kz-search button { display: none !important; }
+
+.kz-topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-shrink: 0;
+}
+.kz-topbar-right .theme-toggle {
+    width: 36px !important; height: 36px !important;
+    border-radius: 50% !important;
+    background: transparent !important;
+    border: 1px solid var(--kz-border, var(--border)) !important;
+    color: var(--kz-text-muted, var(--text2)) !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    padding: 0 !important;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    clip-path: none !important;
+}
+.kz-topbar-right .theme-toggle:hover {
+    background: var(--kz-surface-hover, var(--surface2)) !important;
+    border-color: var(--kz-text-muted, var(--text2)) !important;
+    transform: none !important;
+}
+.kz-bell {
+    position: relative !important;
+    width: 36px !important; height: 36px !important;
+    border-radius: 50% !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    color: var(--kz-text-muted, var(--text2)) !important;
+    border: 1px solid var(--kz-border, var(--border)) !important;
+    text-decoration: none !important;
+    transition: background 0.15s, border-color 0.15s;
+}
+.kz-bell:hover {
+    background: var(--kz-surface-hover, var(--surface2)) !important;
+    border-color: var(--kz-text-muted, var(--text2)) !important;
+    transform: none !important;
+}
+.kz-bell svg { width: 16px !important; height: 16px !important; stroke-width: 1.8; }
+.kz-bell .bell-badge {
+    position: absolute !important;
+    top: -4px !important; right: -4px !important;
+    background: #dc2626 !important;
+    color: #fff !important;
+    font-size: 0.6rem !important;
+    font-weight: 700 !important;
+    border-radius: 999px !important;
+    padding: 1px 5px !important;
+    line-height: 1.2 !important;
+    animation: none !important;
+}
+.kz-user-btn {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.45rem 0.8rem !important;
+    border-radius: 999px !important;
+    background: var(--kz-surface-hover, var(--surface2)) !important;
+    border: 1px solid var(--kz-border, var(--border)) !important;
+    color: var(--kz-text, var(--text)) !important;
+    font-weight: 600;
+    font-size: 0.85rem !important;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    font-family: inherit;
+}
+.kz-user-btn:hover {
+    background: var(--kz-brand-light, var(--accent-wash)) !important;
+    border-color: var(--kz-brand, var(--red-bright)) !important;
+    transform: none !important;
+}
+.kz-user-btn svg { width: 13px !important; height: 13px !important; stroke-width: 2; }
+
+@media (max-width: 768px) {
+    .topbar.kz-topbar { padding: 0.5rem 1rem !important; flex-wrap: wrap; }
+    .search-form.kz-search { max-width: 100% !important; order: 3; flex: 1 1 100% !important; margin-top: 0.4rem !important; }
+}
+</style>
 </head>
 <body class="ui-{{ ui_device or 'auto' }}">
 
@@ -2095,18 +2341,43 @@ html.theme-dark .kz-badge.info { background: rgba(59, 130, 246, 0.2); color: #93
             </a>
         </div>
 
-        <nav class="sidebar-nav" id="kz-sidebar-nav">
-            {% for group in nav_groups or [] %}
-            <div class="nav-section">
-                <div class="nav-section-title">{{ group.title }}</div>
-                {% for item in group.links %}
-                <a href="{{ url_for(item.endpoint) }}" {% if request.endpoint in item.active %}class="active"{% endif %}>
-                    <i data-lucide="{{ item.icon }}" class="icon"></i> {{ item.label }}
+        <nav class="sidebar-nav kz-sidebar" id="kz-sidebar-nav">
+    {% set pinned = ['dashboard', 'counter', 'sales', 'stock', 'customers', 'services'] %}
+    <div class="kz-nav-pinned">
+        {% for group in nav_groups or [] %}
+            {% for item in group.links %}
+                {% if item.endpoint in pinned %}
+                <a href="{{ url_for(item.endpoint) }}" class="kz-nav-item {% if request.endpoint in item.active %}active{% endif %}">
+                    <i data-lucide="{{ item.icon }}"></i><span>{{ item.label }}</span>
+                </a>
+                {% endif %}
+            {% endfor %}
+        {% endfor %}
+    </div>
+    <div class="kz-nav-divider"></div>
+    {% for group in nav_groups or [] %}
+        {% set unpinned = group.links | rejectattr('endpoint', 'in', pinned) | list %}
+        {% if unpinned %}
+        {% set ns = namespace(active=false) %}
+        {% for item in unpinned %}
+            {% if request.endpoint in item.active %}{% set ns.active = true %}{% endif %}
+        {% endfor %}
+        <details class="kz-nav-group" {% if ns.active %}open{% endif %} data-group-key="{{ group.title }}">
+            <summary class="kz-nav-group-header">
+                <span>{{ group.title }}</span>
+                <i data-lucide="chevron-down" class="kz-chevron"></i>
+            </summary>
+            <div class="kz-nav-group-body">
+                {% for item in unpinned %}
+                <a href="{{ url_for(item.endpoint) }}" class="kz-nav-item {% if request.endpoint in item.active %}active{% endif %}">
+                    <i data-lucide="{{ item.icon }}"></i><span>{{ item.label }}</span>
                 </a>
                 {% endfor %}
             </div>
-            {% endfor %}
-        </nav>
+        </details>
+        {% endif %}
+    {% endfor %}
+</nav>
 
         <div class="sidebar-footer">
             <span>KAZE · {{ plan.label if plan else 'New user' }} · <a href="{{ url_for('legal_licence') }}" style="color:inherit;">Licence</a></span>
@@ -2117,45 +2388,38 @@ html.theme-dark .kz-badge.info { background: rgba(59, 130, 246, 0.2); color: #93
     <!-- ─── Main Content ─── -->
     <div class="main-content">
         <!-- Top Bar -->
-        <header class="topbar">
-            <!-- Hamburger -->
-            <button class="hamburger" id="hamburgerBtn" aria-label="Toggle sidebar">☰</button>
-
-            <!-- GLOBAL SEARCH FORM -->
-            <form action="{{ url_for('search') }}" method="GET" class="search-form">
-                <input type="text" name="q" placeholder="Search customers, products, notes, tasks..." aria-label="Search">
-                <button type="submit" aria-label="Submit search">🔍</button>
-            </form>
-
-            <!-- Right group: notifications + user menu -->
-            <div class="right-group">
-                <a class="status-chip" href="{{ url_for('settings') }}" title="App mode">{{ app_modes[app_mode].label if app_modes is defined and app_mode in app_modes else (app_mode or 'Full') }}</a>
-                <a class="status-chip" href="{{ url_for('plans') }}" title="Package">{{ plan.label if plan else 'New user' }}</a>
-                <button type="button" class="theme-toggle" id="themeToggle" title="Switch dark / light mode" aria-label="Switch dark or light mode">🌙</button>
-                <button type="button" class="theme-toggle" id="soundToggle" title="Sound cues on / off" aria-label="Sound cues on or off">🔔</button>
-                <span class="live-clock" id="liveClock" title="Local time"></span>
-                <a href="{{ url_for('notifications') }}" class="bell-link" title="Notifications">
-                    🔔{% if unread_notifications and unread_notifications > 0 %}<span class="bell-badge">{{ unread_notifications }}</span>{% endif %}
-                </a>
-                <div class="user-menu">
-                    <button class="dropbtn">{{ current_user.username }} ▼</button>
-                    <div class="dropdown-content">
-                        <a href="{{ url_for('dashboard') }}">Workshop Bench</a>
-                        <a href="{{ url_for('team') }}">👥 Team</a>
-                        <a href="{{ url_for('activity') }}">Login Activity</a>
-                        <a href="{{ url_for('backup_export') }}">Download backup</a>
-                        <a href="#" onclick="openModal('tutorialModal'); return false;">Help / Tutorial</a>
-                        <a href="{{ url_for('tutorial') }}">📖 Practical guide</a>
-                        <a href="{{ url_for('shortcuts') }}">⌨️ Shortcuts</a>
-                        <a href="{{ url_for('swot') }}">🧭 SWOT Analysis</a>
-                        <a href="{{ url_for('settings') }}">Settings</a>
-                        <a href="{{ url_for('legal_licence') }}">Licence</a>
-                        <a href="{{ url_for('legal_terms') }}">Terms</a>
-                        <a href="{{ url_for('logout') }}">Logout</a>
-                    </div>
-                </div>
+        <header class="topbar kz-topbar" id="kz-topbar">
+    <button class="hamburger" id="hamburgerBtn" aria-label="Toggle sidebar">☰</button>
+    <form action="{{ url_for('search') }}" method="GET" class="search-form kz-search">
+        <input type="text" name="q" placeholder="Search anything…" aria-label="Search">
+        <button type="submit" aria-label="Submit search">🔍</button>
+    </form>
+    <div class="right-group kz-topbar-right">
+        <button type="button" class="theme-toggle" id="themeToggle" title="Toggle theme" aria-label="Toggle theme">🌙</button>
+        <button type="button" class="theme-toggle" id="soundToggle" title="Toggle sounds" aria-label="Toggle sounds">🔔</button>
+        <a href="{{ url_for('notifications') }}" class="bell-link kz-bell" title="Notifications">
+            <i data-lucide="bell"></i>
+            {% if unread_notifications and unread_notifications > 0 %}<span class="bell-badge">{{ unread_notifications }}</span>{% endif %}
+        </a>
+        <div class="user-menu kz-user-menu">
+            <button class="dropbtn kz-user-btn">{{ current_user.username }} <i data-lucide="chevron-down"></i></button>
+            <div class="dropdown-content">
+                <a href="{{ url_for('dashboard') }}">Workshop Bench</a>
+                <a href="{{ url_for('team') }}">👥 Team</a>
+                <a href="{{ url_for('activity') }}">Login Activity</a>
+                <a href="{{ url_for('backup_export') }}">Download backup</a>
+                <a href="#" onclick="openModal('tutorialModal'); return false;">Help / Tutorial</a>
+                <a href="{{ url_for('tutorial') }}">📖 Practical guide</a>
+                <a href="{{ url_for('shortcuts') }}">⌨️ Shortcuts</a>
+                <a href="{{ url_for('swot') }}">🧭 SWOT Analysis</a>
+                <a href="{{ url_for('settings') }}">Settings</a>
+                <a href="{{ url_for('legal_licence') }}">Licence</a>
+                <a href="{{ url_for('legal_terms') }}">Terms</a>
+                <a href="{{ url_for('logout') }}">Logout</a>
             </div>
-        </header>
+        </div>
+    </div>
+</header>
 
         <!-- Page Content -->
         <div class="page-content">
@@ -2582,6 +2846,31 @@ function kazeDelRow(btn) {
       return orig.call(this, url, opts);
     };
   }
+})();
+</script>
+<script id="kaze-sidebar-js">
+(function(){
+    var STORAGE_KEY = 'kaze-sidebar-groups-v1';
+    var saved = {};
+    try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch(e) {}
+    var groups = document.querySelectorAll('.kz-nav-group');
+    groups.forEach(function(g) {
+        var key = g.dataset.groupKey || '';
+        if (!key) return;
+        // If this group contains the active page, always open
+        if (g.querySelector('.kz-nav-item.active')) {
+            g.open = true;
+            return;
+        }
+        // Otherwise restore saved state
+        if (key in saved) {
+            g.open = saved[key];
+        }
+        g.addEventListener('toggle', function() {
+            saved[key] = g.open;
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)); } catch(e) {}
+        });
+    });
 })();
 </script>
 </body>
