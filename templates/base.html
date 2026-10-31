@@ -2327,6 +2327,63 @@ html.theme-dark .kz-badge.info { background: rgba(59, 130, 246, 0.2); color: #93
     .search-form.kz-search { max-width: 100% !important; order: 3; flex: 1 1 100% !important; margin-top: 0.4rem !important; }
 }
 </style>
+<style id="kaze-polish-4d">
+/* Sidebar smooth animation (overrides existing to enable grid trick) */
+.kz-nav-group-body {
+    display: grid !important;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.2s ease;
+    opacity: 0;
+    padding: 0 !important;
+}
+.kz-nav-group[open] .kz-nav-group-body {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    padding-top: 0.15rem !important;
+    padding-bottom: 0.35rem !important;
+}
+.kz-nav-group-inner {
+    overflow: hidden;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+.kz-chevron {
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+.kz-nav-group[open] .kz-chevron {
+    transform: rotate(180deg) !important;
+}
+
+/* Light theme hard override — white surfaces regardless of accent */
+html.theme-light,
+html.theme-light body {
+    --surface: #ffffff !important;
+    --surface2: #f5f7f8 !important;
+    --bg2: #ffffff !important;
+    --bg3: #eef2ef !important;
+    --text: #111827 !important;
+    --text2: #374151 !important;
+    --text3: #4b5563 !important;
+    --border: #d5ddd7 !important;
+    --border2: #c4cdc6 !important;
+    color-scheme: light !important;
+}
+
+/* Light theme: catch hardcoded gray text in old templates */
+html.theme-light .page-content [style*="color:#888"],
+html.theme-light .page-content [style*="color: #888"],
+html.theme-light .page-content [style*="color:#666"],
+html.theme-light .page-content [style*="color: #666"],
+html.theme-light .page-content [style*="color:#999"],
+html.theme-light .page-content [style*="color: #999"],
+html.theme-light .page-content [style*="color:#aaa"],
+html.theme-light .page-content [style*="color: #aaa"] {
+    color: var(--text2) !important;
+}
+</style>
 </head>
 <body class="ui-{{ ui_device or 'auto' }}">
 
@@ -2368,11 +2425,13 @@ html.theme-dark .kz-badge.info { background: rgba(59, 130, 246, 0.2); color: #93
                 <i data-lucide="chevron-down" class="kz-chevron"></i>
             </summary>
             <div class="kz-nav-group-body">
-                {% for item in unpinned %}
-                <a href="{{ url_for(item.endpoint) }}" class="kz-nav-item {% if request.endpoint in item.active %}active{% endif %}">
-                    <i data-lucide="{{ item.icon }}"></i><span>{{ item.label }}</span>
-                </a>
-                {% endfor %}
+                <div class="kz-nav-group-inner">
+                    {% for item in unpinned %}
+                    <a href="{{ url_for(item.endpoint) }}" class="kz-nav-item {% if request.endpoint in item.active %}active{% endif %}">
+                        <i data-lucide="{{ item.icon }}"></i><span>{{ item.label }}</span>
+                    </a>
+                    {% endfor %}
+                </div>
             </div>
         </details>
         {% endif %}
@@ -2871,6 +2930,63 @@ function kazeDelRow(btn) {
             try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)); } catch(e) {}
         });
     });
+})();
+</script>
+<script id="kaze-chart-theme">
+(function(){
+    function applyChartTheme() {
+        if (!window.Chart) return;
+        var isDark = document.documentElement.classList.contains('theme-dark') ||
+                     (document.documentElement.classList.contains('theme-auto') &&
+                      window.matchMedia('(prefers-color-scheme: dark)').matches);
+        var textColor = isDark ? '#94a3b8' : '#6b7280';
+        var gridColor = isDark ? 'rgba(51, 65, 85, 0.4)' : 'rgba(229, 231, 235, 0.8)';
+        var tooltipBg = isDark ? 'rgba(30, 41, 59, 0.98)' : 'rgba(17, 24, 39, 0.95)';
+
+        Chart.defaults.font.family = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+        Chart.defaults.font.size = 12;
+        Chart.defaults.color = textColor;
+        Chart.defaults.borderColor = gridColor;
+
+        Chart.defaults.plugins.legend.labels.usePointStyle = true;
+        Chart.defaults.plugins.legend.labels.boxWidth = 8;
+        Chart.defaults.plugins.legend.labels.boxHeight = 8;
+        Chart.defaults.plugins.legend.labels.padding = 16;
+
+        Chart.defaults.plugins.tooltip.backgroundColor = tooltipBg;
+        Chart.defaults.plugins.tooltip.padding = 12;
+        Chart.defaults.plugins.tooltip.cornerRadius = 8;
+        Chart.defaults.plugins.tooltip.displayColors = true;
+        Chart.defaults.plugins.tooltip.boxPadding = 4;
+        Chart.defaults.plugins.tooltip.titleFont = { weight: '600', size: 13 };
+        Chart.defaults.plugins.tooltip.bodyFont = { size: 12 };
+
+        Chart.defaults.scales = Chart.defaults.scales || {};
+        if (Chart.defaults.scales.linear) {
+            Chart.defaults.scales.linear.grid = { color: gridColor, drawBorder: false };
+            Chart.defaults.scales.linear.ticks = { color: textColor, padding: 6 };
+        }
+        if (Chart.defaults.scales.category) {
+            Chart.defaults.scales.category.grid = { display: false };
+            Chart.defaults.scales.category.ticks = { color: textColor, padding: 6 };
+        }
+    }
+
+    // Apply immediately if Chart is loaded
+    applyChartTheme();
+
+    // Re-apply on theme change
+    new MutationObserver(function() {
+        applyChartTheme();
+        // Refresh existing chart instances so they pick up new colors
+        try {
+            if (Chart.instances) {
+                Object.values(Chart.instances).forEach(function(c) {
+                    try { c.update('none'); } catch(e) {}
+                });
+            }
+        } catch(e) {}
+    }).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 })();
 </script>
 </body>
