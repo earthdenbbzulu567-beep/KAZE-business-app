@@ -352,6 +352,7 @@ def build_sales_trackers(rows):
         'week_profit': 0.0,
         'month_revenue': 0.0,
         'month_profit': 0.0,
+        'month_tickets': 0,
         'last_month_revenue': 0.0,
         'last_month_profit': 0.0,
         'all_revenue': 0.0,
@@ -407,6 +408,7 @@ def build_sales_trackers(rows):
         if day >= month_from:
             track['month_revenue'] += revenue
             track['month_profit'] += profit
+            track['month_tickets'] += 1
         if last_start <= day <= last_end:
             track['last_month_revenue'] += revenue
             track['last_month_profit'] += profit
@@ -678,7 +680,8 @@ def pipeline_full(cur, user_id, snap, bits):
         push_alert(snap['alerts'], 'danger', 'Operating loss', 'See the P/L bar for the full split.')
     if bits['monthly_goal'] and snap['sales']['month_revenue'] < bits['monthly_goal']:
         left = money_round(bits['monthly_goal'] - snap['sales']['month_revenue'])
-        push_alert(snap['alerts'], 'info', 'Goal gap', '{} left to hit this month’s sales goal.'.format(left))
+        left_fmt = '{:,.2f}'.format(left)
+        push_alert(snap['alerts'], 'info', 'Goal gap', '{} left to hit this month’s sales goal.'.format(left_fmt))
     snap['indicators'] = build_indicators(snap)
     return _mark(
         snap,

@@ -1,18 +1,232 @@
 {% extends "base.html" %}
 {% block charts_js %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>{% endblock %}
 {% block content %}
-<section class="dash-hero">
-    <div class="dash-hero-mark">
-        <img src="{{ url_for('static', filename='logo_icon.png') }}" alt="KAZE">
-    </div>
-    <div class="dash-hero-copy">
-        <p class="dash-kicker">{{ user_settings.business_name if user_settings and user_settings.business_name else 'KAZE Traders' }}</p>
-        <h1>{{ current_user.username }}'s Workshop Bench</h1>
-        <p class="dash-hero-mode">{{ app_modes[app_mode].label if app_mode in app_modes else app_mode }} · live {{ (snap.ran or [])|join(', ') or 'none' }}</p>
-    </div>
-    <a href="{{ url_for('settings') }}#modes" class="btn-secondary dash-hero-btn">Change colour / mode</a>
-</section>
-<p class="dash-hero-hint">{{ app_modes[app_mode].hint if app_mode in app_modes else '' }} Dormant: {{ (snap.skipped or [])|join(', ') or 'none' }}.</p>
+<style id="kaze-dashboard-4d2">
+.kz-dash-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+    align-items: start;
+}
+@media (max-width: 960px) {
+    .kz-dash-grid { grid-template-columns: 1fr; }
+}
+.kz-dash-main > .widget:last-child,
+.kz-dash-side > .widget:last-child,
+.kz-dash-side > .kz-card:last-child { margin-bottom: 0; }
+
+.kz-activity-widget {
+    padding: 1.25rem 1.25rem 1rem !important;
+    margin: 0 !important;
+    height: fit-content;
+    display: flex;
+    flex-direction: column;
+}
+.kz-activity-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 1rem;
+    padding-bottom: 0.85rem;
+    border-bottom: 1px solid var(--kz-border, var(--border));
+}
+.kz-activity-header h3 {
+    margin: 0;
+    font-size: 0.95rem !important;
+    font-weight: 600;
+    color: var(--kz-text, var(--text));
+}
+.kz-activity-link {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--kz-brand, var(--red-bright));
+    text-decoration: none;
+}
+.kz-activity-link:hover { text-decoration: underline; }
+.kz-activity-feed {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+.kz-activity-item { display: flex; gap: 0.75rem; align-items: flex-start; padding: 0; }
+.kz-activity-icon {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    display: grid; place-items: center;
+    flex-shrink: 0;
+    background: var(--kz-surface-hover, var(--surface2));
+}
+.kz-activity-icon i, .kz-activity-icon svg { width: 16px; height: 16px; stroke-width: 2; }
+.kz-activity-icon.sale { background: #d1fae5; color: #059669; }
+.kz-activity-icon.expense { background: #fee2e2; color: #dc2626; }
+.kz-activity-icon.stock { background: #dbeafe; color: #2563eb; }
+.kz-activity-icon.customer { background: #ede9fe; color: #7c3aed; }
+.kz-activity-icon.default { background: #f3f4f6; color: #6b7280; }
+html.theme-dark .kz-activity-icon.sale { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
+html.theme-dark .kz-activity-icon.expense { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
+html.theme-dark .kz-activity-icon.stock { background: rgba(59, 130, 246, 0.2); color: #93c5fd; }
+html.theme-dark .kz-activity-icon.customer { background: rgba(139, 92, 246, 0.2); color: #c4b5fd; }
+html.theme-dark .kz-activity-icon.default { background: rgba(107, 114, 128, 0.2); color: #d1d5db; }
+.kz-activity-body { flex: 1; min-width: 0; }
+.kz-activity-action { font-size: 0.85rem; font-weight: 600; color: var(--kz-text, var(--text)); margin-bottom: 2px; }
+.kz-activity-detail { font-size: 0.78rem; color: var(--kz-text-muted, var(--text2)); margin-bottom: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kz-activity-time { font-size: 0.72rem; color: var(--kz-text-light, var(--text3)); font-family: var(--mono); }
+.kz-activity-empty { color: var(--kz-text-light, var(--text3)); font-size: 0.85rem; text-align: center; padding: 1rem; }
+
+.kz-dash-secondary {
+    background: var(--kz-surface, var(--surface)) !important;
+    border: 1px solid var(--kz-border, var(--border)) !important;
+    border-radius: var(--kz-radius, 12px) !important;
+    margin: 1.25rem 0 !important;
+    padding: 0 !important;
+    overflow: hidden;
+}
+.kz-dash-secondary > summary {
+    padding: 1rem 1.25rem !important;
+    cursor: pointer;
+    list-style: none;
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--kz-text, var(--text));
+}
+.kz-dash-secondary > summary::-webkit-details-marker { display: none; }
+.kz-dash-secondary > summary::after {
+    content: '▾';
+    color: var(--kz-text-muted, var(--text3));
+    transition: transform 0.2s;
+}
+.kz-dash-secondary[open] > summary::after { transform: rotate(180deg); }
+.kz-dash-secondary[open] > summary { border-bottom: 1px solid var(--kz-border, var(--border)); }
+.kz-secondary-hint { font-size: 0.78rem; font-weight: 500; color: var(--kz-text-light, var(--text3)); }
+.kz-dash-secondary-body { padding: 1rem 1.25rem; }
+.kz-dash-secondary-body .widget { margin: 0 0 1rem !important; padding: 1rem !important; }
+.kz-dash-secondary-body .widget:last-child { margin-bottom: 0 !important; }
+</style>
+<style id="kaze-dashboard-4d">
+/* Phase 4d — Dashboard redesign */
+
+/* Kill old hero styles if any residue remains */
+.dash-hero, .dash-hero-hint { display: none !important; }
+
+/* KPI grid — 4 cards, mockup layout */
+.kz-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin: 0 0 1.5rem;
+}
+.kz-kpi {
+    padding: 1.25rem 1.35rem !important;
+    position: relative;
+    overflow: hidden;
+}
+.kz-kpi::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--kz-brand, #1a8f3c), var(--kz-accent, #10b981));
+    opacity: 0.7;
+}
+.kz-kpi .kz-stat-label {
+    font-size: 0.72rem !important;
+    letter-spacing: 0.08em !important;
+    color: var(--kz-text-muted, var(--text3)) !important;
+}
+.kz-kpi .kz-stat-value {
+    font-size: 1.7rem !important;
+    font-weight: 700 !important;
+    margin: 0.3rem 0 !important;
+    letter-spacing: -0.02em;
+    font-family: var(--kz-font);
+}
+.kz-positive { color: #059669 !important; }
+.kz-negative { color: #dc2626 !important; }
+.kz-kpi .kz-stat-delta {
+    font-size: 0.8rem !important;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+.kz-kpi .kz-stat-delta.up { color: #059669; }
+.kz-kpi .kz-stat-delta.down { color: #dc2626; }
+.kz-kpi .kz-kpi-hint {
+    display: block;
+    margin-top: 0.5rem;
+    font-size: 0.78rem;
+    color: var(--kz-text-light, var(--text3));
+}
+
+/* Chart container inside dashboard — mockup styling */
+.page-content .chart-container {
+    background: var(--kz-surface, var(--surface)) !important;
+    border: 1px solid var(--kz-border, var(--border)) !important;
+    border-radius: var(--kz-radius, 12px) !important;
+    padding: 1.5rem !important;
+    box-shadow: var(--kz-shadow-sm, 0 1px 2px rgba(0,0,0,0.05)) !important;
+    margin-bottom: 1.5rem !important;
+}
+.page-content .chart-container h2,
+.page-content .widget h2 {
+    font-size: 0.95rem !important;
+    text-transform: none !important;
+    letter-spacing: -0.01em !important;
+    color: var(--kz-text, var(--text)) !important;
+    font-weight: 600 !important;
+    margin: 0 0 1rem !important;
+}
+.page-content .chart-container h2::before,
+.page-content .widget h2::before {
+    display: none !important;
+}
+
+/* Light-theme friendliness for tables inside dashboard */
+html:not(.theme-dark) .page-content table {
+    background: var(--kz-surface, #fff) !important;
+}
+html:not(.theme-dark) .page-content thead th {
+    background: var(--kz-bg, #f9fafb) !important;
+    color: var(--kz-text-muted, #6b7280) !important;
+    border-bottom-color: var(--kz-border, #e5e7eb) !important;
+}
+html:not(.theme-dark) .page-content tbody tr:hover {
+    background: var(--kz-surface-hover, #f3f4f6) !important;
+}
+
+/* Tabs — mockup pill styling */
+.dash-tabs {
+    border-bottom: none !important;
+    margin-bottom: 1.2rem !important;
+}
+.dash-tab {
+    border-radius: 999px !important;
+    padding: 0.5rem 1.1rem !important;
+    font-size: 0.85rem !important;
+    font-weight: 600 !important;
+    background: transparent !important;
+    border: 1px solid var(--kz-border, var(--border)) !important;
+    color: var(--kz-text-muted, var(--text2)) !important;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.dash-tab:hover {
+    background: var(--kz-surface-hover, var(--surface2)) !important;
+    color: var(--kz-text, var(--text)) !important;
+}
+.dash-tab.is-on {
+    background: var(--kz-brand, var(--red-bright)) !important;
+    color: #ffffff !important;
+    border-color: var(--kz-brand, var(--red-bright)) !important;
+}
+</style>
 <style>
 .dash-hero {
     display: flex;
@@ -171,38 +385,36 @@ function dismissOnboarding() {
 </div>
 
 <section class="dash-panel is-on" id="panel-sales">
-    <div class="summary-container">
-        <div class="summary-card">
-            <h3>Today's sales</h3>
-            <div class="amount income-amount" data-count-to="{{ snap.sales.today_revenue }}">{{ money(0) }}</div>
-            <p class="card-hint">{{ snap.sales.today_tickets }} tickets · {{ snap.sales.day_vs_day_pct }}% vs yesterday</p>
-        </div>
-        <div class="summary-card">
-            <h3>Today's sale profit</h3>
-            <div class="amount {% if snap.sales.today_profit >= 0 %}profit-positive{% else %}profit-negative{% endif %}" data-count-to="{{ snap.sales.today_profit }}">{{ money(0) }}</div>
-            <p class="card-hint">{{ snap.sales.today_units }} units</p>
-        </div>
-        <div class="summary-card">
-            <h3>This month sales</h3>
-            <div class="amount income-amount" data-count-to="{{ snap.sales.month_revenue }}">{{ money(0) }}</div>
-            <p class="card-hint">{{ snap.sales.month_vs_month_pct }}% vs last month</p>
-        </div>
-        <div class="summary-card">
-            <h3>Last month sales</h3>
-            <div class="amount">{{ money(snap.sales.last_month_revenue) }}</div>
-            <p class="card-hint">profit {{ money(snap.sales.last_month_profit) }}</p>
-        </div>
-        <div class="summary-card">
-            <h3>Average ticket</h3>
-            <div class="amount">{{ money(snap.sales.avg_ticket) }}</div>
-            <p class="card-hint">{{ snap.sales.avg_margin_pct }}% average margin</p>
-        </div>
-        <div class="summary-card">
-            <h3>All-time sale profit</h3>
-            <div class="amount {% if snap.sales.all_profit >= 0 %}profit-positive{% else %}profit-negative{% endif %}">{{ money(snap.sales.all_profit) }}</div>
-            <p class="card-hint">{{ snap.sales.all_tickets }} tickets · {{ money(snap.sales.all_revenue) }} revenue</p>
-        </div>
+    <div class="kz-kpi-grid">
+    <div class="kz-stat-card kz-kpi">
+        <span class="kz-stat-label">Total Sales</span>
+        <span class="kz-stat-value" data-count-to="{{ snap.sales.month_revenue }}">{{ money(0) }}</span>
+        <span class="kz-stat-delta {% if snap.sales.month_vs_month_pct >= 0 %}up{% else %}down{% endif %}">
+            {% if snap.sales.month_vs_month_pct >= 0 %}↑{% else %}↓{% endif %} {{ snap.sales.month_vs_month_pct|round(1) }}% vs last month
+        </span>
+        <span class="kz-kpi-hint">{{ snap.sales.month_tickets }} tickets this month</span>
     </div>
+    <div class="kz-stat-card kz-kpi">
+        <span class="kz-stat-label">Total Expenses</span>
+        <span class="kz-stat-value" data-count-to="{{ snap.books.expense_month }}">{{ money(0) }}</span>
+        <span class="kz-stat-delta down">↓ expenses this month</span>
+        <span class="kz-kpi-hint">All time: {{ money(total_expenses) }}</span>
+    </div>
+    <div class="kz-stat-card kz-kpi">
+        <span class="kz-stat-label">Profit</span>
+        <span class="kz-stat-value {% if snap.sales.month_profit >= 0 %}kz-positive{% else %}kz-negative{% endif %}" data-count-to="{{ snap.sales.month_profit }}">{{ money(0) }}</span>
+        <span class="kz-stat-delta {% if snap.sales.avg_margin_pct >= 0 %}up{% else %}down{% endif %}">{{ snap.sales.avg_margin_pct }}% margin</span>
+        <span class="kz-kpi-hint">Last month: {{ money(snap.sales.last_month_profit) }}</span>
+    </div>
+    <div class="kz-stat-card kz-kpi">
+        <span class="kz-stat-label">Cash Balance</span>
+        <span class="kz-stat-value" data-count-to="{{ cash_net }}">{{ money(0) }}</span>
+        <span class="kz-stat-delta {% if cash_net >= 0 %}up{% else %}down{% endif %}">
+            {% if cash_net >= 0 %}↑{% else %}↓{% endif %} across cash books
+        </span>
+        <span class="kz-kpi-hint">Net cash in − out</span>
+    </div>
+</div>
 
     {% if mode_on('sales') or mode_on('counter') %}
     <div class="action-buttons" style="margin:0.5rem 0 1rem;">
@@ -216,12 +428,43 @@ function dismissOnboarding() {
     {% endif %}
 
     {% if mode_on('sales') or 'sales' in (snap.ran or []) %}
-    <div class="widget">
+    <div class="kz-dash-grid">
+    <div class="kz-dash-main">
+        <div class="widget">
         <h2>Sales trend (7 days)</h2>
         <div class="chart-container">
             <canvas id="salesTrendChart"></canvas>
         </div>
     </div>
+    </div>
+    <div class="kz-dash-side">
+        <div class="kz-card kz-activity-widget">
+    <div class="kz-activity-header">
+        <h3>Recent Activity</h3>
+        <a href="{{ url_for('activity') }}" class="kz-activity-link">View all →</a>
+    </div>
+    <ul class="kz-activity-feed">
+        {% for act in activities[:8] %}
+        {% set act_lower = (act.action or '')|lower %}
+        <li class="kz-activity-item">
+            <div class="kz-activity-icon {% if 'sale' in act_lower %}sale{% elif 'expense' in act_lower or 'delete' in act_lower %}expense{% elif 'stock' in act_lower or 'product' in act_lower %}stock{% elif 'customer' in act_lower %}customer{% else %}default{% endif %}">
+                <i data-lucide="{% if 'sale' in act_lower %}shopping-cart{% elif 'expense' in act_lower %}receipt{% elif 'stock' in act_lower %}package{% elif 'customer' in act_lower %}user-plus{% else %}activity{% endif %}"></i>
+            </div>
+            <div class="kz-activity-body">
+                <div class="kz-activity-action">{{ act.action }}</div>
+                {% if act.details %}
+                <div class="kz-activity-detail">{{ act.details }}</div>
+                {% endif %}
+                <div class="kz-activity-time">{{ act.created_at|timesince }}</div>
+            </div>
+        </li>
+        {% else %}
+        <li class="kz-activity-empty">No activity yet.</li>
+        {% endfor %}
+    </ul>
+</div>
+    </div>
+</div>
     <script>
         const salesTrendData = {{ snap.sales.trend_7 | tojson }};
         const trendLabels = Object.keys(salesTrendData).sort();
@@ -283,7 +526,14 @@ function dismissOnboarding() {
 </section>
 
 <section class="dash-panel" id="panel-books">
-    <div class="summary-container">
+    
+    <details class="kz-dash-secondary">
+        <summary>
+            <span>Income &amp; Expenses summary</span>
+            <span class="kz-secondary-hint">Other income · Expenses · Net · Cash drawer</span>
+        </summary>
+        <div class="kz-dash-secondary-body">
+            <div class="summary-container">
         <div class="summary-card">
             <h3>Other income</h3>
             <div class="amount income-amount" data-count-to="{{ total_income }}">{{ money(0) }}</div>
@@ -305,7 +555,8 @@ function dismissOnboarding() {
             <p class="card-hint">Cash in minus cash out</p>
         </div>
     </div>
-
+        </div>
+    </details>
     {% if income or expenses %}
     <div class="chart-container">
         <canvas id="financeChart"></canvas>
@@ -488,7 +739,13 @@ function dismissOnboarding() {
     </div>
 </section>
 
-{% if mode_on('stock') and user_settings and user_settings.show_low_stock_widget %}
+<details class="kz-dash-secondary">
+    <summary>
+        <span>More widgets</span>
+        <span class="kz-secondary-hint">Low stock · Upcoming services · Open tasks · Coming up</span>
+    </summary>
+    <div class="kz-dash-secondary-body">
+        {% if mode_on('stock') and user_settings and user_settings.show_low_stock_widget %}
 {% if low_stock_items %}<div data-kaze-sound="low_stock" data-kaze-once="1" hidden></div>{% endif %}
 <div class="widget">
     <h2>Low stock alerts</h2>
@@ -576,22 +833,10 @@ function dismissOnboarding() {
     <p style="margin-top:0.75rem;"><a href="{{ url_for('calendar') }}">Full calendar</a></p>
 </div>
 {% endif %}
+    </div>
+</details>
 
-<div class="widget">
-    <h2>Recent activity</h2>
-    <ul class="activity-feed">
-        {% for act in activities %}
-        <li>
-            <span class="user">{{ act.username }}</span>
-            <span class="action">{{ act.action }}</span>
-            <span class="details">{{ act.details or '' }}</span>
-            <span class="time">{{ act.created_at|timesince }}</span>
-        </li>
-        {% else %}
-        <li>No activity yet.</li>
-        {% endfor %}
-    </ul>
-</div>
+
 
 <div class="pl-board {% if pl.status == 'profit' %}is-profit{% elif pl.status == 'loss' %}is-loss{% endif %}">
     <div>
@@ -644,23 +889,5 @@ function dismissOnboarding() {
     });
 </script>
 
-<section class="overview-grid" style="margin-top:2rem;">
-  <h2>Business Activity Overview</h2>
-  <div class="stats-grid">
-    <div class="stat-card"><div class="stat-value">{{ money(month_revenue or 0) }}</div><div class="stat-label">Month Revenue</div></div>
-    <div class="stat-card"><div class="stat-value">{{ money(profit or 0) }}</div><div class="stat-label">Operating Profit</div></div>
-    <div class="stat-card"><div class="stat-value">{{ (low_stock_items|length) if low_stock_items else 0 }}</div><div class="stat-label">Low Stock</div></div>
-    <div class="stat-card"><div class="stat-value">{{ open_tasks or 0 }}</div><div class="stat-label">Open Tasks</div></div>
-  </div>
-  <div class="card" style="margin-top:1rem;">
-    <h3>Recent Activities</h3>
-    <ul>
-      {% for act in activities[:10] %}
-      <li>{{ act.action }} — {{ act.details }} ({{ act.created_date }})</li>
-      {% else %}
-      <li>No recent activity</li>
-      {% endfor %}
-    </ul>
-  </div>
-</section>
+
 {% endblock %}
