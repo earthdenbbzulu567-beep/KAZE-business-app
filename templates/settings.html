@@ -1,5 +1,208 @@
 {% extends "base.html" %}
 {% block content %}
+<style id="kaze-settings-4h">
+/* Phase 4h — Settings page visual */
+
+.page-content .detail-overlay { display: none !important; }
+
+.page-content .page-header {
+    border-bottom: 1px solid var(--kz-border, var(--border)) !important;
+    padding-bottom: 1rem !important;
+    margin-bottom: 1.5rem !important;
+}
+.page-content .page-header h1 {
+    font-size: 1.5rem !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.02em !important;
+    color: var(--kz-text, var(--text)) !important;
+}
+
+/* Section headings */
+#settingsForm > h2,
+#settingsForm section > h2,
+.page-content > h2 {
+    font-size: 0.95rem !important;
+    text-transform: none !important;
+    letter-spacing: -0.01em !important;
+    font-weight: 600 !important;
+    color: var(--kz-text, var(--text)) !important;
+    margin: 2rem 0 0.9rem !important;
+    padding-bottom: 0.55rem;
+    border-bottom: 1px solid var(--kz-border, var(--border));
+}
+#settingsForm > h2::before,
+#settingsForm section > h2::before,
+.page-content > h2::before { display: none !important; }
+
+/* Mode panel / Device UI section — hero cards at top */
+.mode-panel {
+    background: var(--kz-surface, var(--surface)) !important;
+    border: 1px solid var(--kz-border, var(--border)) !important;
+    border-radius: var(--kz-radius, 12px) !important;
+    padding: 1.5rem !important;
+    margin-bottom: 1.25rem !important;
+    box-shadow: var(--kz-shadow-sm, 0 1px 2px rgba(0,0,0,0.05)) !important;
+}
+.mode-panel .page-header { border: none !important; padding: 0 !important; margin: 0 0 1rem !important; }
+.mode-panel .page-header h2 { font-size: 1rem !important; margin: 0 !important; padding: 0 !important; border: none !important; }
+
+/* Mode cards */
+.mode-grid {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)) !important;
+    gap: 0.75rem !important;
+    margin-bottom: 1rem !important;
+}
+.mode-card {
+    background: var(--kz-bg, var(--bg3)) !important;
+    border: 1px solid var(--kz-border, var(--border)) !important;
+    border-radius: 10px !important;
+    padding: 0.95rem 1rem !important;
+    transition: border-color 0.15s, background 0.15s !important;
+}
+.mode-card:hover {
+    border-color: var(--kz-brand, #1a8f3c) !important;
+    background: var(--kz-surface, var(--surface)) !important;
+}
+.mode-card.is-on,
+.mode-card:has(input:checked) {
+    border-color: var(--kz-brand, #1a8f3c) !important;
+    background: color-mix(in srgb, var(--kz-brand, #1a8f3c) 8%, var(--kz-bg, var(--bg3))) !important;
+    box-shadow: 0 0 0 2px var(--kz-brand, #1a8f3c) !important;
+}
+.mode-card .mode-kicker {
+    color: var(--kz-text-light, var(--text3)) !important;
+    font-size: 0.66rem !important;
+}
+.mode-card strong {
+    color: var(--kz-text, var(--text)) !important;
+    font-size: 0.92rem !important;
+    font-weight: 600 !important;
+}
+.mode-card .mode-hint {
+    color: var(--kz-text-muted, var(--text3)) !important;
+    font-size: 0.8rem !important;
+}
+
+/* Module check rows */
+.module-checks {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)) !important;
+    gap: 0.4rem 0.9rem !important;
+}
+.module-row {
+    background: var(--kz-bg, var(--bg3)) !important;
+    border-radius: 8px !important;
+    padding: 0.5rem 0.75rem !important;
+    color: var(--kz-text, var(--text)) !important;
+    font-size: 0.86rem !important;
+}
+
+/* Widgets (Stripe, PayPal, Flutterwave, Bank cards) */
+#settingsForm .widget {
+    background: var(--kz-surface, var(--surface)) !important;
+    border: 1px solid var(--kz-border, var(--border)) !important;
+    border-radius: var(--kz-radius, 12px) !important;
+    padding: 1.25rem 1.4rem !important;
+    margin-bottom: 1.25rem !important;
+    box-shadow: var(--kz-shadow-sm, 0 1px 2px rgba(0,0,0,0.05)) !important;
+}
+#settingsForm .widget h2 {
+    font-size: 0.92rem !important;
+    text-transform: none !important;
+    letter-spacing: -0.01em !important;
+    color: var(--kz-text, var(--text)) !important;
+    font-weight: 600 !important;
+    margin: 0 0 0.75rem !important;
+    border: none !important;
+    padding: 0 !important;
+}
+#settingsForm .widget h2::before { display: none !important; }
+
+/* Form groups — consistent spacing */
+#settingsForm .form-group {
+    margin: 0.9rem 0 !important;
+}
+#settingsForm label {
+    font-size: 0.82rem !important;
+    color: var(--kz-text-muted, var(--text2)) !important;
+    font-weight: 500 !important;
+    margin-bottom: 0.4rem !important;
+}
+#settingsForm input[type="text"],
+#settingsForm input[type="number"],
+#settingsForm input[type="email"],
+#settingsForm input[type="password"],
+#settingsForm select,
+#settingsForm textarea {
+    padding: 0.65rem 0.9rem !important;
+    border: 1px solid var(--kz-border-strong, var(--border2)) !important;
+    border-radius: 10px !important;
+    background: var(--kz-surface, var(--surface)) !important;
+    color: var(--kz-text, var(--text)) !important;
+    font-size: 0.9rem !important;
+    width: 100%;
+    max-width: 520px;
+}
+#settingsForm input:focus,
+#settingsForm select:focus,
+#settingsForm textarea:focus {
+    outline: none !important;
+    border-color: var(--kz-brand, #1a8f3c) !important;
+    box-shadow: 0 0 0 3px var(--kz-brand-glow, rgba(26,143,60,0.15)) !important;
+}
+
+/* Checkbox rows — inline layout */
+#settingsForm .form-group:has(input[type="checkbox"]:not([name="app_mode"]):not([name="ui_device"])) {
+    display: flex !important;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+#settingsForm input[type="checkbox"] {
+    width: 18px !important;
+    height: 18px !important;
+    margin: 0 !important;
+    accent-color: var(--kz-brand, #1a8f3c) !important;
+}
+
+/* Save button */
+#settingsForm > button[type="submit"],
+#settingsForm > div > button[type="submit"] {
+    background: var(--kz-brand, #1a8f3c) !important;
+    color: #fff !important;
+    border-radius: 999px !important;
+    padding: 0.75rem 1.8rem !important;
+    font-weight: 700 !important;
+    font-size: 0.9rem !important;
+    clip-path: none !important;
+    border: none !important;
+    margin-top: 1rem !important;
+    cursor: pointer;
+}
+#settingsForm > button[type="submit"]:hover {
+    background: #157432 !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 6px 16px var(--kz-brand-glow, rgba(26,143,60,0.3)) !important;
+}
+
+/* Secondary buttons inside form (Save mode, Preview, etc) */
+#settingsForm button:not([type="submit"]) {
+    border-radius: 10px !important;
+}
+
+/* Two-factor + Password + Backup + Clear data section cards */
+.page-content > h2 ~ .widget,
+.page-content > h2 ~ form {
+    background: var(--kz-surface, var(--surface)) !important;
+    border: 1px solid var(--kz-border, var(--border)) !important;
+    border-radius: var(--kz-radius, 12px) !important;
+    padding: 1.25rem 1.4rem !important;
+    margin-bottom: 1.25rem !important;
+    box-shadow: var(--kz-shadow-sm, 0 1px 2px rgba(0,0,0,0.05)) !important;
+}
+</style>
+
 
 <div class="card detail-overlay" style="margin-bottom:1.5rem; background:linear-gradient(135deg, rgba(16,185,129,0.08), transparent);">
   <h3>Settings Overview</h3>

@@ -2384,8 +2384,82 @@ html.theme-light .page-content [style*="color: #aaa"] {
     color: var(--text2) !important;
 }
 </style>
+<style id="kaze-offline-banner-css">
+#kaze-offline-banner {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 9999;
+    padding: 0.7rem 1.2rem;
+    background: #dc2626;
+    color: #ffffff;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    transform: translateY(-100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    font-family: 'Inter', -apple-system, sans-serif;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+#kaze-offline-banner.visible {
+    transform: translateY(0);
+}
+#kaze-offline-banner button {
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 999px;
+    padding: 0.3rem 0.9rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    clip-path: none;
+    transition: background 0.15s;
+}
+#kaze-offline-banner button:hover {
+    background: rgba(255, 255, 255, 0.35);
+}
+body.kaze-offline .main-content { padding-top: 36px; }
+</style>
 </head>
 <body class="ui-{{ ui_device or 'auto' }}">
+<div id="kaze-offline-banner" role="alert" aria-live="polite">
+    <span>⚠ You're offline. Some features may not work.</span>
+    <button type="button" id="kaze-offline-retry">Reconnect</button>
+</div>
+<script id="kaze-offline-js">
+(function(){
+    var banner = document.getElementById('kaze-offline-banner');
+    var retryBtn = document.getElementById('kaze-offline-retry');
+    if (!banner) return;
+    function update() {
+        if (navigator.onLine === false) {
+            banner.classList.add('visible');
+            document.body.classList.add('kaze-offline');
+        } else {
+            banner.classList.remove('visible');
+            document.body.classList.remove('kaze-offline');
+        }
+    }
+    window.addEventListener('online', update);
+    window.addEventListener('offline', update);
+    if (retryBtn) {
+        retryBtn.addEventListener('click', function() {
+            if (navigator.onLine) {
+                update();
+                window.location.reload();
+            } else {
+                retryBtn.textContent = 'Still offline…';
+                setTimeout(function() { retryBtn.textContent = 'Reconnect'; }, 2000);
+            }
+        });
+    }
+    update();
+})();
+</script>
 
     <!-- ─── Sidebar ─── -->
     <div class="sidebar" id="sidebar">
