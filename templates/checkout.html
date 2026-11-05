@@ -1,9 +1,271 @@
 {% extends "base.html" %}
 {% block title %}KAZE Traders checkout{% endblock %}
 {% block content %}
+<style id="kaze-checkout-4f2">
+/* Logo image — matches sidebar .brand-mark */
+.kaze-brand .kaze-mark,
+img.kaze-mark {
+    width: 52px !important;
+    height: 52px !important;
+    min-width: 52px !important;
+    border-radius: 14px !important;
+    display: block !important;
+    flex-shrink: 0 !important;
+    object-fit: cover !important;
+    background: #070707 !important;
+    box-shadow: 0 0 0 1px rgba(46, 125, 50, 0.55),
+                0 6px 14px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Phase 4f-2 — Checkout page visual. CSS-only. No layout toggles. */
+
+/* Page wrapper */
+.kaze-checkout {
+    max-width: 620px !important;
+    margin: 2rem auto !important;
+    padding: 0 1rem;
+}
+
+/* Brand header */
+.kaze-brand {
+    display: flex !important;
+    gap: 0.9rem !important;
+    align-items: center !important;
+    margin-bottom: 1.5rem !important;
+    justify-content: space-between !important;
+    flex-wrap: wrap;
+}
+.kaze-brand .kicker {
+    color: var(--kz-brand, #1a8f3c) !important;
+    font-size: 0.7rem !important;
+    letter-spacing: 0.14em !important;
+    text-transform: uppercase !important;
+    font-weight: 800 !important;
+    margin: 0 0 0.3rem !important;
+}
+.kaze-brand h1 {
+    font-size: 1.5rem !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.02em !important;
+    margin: 0 0 0.3rem !important;
+    color: var(--kz-text, var(--text)) !important;
+    font-family: var(--kz-font) !important;
+}
+.kaze-brand p:not(.kicker) {
+    color: var(--kz-text-muted, var(--text2)) !important;
+    font-size: 0.88rem !important;
+    margin: 0 !important;
+    line-height: 1.5;
+}
+
+
+/* Cards — NO display property (critical: preserves [hidden] toggle) */
+.checkout-card {
+    background: var(--kz-surface, var(--surface)) !important;
+    border: 1px solid var(--kz-border, var(--border)) !important;
+    border-radius: var(--kz-radius, 12px) !important;
+    padding: 1.5rem 1.6rem !important;
+    box-shadow: var(--kz-shadow-sm, 0 1px 2px rgba(0,0,0,0.05)) !important;
+    margin-bottom: 1.25rem !important;
+}
+
+/* Amount — the hero */
+.checkout-amount {
+    font-family: var(--kz-font) !important;
+    font-size: 2.4rem !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.03em !important;
+    color: var(--kz-brand, #1a8f3c) !important;
+    margin: 0.5rem 0 1.25rem !important;
+    line-height: 1.1;
+}
+.checkout-amount span {
+    font-size: 0.9rem !important;
+    color: var(--kz-text-light, var(--text3)) !important;
+    font-weight: 500;
+    font-family: var(--kz-font);
+    letter-spacing: 0;
+    margin-left: 0.3rem;
+}
+
+/* Sub-heading inside summary */
+.checkout-card .kicker {
+    color: var(--kz-text-muted, var(--text3)) !important;
+    font-size: 0.7rem !important;
+    letter-spacing: 0.12em !important;
+}
+.checkout-card h2 {
+    font-size: 1.15rem !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.01em !important;
+    text-transform: none !important;
+    margin: 0.3rem 0 0 !important;
+    color: var(--kz-text, var(--text)) !important;
+}
+.checkout-card h2::before { display: none !important; }
+
+/* Form */
+#kaze-pay-form .form-group {
+    margin: 1rem 0 1.1rem !important;
+    display: block !important;
+    width: 100% !important;
+}
+#kaze-pay-form label {
+    font-size: 0.8rem !important;
+    color: var(--kz-text-muted, var(--text2)) !important;
+    font-weight: 500;
+    margin-bottom: 0.4rem !important;
+}
+#pay-method {
+    width: 100% !important;
+    padding: 0.7rem 0.9rem !important;
+    border: 1px solid var(--kz-border-strong, var(--border2)) !important;
+    border-radius: 10px !important;
+    background: var(--kz-surface, var(--surface)) !important;
+    color: var(--kz-text, var(--text)) !important;
+    font-size: 0.92rem !important;
+    font-family: inherit;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.9rem center;
+    padding-right: 2.5rem !important;
+    cursor: pointer;
+}
+#pay-method:focus {
+    outline: none !important;
+    border-color: var(--kz-brand, #1a8f3c) !important;
+    box-shadow: 0 0 0 3px var(--kz-brand-glow, rgba(26,143,60,0.15)) !important;
+}
+
+/* Button row */
+.checkout-actions {
+    display: flex !important;
+    gap: 0.6rem !important;
+    flex-wrap: wrap !important;
+    align-items: center;
+    margin: 0.6rem 0 0.8rem !important;
+}
+
+/* Pay now — pill green */
+.pay-now,
+#pay-now-btn {
+    background: var(--kz-brand, #1a8f3c) !important;
+    color: #ffffff !important;
+    border: none !important;
+    border-radius: 999px !important;
+    padding: 0.75rem 1.8rem !important;
+    font-size: 0.95rem !important;
+    font-weight: 700 !important;
+    cursor: pointer;
+    clip-path: none !important;
+    letter-spacing: 0.01em;
+    transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+.pay-now:hover,
+#pay-now-btn:hover:not(:disabled) {
+    background: #157432 !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 6px 16px var(--kz-brand-glow, rgba(26,143,60,0.3)) !important;
+}
+.pay-now:disabled,
+#pay-now-btn:disabled {
+    opacity: 0.5 !important;
+    cursor: not-allowed;
+}
+
+/* Back button — outlined pill */
+.back-btn,
+a.back-btn,
+button.back-btn {
+    background: transparent !important;
+    color: var(--kz-text, var(--text)) !important;
+    border: 1px solid var(--kz-border-strong, var(--border2)) !important;
+    border-radius: 999px !important;
+    padding: 0.7rem 1.3rem !important;
+    font-size: 0.9rem !important;
+    font-weight: 600 !important;
+    text-decoration: none !important;
+    display: inline-flex;
+    align-items: center;
+    transition: background 0.15s, border-color 0.15s;
+    clip-path: none !important;
+}
+.back-btn:hover,
+a.back-btn:hover {
+    background: var(--kz-surface-hover, var(--surface2)) !important;
+    border-color: var(--kz-text-muted, var(--text2)) !important;
+}
+
+/* Error card — NO display property (preserves [hidden]) */
+.pay-error {
+    background: #fee2e2 !important;
+    color: #991b1b !important;
+    border: 1px solid #fecaca !important;
+    border-radius: 8px !important;
+    padding: 0.8rem 1rem !important;
+    font-size: 0.88rem !important;
+    font-weight: 600 !important;
+    margin-top: 0.75rem !important;
+    line-height: 1.4;
+}
+html.theme-dark .pay-error {
+    background: rgba(239, 68, 68, 0.15) !important;
+    color: #fca5a5 !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+/* Payment slots — preserve min-height for Stripe iframe */
+#stripe-slot, #paypal-slot {
+    min-height: 420px;
+    padding: 0.5rem 0;
+}
+#stripe-slot iframe, #paypal-slot iframe {
+    border-radius: 10px;
+}
+#bank-slot h3 {
+    font-size: 1rem !important;
+    font-weight: 600 !important;
+    color: var(--kz-text, var(--text)) !important;
+    margin: 0 0 0.5rem !important;
+    text-transform: none !important;
+    letter-spacing: -0.01em !important;
+}
+#bank-slot h3::before { display: none !important; }
+
+/* Muted / helper text */
+.muted {
+    color: var(--kz-text-light, var(--text3)) !important;
+    font-size: 0.82rem !important;
+}
+
+/* Payment terms link */
+.checkout-card > p > a,
+.checkout-card p a {
+    color: var(--kz-brand, #1a8f3c) !important;
+    font-size: 0.82rem !important;
+    text-decoration: underline !important;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+}
+
+/* Embed section header actions */
+#checkout-embed .checkout-actions {
+    border-bottom: 1px solid var(--kz-border, var(--border)) !important;
+    padding-bottom: 0.9rem !important;
+    margin-bottom: 1.25rem !important;
+}
+
+/* No-method fallback message */
+.checkout-card p:only-of-type {
+    color: var(--kz-text-muted, var(--text2)) !important;
+    font-size: 0.9rem !important;
+}
+</style>
+
 <div class="kaze-checkout">
     <div class="kaze-brand">
-        <span class="kaze-mark">K</span>
+        <img src="{{ url_for('static', filename='logo_icon.png') }}" alt="KAZE" class="kaze-mark">
         <div>
             <p class="kicker">KAZE Traders</p>
             <h1>Checkout</h1>
