@@ -97,7 +97,7 @@ def create_checkout(settings, *, amount, title, success_url, cancel_url, metadat
             'managed_payments': {'enabled': False},
         }
         if embedded:
-            payload['ui_mode'] = 'embedded'
+            payload['ui_mode'] = 'embedded_page'
             payload['return_url'] = success_url
         else:
             payload['success_url'] = success_url
