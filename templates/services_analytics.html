@@ -1,6 +1,150 @@
 {% extends "base.html" %}
 {% block title %}Services Analytics{% endblock %}
 {% block content %}
+<style id="kaze-analytics-4g">
+/* Phase 4g — Analytics page visual unification */
+
+/* Page Header */
+.page-content .page-header {
+    border-bottom: 1px solid var(--kz-border, var(--border)) !important;
+    padding-bottom: 1rem !important;
+    margin-bottom: 1.5rem !important;
+}
+.page-content .page-header h1 {
+    font-size: 1.5rem !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.02em !important;
+    color: var(--kz-text, var(--text)) !important;
+}
+
+/* Cleaner Headings */
+.page-content h2 {
+    font-size: 0.98rem !important;
+    text-transform: none !important;
+    letter-spacing: -0.01em !important;
+    font-weight: 600 !important;
+    color: var(--kz-text, var(--text)) !important;
+    margin: 1.75rem 0 0.85rem !important;
+}
+.page-content h2::before { display: none !important; }
+
+/* Stat Chips → KPI Cards */
+.page-content .stat-grid { gap: 0.85rem; margin: 1rem 0 1.5rem; }
+.page-content .stat-chip {
+    background: var(--kz-surface, var(--surface)) !important;
+    border: 1px solid var(--kz-border, var(--border)) !important;
+    border-radius: var(--kz-radius, 12px) !important;
+    padding: 1rem 1.2rem !important;
+    position: relative;
+    box-shadow: var(--kz-shadow-sm, 0 1px 2px rgba(0,0,0,0.05));
+    animation: none !important;
+}
+.page-content .stat-chip::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--kz-brand, #1a8f3c), var(--kz-accent, #10b981));
+    opacity: 0.6;
+    border-radius: var(--kz-radius, 12px) var(--kz-radius, 12px) 0 0;
+}
+.page-content .stat-chip span {
+    font-size: 0.72rem !important;
+    letter-spacing: 0.08em !important;
+    color: var(--kz-text-muted, var(--text3)) !important;
+}
+.page-content .stat-chip strong {
+    font-size: 1.3rem !important;
+    color: var(--kz-text, var(--text)) !important;
+    font-family: var(--kz-font);
+}
+
+/* Widgets / Cards */
+.page-content .widget {
+    background: var(--kz-surface, var(--surface)) !important;
+    border: 1px solid var(--kz-border, var(--border)) !important;
+    border-radius: var(--kz-radius, 12px) !important;
+    padding: 1.25rem 1.4rem !important;
+    margin: 1.5rem 0 !important;
+    box-shadow: var(--kz-shadow-sm, 0 1px 2px rgba(0,0,0,0.05));
+}
+
+/* Tabs (Analytics specific) */
+.analytics-tabs {
+    display: flex !important;
+    gap: 0.4rem !important;
+    margin: 1rem 0 1.5rem !important;
+    flex-wrap: wrap !important;
+    border-bottom: none !important;
+}
+.analytics-tabs button {
+    background: transparent !important;
+    border: 1px solid var(--kz-border, var(--border)) !important;
+    border-radius: 999px !important;
+    padding: 0.5rem 1.1rem !important;
+    font-size: 0.85rem !important;
+    font-weight: 600 !important;
+    color: var(--kz-text-muted, var(--text2)) !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+    font-family: inherit !important;
+}
+.analytics-tabs button:hover {
+    background: var(--kz-surface-hover, var(--surface2)) !important;
+    color: var(--kz-text, var(--text)) !important;
+}
+.analytics-tabs button.is-on {
+    background: var(--kz-brand, var(--red-bright)) !important;
+    color: #ffffff !important;
+    border-color: var(--kz-brand, var(--red-bright)) !important;
+    font-weight: 700 !important;
+}
+
+/* Tables inside analytics */
+.page-content .table-wrapper {
+    border: 1px solid var(--kz-border, var(--border)) !important;
+    border-radius: var(--kz-radius, 12px) !important;
+    overflow: hidden;
+    box-shadow: var(--kz-shadow-sm, 0 1px 2px rgba(0,0,0,0.05));
+    background: var(--kz-surface, var(--surface)) !important;
+}
+.page-content thead th {
+    background: var(--kz-bg, var(--bg3)) !important;
+    color: var(--kz-text-muted, var(--text3)) !important;
+    font-size: 0.72rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    font-weight: 600 !important;
+    border-bottom: 1px solid var(--kz-border, var(--border)) !important;
+}
+.page-content tbody td {
+    border-bottom: 1px solid var(--kz-border, var(--border)) !important;
+    color: var(--kz-text, var(--text)) !important;
+}
+.page-content tbody tr:hover {
+    background: var(--kz-surface-hover, var(--surface2)) !important;
+}
+
+/* --- Table Overflow Fix --- */
+.page-content .table-wrapper {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+}
+.page-content table {
+    width: 100% !important;
+    table-layout: auto !important;
+}
+.page-content th, 
+.page-content td {
+    white-space: nowrap !important; /* Prevents numbers from breaking mid-digit */
+    padding: 12px 16px !important;
+}
+.page-content td {
+    font-variant-numeric: tabular-nums !important; /* Aligns all numbers perfectly */
+}
+
+</style>
+
 <div class="page-header">
   <div>
     <h1><i data-lucide="graduation-cap"></i> Services Analytics</h1>
