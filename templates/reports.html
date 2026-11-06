@@ -105,9 +105,9 @@
         data: {
             labels: months,
             datasets: [
-                { label: 'Profit', data: months.map(m => profitData[m] || 0), backgroundColor: 'rgba(46, 204, 113, 0.7)', borderColor: '#2ecc71', borderWidth: 1, type: 'line', tension: 0.3, fill: false },
-                { label: 'Income', data: months.map(m => incomeData[m] || 0), backgroundColor: 'rgba(52, 152, 219, 0.5)' },
-                { label: 'Expenses', data: months.map(m => expenseData[m] || 0), backgroundColor: 'rgba(231, 76, 60, 0.5)' }
+                { label: 'Profit', data: months.map(m => profitData[m] || 0), borderColor: '#10b981', backgroundColor: 'transparent', borderWidth: 2, type: 'line', tension: 0.35, fill: false, order: 1 },
+                { label: 'Income', data: months.map(m => incomeData[m] || 0), backgroundColor: '#1a8f3c', borderRadius: 4, order: 2 },
+                { label: 'Expenses', data: months.map(m => expenseData[m] || 0), backgroundColor: '#1e293b', borderRadius: 4, order: 2 }
             ]
         },
         options: {
@@ -122,8 +122,9 @@
     const expLabels = {{ expense_by_category | map(attribute='category') | list | tojson }};
     const expValues = {{ expense_by_category | map(attribute='total') | list | tojson }};
     new Chart(pieCtx, {
-        type: 'pie',
-        data: { labels: expLabels, datasets: [{ data: expValues, backgroundColor: ['#2ecc71','#e74c3c','#f1c40f','#3498db','#9b59b6'] }] }
+        type: 'doughnut',
+        data: { labels: expLabels, datasets: [{ data: expValues, backgroundColor: ['#1a8f3c','#e74c3c','#f1c40f','#3498db','#9b59b6'], borderWidth: 0 }] },
+        options: { cutout: '70%' }
     });
 
     // ─── Product Bar Chart ───

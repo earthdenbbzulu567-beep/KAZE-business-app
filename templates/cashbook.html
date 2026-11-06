@@ -118,8 +118,8 @@
 <script>
 new Chart(document.getElementById('cashMixChart'), {
     type: 'doughnut',
-    data: { labels: ['Cash in', 'Cash out'], datasets: [{ data: [{{ ns.inn }}, {{ ns.out }}], backgroundColor: ['#2ecc71', '#e74c3c'] }] },
-    options: { plugins: { title: { display: true, text: 'Cash mix' } } }
+    data: { labels: ['Cash in', 'Cash out'], datasets: [{ data: [{{ ns.inn }}, {{ ns.out }}], backgroundColor: ['#1a8f3c', '#1e293b'], borderWidth: 0 }] },
+    options: { cutout: '70%', plugins: { title: { display: true, text: 'Cash mix' } } }
 });
 </script>
 {% endif %}

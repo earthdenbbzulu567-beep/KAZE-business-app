@@ -467,14 +467,41 @@ function dismissOnboarding() {
 </div>
     <script>
         const salesTrendData = {{ snap.sales.trend_7 | tojson }};
+        const expenseData = {{ snap.books.expense_by_date | tojson }};
         const trendLabels = Object.keys(salesTrendData).sort();
-        const trendValues = trendLabels.map(d => salesTrendData[d]);
-        const chartType = '{{ user_settings.default_chart_type if user_settings else "line" }}';
+        
+        const salesValues = trendLabels.map(d => salesTrendData[d] || 0);
+        const expenseValues = trendLabels.map(d => expenseData[d] || 0);
+
         const ctxTrend = document.getElementById('salesTrendChart').getContext('2d');
         new Chart(ctxTrend, {
-            type: chartType,
-            data: { labels: trendLabels, datasets: [{ label: 'Sales revenue', data: trendValues, borderColor: '#27ae60', backgroundColor: 'rgba(39,174,96,0.2)' }] },
-            options: { responsive: true, scales: { y: { ticks: { callback: v => window.kazeMoney(v) } } } }
+            type: 'bar',
+            data: { 
+                labels: trendLabels, 
+                datasets: [
+                    { 
+                        label: 'Sales', 
+                        data: salesValues, 
+                        backgroundColor: '#1a8f3c',
+                        borderRadius: 4
+                    },
+                    { 
+                        label: 'Expenses', 
+                        data: expenseValues, 
+                        backgroundColor: '#1e293b',
+                        borderRadius: 4
+                    }
+                ] 
+            },
+            options: { 
+                responsive: true, 
+                scales: { 
+                    y: { 
+                        beginAtZero: true,
+                        ticks: { callback: v => window.kazeMoney(v) } 
+                    } 
+                } 
+            }
         });
     </script>
     {% endif %}

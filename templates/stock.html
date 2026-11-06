@@ -397,18 +397,18 @@ form[action*="stock_bulk"] > div:first-of-type input[type="number"] {
             datasets: [{
                 label: 'Inventory value',
                 data: invValues,
-                backgroundColor: 'rgba(39, 174, 96, 0.7)',
-                borderColor: '#27ae60',
-                borderWidth: 1
+                backgroundColor: '#1a8f3c',
+                borderRadius: 4
             }]
         },
         options: {
+            indexAxis: 'y', // Horizontal Bar
             responsive: true,
             plugins: {
-                title: { display: true, text: 'Inventory Value by Product' }
+                title: { display: false }
             },
             scales: {
-                y: { ticks: { callback: v => window.kazeMoney(v) } }
+                x: { ticks: { callback: v => window.kazeMoney(v) } }
             }
         }
     });

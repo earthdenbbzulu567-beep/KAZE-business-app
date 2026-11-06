@@ -1710,6 +1710,29 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 </style>
     {% block charts_js %}{% endblock %}
 
+<script id="kaze-chart-globals">
+(function(){
+    if (!window.Chart) return;
+    Chart.defaults.font.family = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    Chart.defaults.font.size = 11;
+    Chart.defaults.color = '#6b7280';
+    Chart.defaults.borderColor = '#e5e7eb';
+    Chart.defaults.plugins.legend.labels.usePointStyle = true;
+    Chart.defaults.plugins.legend.labels.boxWidth = 6;
+    Chart.defaults.plugins.legend.labels.boxHeight = 6;
+    Chart.defaults.plugins.legend.labels.padding = 16;
+    Chart.defaults.plugins.tooltip.backgroundColor = '#1e293b';
+    Chart.defaults.plugins.tooltip.padding = 10;
+    Chart.defaults.plugins.tooltip.cornerRadius = 6;
+    Chart.defaults.elements.bar.borderRadius = 4;
+    Chart.defaults.elements.line.tension = 0.35;
+    Chart.defaults.elements.point.radius = 3;
+    Chart.defaults.scales.linear.grid.display = false;
+    Chart.defaults.scales.category.grid.display = false;
+})();
+</script>
+
+
     
     
 
@@ -3063,6 +3086,49 @@ function kazeDelRow(btn) {
     }).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 })();
 </script>
+
+<script id="kaze-chart-globals">
+(function(){
+    if (!window.Chart) return;
+    // Typography & Colors
+    Chart.defaults.font.family = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    Chart.defaults.font.size = 11;
+    Chart.defaults.color = '#6b7280';
+    Chart.defaults.borderColor = '#e5e7eb';
+
+    // Clean Legend (Small circles)
+    Chart.defaults.plugins.legend.labels.usePointStyle = true;
+    Chart.defaults.plugins.legend.labels.boxWidth = 6;
+    Chart.defaults.plugins.legend.labels.boxHeight = 6;
+    Chart.defaults.plugins.legend.labels.padding = 16;
+
+    // Modern Tooltip
+    Chart.defaults.plugins.tooltip.backgroundColor = '#1e293b';
+    Chart.defaults.plugins.tooltip.padding = 10;
+    Chart.defaults.plugins.tooltip.cornerRadius = 6;
+    Chart.defaults.plugins.tooltip.displayColors = true;
+    Chart.defaults.plugins.tooltip.boxPadding = 4;
+
+    // Rounded Bars & Smooth Lines
+    Chart.defaults.elements.bar.borderRadius = 4;
+    Chart.defaults.elements.line.tension = 0.35;
+    Chart.defaults.elements.point.radius = 3;
+
+    // Remove heavy grids
+    Chart.defaults.scales.linear.grid.display = false;
+    Chart.defaults.scales.category.grid.display = false;
+    
+    // Mockup Colors
+    window.KAZE_COLORS = {
+        sales: '#1a8f3c',     // Brand Green
+        expenses: '#1e293b',  // Dark Slate
+        profit: '#10b981',    // Bright Green
+        light: '#f3f4f6',
+        danger: '#ef4444'
+    };
+})();
+</script>
+
 </body>
 
 </html>
