@@ -1,9 +1,13 @@
 {% extends "base.html" %}
 {% block content %}
 
-<div class="card detail-overlay" style="margin-bottom:1.5rem; background:linear-gradient(135deg, rgba(16,185,129,0.08), transparent);">
-  <h3>Book Keeping Overview</h3>
-  <p>Full set of journals, ledgers, and source documents.</p>
+{% set ov = namespace(n=0) %}{% for _k, _l, _h, _c in types %}{% set ov.n = ov.n + _c %}{% endfor %}
+<div class="kz-card" style="margin-bottom:1.5rem;">
+    <div class="kz-overlay-stats">
+        <div class="kz-overlay-stat"><span>Doc Types</span><strong>{{ types|length }}</strong></div>
+        <div class="kz-overlay-stat"><span>Saved Papers</span><strong>{{ ov.n }}</strong></div>
+        <div class="kz-overlay-stat"><span>Recent Cash Lines</span><strong>{{ recent_cash|length }}</strong></div>
+    </div>
 </div>
 
 <div class="page-header">

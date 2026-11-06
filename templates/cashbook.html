@@ -2,11 +2,13 @@
 {% block charts_js %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>{% endblock %}
 {% block content %}
 
-<div class="card detail-overlay" style="margin-bottom:1.5rem; background:linear-gradient(135deg, rgba(16,185,129,0.08), transparent);">
-  <h3>Book Keeping Overview</h3>
-  
-<p>All income, expenses, and cash movements with running balances.</p>
-
+{% set ov = namespace(inn=0, out=0) %}{% for _e in entries %}{% if _e.entry_type == 'in' %}{% set ov.inn = ov.inn + _e.amount %}{% else %}{% set ov.out = ov.out + _e.amount %}{% endif %}{% endfor %}
+<div class="kz-card" style="margin-bottom:1.5rem;">
+    <div class="kz-overlay-stats">
+        <div class="kz-overlay-stat"><span>Cash In</span><strong style="color:var(--green);">{{ money(ov.inn) }}</strong></div>
+        <div class="kz-overlay-stat"><span>Cash Out</span><strong style="color:#e74c3c;">{{ money(ov.out) }}</strong></div>
+        <div class="kz-overlay-stat"><span>Net Drawer</span><strong>{{ money(ov.inn - ov.out) }}</strong></div>
+    </div>
 </div>
 
 <div class="page-header">

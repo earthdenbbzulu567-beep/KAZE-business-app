@@ -1,11 +1,13 @@
 {% extends "base.html" %}
 {% block content %}
 
-<div class="card detail-overlay" style="margin-bottom:1.5rem; background:linear-gradient(135deg, rgba(16,185,129,0.08), transparent);">
-  <h3>Account Tracking Overview</h3>
-  
-<p>Ledgers, journals, and financial statements in detailed table format.</p>
-
+{% set ov = namespace(lines=0) %}{% for _k, _l, _h, _c in books %}{% set ov.lines = ov.lines + _c %}{% endfor %}
+<div class="kz-card" style="margin-bottom:1.5rem;">
+    <div class="kz-overlay-stats">
+        <div class="kz-overlay-stat"><span>Available Books</span><strong>{{ books|length }}</strong></div>
+        <div class="kz-overlay-stat"><span>Posted Lines</span><strong>{{ ov.lines }}</strong></div>
+        <div class="kz-overlay-stat"><span>Status</span><strong style="color:var(--green);">Live</strong></div>
+    </div>
 </div>
 
 <div class="page-header">

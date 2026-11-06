@@ -2528,7 +2528,7 @@ def send_email(to_email, subject, body):
     except ValueError:
         port = 587
     try:
-        server = smtplib.SMTP(host, port, timeout=20)
+        server = smtplib.SMTP(host, port, timeout=5)
         server.starttls()
         server.login(from_email, password)
         server.send_message(msg)

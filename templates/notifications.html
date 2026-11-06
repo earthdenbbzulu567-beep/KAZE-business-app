@@ -1,9 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
 
-<div class="card detail-overlay" style="margin-bottom:1.5rem; background:linear-gradient(135deg, rgba(16,185,129,0.08), transparent);">
-  <h3>Notifications Overview</h3>
-  <p>All alerts, reminders, and system messages in one place.</p>
+<div class="kz-card" style="margin-bottom:1.5rem;">
+    <div class="kz-overlay-stats">
+        <div class="kz-overlay-stat"><span>Total Alerts</span><strong>{{ notifications|length }}</strong></div>
+        <div class="kz-overlay-stat"><span>Unread</span><strong style="color:var(--brand);">{{ unread_notifications }}</strong></div>
+    </div>
 </div>
 
 {% if notifications %}<div data-kaze-sound="notification" data-kaze-once="1" hidden></div>{% endif %}

@@ -2,11 +2,12 @@
 {% block charts_js %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>{% endblock %}
 {% block content %}
 
-<div class="card detail-overlay" style="margin-bottom:1.5rem; background:linear-gradient(135deg, rgba(16,185,129,0.08), transparent);">
-  <h3>Reports Overview</h3>
-  
-<p>Comprehensive financial and operational reports. Export to Excel/CSV available.</p>
-
+<div class="kz-card" style="margin-bottom:1.5rem;">
+    <div class="kz-overlay-stats">
+        <div class="kz-overlay-stat"><span>Report Period</span><strong>{{ start_date }} to {{ end_date }}</strong></div>
+        <div class="kz-overlay-stat"><span>Top Products</span><strong>{{ top_products|length }}</strong></div>
+        <div class="kz-overlay-stat"><span>Top Customers</span><strong>{{ top_customers|length }}</strong></div>
+    </div>
 </div>
 
 <div class="page-header">
