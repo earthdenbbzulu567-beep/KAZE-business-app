@@ -758,6 +758,14 @@ def init_db():
         )
     ''')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_snippets_user ON code_snippets (user_id)')
+
+    # Phase 5 Speed Optimizations
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_activities_user_time ON activities (user_id, created_at DESC)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_user_activity_time ON user_activity (user_id, login_time DESC)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications (user_id, is_read)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_sales_date ON sales (user_id, sale_date)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses (user_id, date)')
+
     cur.execute('''
         CREATE TABLE IF NOT EXISTS bookkeeping_docs (
             id SERIAL PRIMARY KEY,

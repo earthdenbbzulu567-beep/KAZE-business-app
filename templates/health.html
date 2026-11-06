@@ -1,6 +1,78 @@
 {% extends "base.html" %}
 {% block title %}Business Health{% endblock %}
+
 {% block content %}
+<style id="kaze-legacy-sweep">
+/* Phase 5 — Force legacy pages to match the Fintech Mockup */
+
+.page-content .page-header {
+    border-bottom: 1px solid var(--kz-border, var(--border)) !important;
+    padding-bottom: 1rem !important;
+    margin-bottom: 1.5rem !important;
+}
+.page-content .page-header h1 {
+    font-size: 1.5rem !important;
+    font-weight: 700 !important;
+    color: var(--kz-text, var(--text)) !important;
+}
+.page-content h2 {
+    font-size: 0.98rem !important;
+    text-transform: none !important;
+    font-weight: 600 !important;
+    color: var(--kz-text, var(--text)) !important;
+    margin: 1.75rem 0 0.85rem !important;
+}
+.page-content h2::before { display: none !important; }
+
+/* Force all tables to be scrollable and not break */
+.page-content .table-wrapper {
+    overflow-x: auto !important;
+    border: 1px solid var(--kz-border, var(--border)) !important;
+    border-radius: var(--kz-radius, 12px) !important;
+    box-shadow: var(--kz-shadow-sm, 0 1px 2px rgba(0,0,0,0.05));
+}
+.page-content table { width: 100% !important; min-width: 600px; table-layout: auto !important; }
+.page-content thead th {
+    background: var(--kz-bg, var(--bg3)) !important;
+    color: var(--kz-text-muted, var(--text3)) !important;
+    font-size: 0.72rem !important;
+    text-transform: uppercase !important;
+    font-weight: 600 !important;
+    white-space: nowrap !important;
+}
+.page-content tbody td {
+    border-bottom: 1px solid var(--kz-border, var(--border)) !important;
+    color: var(--kz-text, var(--text)) !important;
+    white-space: nowrap !important;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Force old .widget blocks to become .kz-cards */
+.page-content .widget, .page-content .kz-card {
+    background: var(--kz-surface, var(--surface)) !important;
+    border: 1px solid var(--kz-border, var(--border)) !important;
+    border-radius: var(--kz-radius, 12px) !important;
+    padding: 1.25rem 1.4rem !important;
+    box-shadow: var(--kz-shadow-sm, 0 1px 2px rgba(0,0,0,0.05)) !important;
+    margin-bottom: 1.5rem !important;
+}
+
+/* Fix Supreme Tiles */
+.supreme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.9rem; margin: 1rem 0 2rem; }
+.supreme-tile {
+    background: var(--kz-surface, var(--surface));
+    border: 1px solid var(--kz-border, var(--border));
+    border-radius: var(--kz-radius, 12px);
+    padding: 1.25rem 1.1rem;
+    text-decoration: none;
+    color: inherit;
+    box-shadow: var(--kz-shadow-sm, 0 1px 2px rgba(0,0,0,0.05));
+    transition: transform 0.15s;
+}
+.supreme-tile:hover { transform: translateY(-2px); border-color: var(--kz-brand); }
+.tile-value { font-size: 2rem; font-family: var(--mono); font-weight: 800; margin: 0.2rem 0; display: block; }
+</style>
+
 <div class="page-header"><div><h1><i data-lucide="activity"></i> Business Health Score</h1>
 <p>Weighted score from five independent factors.</p></div></div>
 <div class="widget" style="text-align:center;padding:2rem;">
@@ -25,13 +97,5 @@
 <small style="color:var(--text3);">Weight: {{ c.weight }}%</small></div>
 {% endfor %}
 </div>
-<style>
-.health-grid {display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0.85rem;}
-.health-card {padding: 1rem 1.1rem; border-radius: 12px; border: 1px solid var(--border); background: var(--surface);}
-.health-head {display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.5rem;}
-.health-head span {font-family: var(--mono); font-weight: 700;}
-.health-bar {height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden;}
-.health-bar div {height: 100%;}
-.health-card p {margin: 0.55rem 0 0.2rem; font-size: 0.86rem; color: var(--text2);}
-</style>
+
 {% endblock %}

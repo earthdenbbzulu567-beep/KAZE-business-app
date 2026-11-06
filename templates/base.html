@@ -2447,6 +2447,26 @@ html.theme-light .page-content [style*="color: #aaa"] {
 }
 body.kaze-offline .main-content { padding-top: 36px; }
 </style>
+
+<style id="kaze-master-override">
+/* FORCE Supreme tiles to look good */
+.supreme-grid { display: grid !important; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)) !important; gap: 0.9rem !important; margin: 1rem 0 2rem !important; }
+.supreme-tile { background: var(--kz-surface, var(--surface)) !important; border: 1px solid var(--kz-border, var(--border)) !important; border-radius: var(--kz-radius, 12px) !important; padding: 1.25rem 1.1rem !important; text-decoration: none !important; color: inherit !important; box-shadow: var(--kz-shadow-sm, 0 1px 2px rgba(0,0,0,0.05)) !important; display: flex !important; flex-direction: column !important; gap: 0.35rem !important; }
+.supreme-tile:hover { transform: translateY(-2px) !important; border-color: var(--kz-brand) !important; }
+.tile-label { font-size: 0.72rem !important; letter-spacing: 0.08em !important; text-transform: uppercase !important; color: var(--kz-text-muted, var(--text3)) !important; font-weight: 700 !important; }
+.tile-value { font-size: 1.9rem !important; font-family: var(--mono) !important; font-weight: 800 !important; line-height: 1.1 !important; margin: 0.2rem 0 !important; }
+.tile-sub { font-size: 0.82rem !important; color: var(--kz-text-muted, var(--text2)) !important; }
+
+/* FORCE all tables to scroll and align */
+.page-content .table-wrapper { overflow-x: auto !important; border: 1px solid var(--kz-border, var(--border)) !important; border-radius: var(--kz-radius, 12px) !important; background: var(--kz-surface, var(--surface)) !important; }
+.page-content table { width: 100% !important; min-width: 600px !important; border-collapse: collapse !important; }
+.page-content th { background: var(--kz-bg, var(--bg3)) !important; text-transform: uppercase !important; font-size: 0.72rem !important; letter-spacing: 0.05em !important; color: var(--kz-text-muted, var(--text3)) !important; font-weight: 600 !important; padding: 12px 16px !important; }
+.page-content td { padding: 12px 16px !important; white-space: nowrap !important; font-variant-numeric: tabular-nums !important; }
+
+/* FORCE legacy widgets to look like kz-cards */
+.page-content .widget { background: var(--kz-surface, var(--surface)) !important; border: 1px solid var(--kz-border, var(--border)) !important; border-radius: var(--kz-radius, 12px) !important; padding: 1.25rem 1.4rem !important; box-shadow: var(--kz-shadow-sm, 0 1px 2px rgba(0,0,0,0.05)) !important; margin-bottom: 1.5rem !important; }
+</style>
+
 </head>
 <body class="ui-{{ ui_device or 'auto' }}">
 <div id="kaze-offline-banner" role="alert" aria-live="polite">
@@ -2560,18 +2580,16 @@ body.kaze-offline .main-content { padding-top: 36px; }
         <div class="user-menu kz-user-menu">
             <button class="dropbtn kz-user-btn">{{ current_user.username }} <i data-lucide="chevron-down"></i></button>
             <div class="dropdown-content">
-                <a href="{{ url_for('dashboard') }}">Workshop Bench</a>
                 <a href="{{ url_for('team') }}">👥 Team</a>
-                <a href="{{ url_for('activity') }}">Login Activity</a>
-                <a href="{{ url_for('backup_export') }}">Download backup</a>
-                <a href="#" onclick="openModal('tutorialModal'); return false;">Help / Tutorial</a>
-                <a href="{{ url_for('tutorial') }}">📖 Practical guide</a>
-                <a href="{{ url_for('shortcuts') }}">⌨️ Shortcuts</a>
-                <a href="{{ url_for('swot') }}">🧭 SWOT Analysis</a>
-                <a href="{{ url_for('settings') }}">Settings</a>
-                <a href="{{ url_for('legal_licence') }}">Licence</a>
-                <a href="{{ url_for('legal_terms') }}">Terms</a>
-                <a href="{{ url_for('logout') }}">Logout</a>
+                <a href="{{ url_for('activity') }}">🕓 Login Activity</a>
+                <a href="{{ url_for('backup_export') }}">⬇️ Backup</a>
+                <hr style="margin: 4px 0; border: none; border-top: 1px solid var(--border);">
+                <a href="#" onclick="openModal('tutorialModal'); return false;">❓ Tutorial</a>
+                <a href="{{ url_for('settings') }}">⚙️ Settings</a>
+                <a href="{{ url_for('legal_licence') }}">📜 Licence</a>
+                <a href="{{ url_for('legal_terms') }}">📜 Terms</a>
+                <hr style="margin: 4px 0; border: none; border-top: 1px solid var(--border);">
+                <a href="{{ url_for('logout') }}" style="color: #e74c3c; font-weight: 600;">🚪 Logout</a>
             </div>
         </div>
     </div>
