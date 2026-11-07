@@ -1717,18 +1717,30 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     Chart.defaults.font.size = 11;
     Chart.defaults.color = '#6b7280';
     Chart.defaults.borderColor = '#e5e7eb';
+    
     Chart.defaults.plugins.legend.labels.usePointStyle = true;
     Chart.defaults.plugins.legend.labels.boxWidth = 6;
     Chart.defaults.plugins.legend.labels.boxHeight = 6;
     Chart.defaults.plugins.legend.labels.padding = 16;
+    
     Chart.defaults.plugins.tooltip.backgroundColor = '#1e293b';
     Chart.defaults.plugins.tooltip.padding = 10;
     Chart.defaults.plugins.tooltip.cornerRadius = 6;
+    
     Chart.defaults.elements.bar.borderRadius = 4;
     Chart.defaults.elements.line.tension = 0.35;
     Chart.defaults.elements.point.radius = 3;
-    Chart.defaults.scales.linear.grid.display = false;
-    Chart.defaults.scales.category.grid.display = false;
+
+    // Safe initialization to prevent "Cannot set properties of undefined"
+    Chart.defaults.scales = Chart.defaults.scales || {};
+    if (Chart.defaults.scales.linear) {
+        Chart.defaults.scales.linear.grid = Chart.defaults.scales.linear.grid || {};
+        Chart.defaults.scales.linear.grid.display = false;
+    }
+    if (Chart.defaults.scales.category) {
+        Chart.defaults.scales.category.grid = Chart.defaults.scales.category.grid || {};
+        Chart.defaults.scales.category.grid.display = false;
+    }
 })();
 </script>
 
@@ -2447,6 +2459,8 @@ html.theme-light .page-content [style*="color: #aaa"] {
 }
 body.kaze-offline .main-content { padding-top: 36px; }
 </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/kaze-remodel.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/kaze-exact.css') }}">
 </head>
 <body class="ui-{{ ui_device or 'auto' }}">
 <div id="kaze-offline-banner" role="alert" aria-live="polite">
@@ -2496,18 +2510,19 @@ body.kaze-offline .main-content { padding-top: 36px; }
         </div>
 
         <nav class="sidebar-nav kz-sidebar" id="kz-sidebar-nav">
-    {% set pinned = ['dashboard', 'counter', 'sales', 'stock', 'customers', 'services'] %}
-    <div class="kz-nav-pinned">
-        {% for group in nav_groups or [] %}
-            {% for item in group.links %}
-                {% if item.endpoint in pinned %}
-                <a href="{{ url_for(item.endpoint) }}" class="kz-nav-item {% if request.endpoint in item.active %}active{% endif %}">
-                    <i data-lucide="{{ item.icon }}"></i><span>{{ item.label }}</span>
-                </a>
-                {% endif %}
-            {% endfor %}
-        {% endfor %}
-    </div>
+    <a href="{{ url_for('dashboard') }}" class="kz-nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></a>
+    <a href="{{ url_for('sales') }}" class="kz-nav-item {% if request.endpoint == 'sales' %}active{% endif %}"><i data-lucide="shopping-cart"></i><span>Sales</span></a>
+    <a href="{{ url_for('purchase_orders') if mode_on('operations') else url_for('dashboard') }}" class="kz-nav-item"><i data-lucide="shopping-bag"></i><span>Purchases</span></a>
+    <a href="{{ url_for('stock') }}" class="kz-nav-item {% if request.endpoint == 'stock' %}active{% endif %}"><i data-lucide="package"></i><span>Inventory</span></a>
+    <a href="{{ url_for('customers') }}" class="kz-nav-item {% if request.endpoint == 'customers' %}active{% endif %}"><i data-lucide="users"></i><span>Customers</span></a>
+    <a href="{{ url_for('suppliers') if mode_on('operations') else url_for('dashboard') }}" class="kz-nav-item"><i data-lucide="truck"></i><span>Suppliers</span></a>
+    <a href="{{ url_for('expenses') if mode_on('bookkeeping') else url_for('dashboard') }}" class="kz-nav-item"><i data-lucide="wallet"></i><span>Expenses</span></a>
+    <a href="{{ url_for('reports') }}" class="kz-nav-item {% if request.endpoint == 'reports' %}active{% endif %}"><i data-lucide="bar-chart-3"></i><span>Reports</span></a>
+    <a href="{{ url_for('stats') }}" class="kz-nav-item {% if request.endpoint == 'stats' %}active{% endif %}"><i data-lucide="activity"></i><span>Analytics</span></a>
+    <a href="{{ url_for('calendar') if mode_on('planning') else url_for('dashboard') }}" class="kz-nav-item"><i data-lucide="calendar"></i><span>Calendar</span></a>
+    <a href="{{ url_for('tasks') if mode_on('workspace') else url_for('dashboard') }}" class="kz-nav-item"><i data-lucide="check-square"></i><span>Tasks</span></a>
+    <a href="#" class="kz-nav-item"><i data-lucide="message-square"></i><span>Messages</span></a>
+    <a href="{{ url_for('settings') }}" class="kz-nav-item {% if request.endpoint == 'settings' %}active{% endif %}"><i data-lucide="settings"></i><span>Settings</span></a>
     <div class="kz-nav-divider"></div>
     {% for group in nav_groups or [] %}
         {% set unpinned = group.links | rejectattr('endpoint', 'in', pinned) | list %}

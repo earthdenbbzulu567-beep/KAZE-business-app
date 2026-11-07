@@ -1,0 +1,307 @@
+/* KAZE Remodel - Dark modern dashboard matching showcase image
+   Overrides for polished SaaS look: deep dark + bright green accents */
+
+:root {
+  --bg: #0b0f14 !important;
+  --bg2: #111820 !important;
+  --bg3: #1a2230 !important;
+  --surface: #161d28 !important;
+  --surface2: #1e2736 !important;
+  --border: #2a3544 !important;
+  --border2: #3a4658 !important;
+  --text: #f1f5f9 !important;
+  --text2: #94a3b8 !important;
+  --text3: #64748b !important;
+  --green: #22c55e !important;
+  --green-bright: #4ade80 !important;
+  --red-bright: #22c55e !important;
+  --red: #16a34a !important;
+  --accent: #22c55e !important;
+  --radius: 12px !important;
+  --radius-sm: 8px !important;
+  --shadow-1: 0 4px 24px rgba(0,0,0,0.4) !important;
+  --shadow-2: 0 8px 40px rgba(0,0,0,0.5) !important;
+}
+
+body {
+  background: var(--bg) !important;
+  color: var(--text) !important;
+  font-family: 'Inter', 'Plus Jakarta Sans', system-ui, sans-serif !important;
+}
+
+/* Sidebar polish */
+.sidebar {
+  background: linear-gradient(180deg, #0f1720 0%, #0b0f14 100%) !important;
+  border-right: 1px solid #1e2937 !important;
+  box-shadow: none !important;
+  width: 260px !important;
+}
+
+.sidebar-brand {
+  border-bottom: 1px solid #1e2937 !important;
+  background: transparent !important;
+  padding: 1.4rem 1.25rem !important;
+}
+
+.sidebar-nav a,
+.kz-nav-item {
+  border-radius: 8px !important;
+  margin: 2px 8px !important;
+  padding: 0.65rem 0.9rem !important;
+  transition: all 0.15s ease !important;
+}
+
+.sidebar-nav a:hover,
+.kz-nav-item:hover {
+  background: rgba(34, 197, 94, 0.08) !important;
+  color: var(--green-bright) !important;
+}
+
+.sidebar-nav a.active,
+.kz-nav-item.active {
+  background: rgba(34, 197, 94, 0.15) !important;
+  color: #4ade80 !important;
+  font-weight: 600 !important;
+  border-left: 3px solid #22c55e !important;
+}
+
+.sidebar-nav a .icon,
+.kz-nav-item i {
+  color: #64748b !important;
+}
+
+.sidebar-nav a.active .icon,
+.kz-nav-item.active i {
+  color: #4ade80 !important;
+}
+
+/* Topbar */
+.topbar {
+  background: #111820 !important;
+  border-bottom: 1px solid #1e2937 !important;
+  box-shadow: none !important;
+  padding: 0.75rem 1.5rem !important;
+}
+
+.topbar .search-box,
+input[type="search"],
+.kz-search {
+  background: #1a2230 !important;
+  border: 1px solid #2a3544 !important;
+  border-radius: 8px !important;
+  color: var(--text) !important;
+}
+
+/* Cards & widgets */
+.widget,
+.kz-card,
+.kz-stat-card,
+.kz-kpi,
+.feature-card,
+.panel,
+.card {
+  background: #161d28 !important;
+  border: 1px solid #2a3544 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.25) !important;
+  transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+.widget:hover,
+.kz-card:hover,
+.kz-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.35) !important;
+}
+
+/* KPI / metric cards */
+.kz-kpi-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)) !important;
+  gap: 1rem !important;
+  margin-bottom: 1.5rem !important;
+}
+
+.kz-stat-card {
+  padding: 1.25rem 1.4rem !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+.kz-stat-label {
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  color: #94a3b8 !important;
+  display: block !important;
+  margin-bottom: 0.35rem !important;
+}
+
+.kz-stat-value {
+  font-size: 1.65rem !important;
+  font-weight: 700 !important;
+  color: #f8fafc !important;
+  letter-spacing: -0.02em !important;
+  display: block !important;
+}
+
+.kz-stat-delta.up {
+  color: #4ade80 !important;
+  font-weight: 600 !important;
+}
+
+.kz-stat-delta.down {
+  color: #f87171 !important;
+  font-weight: 600 !important;
+}
+
+/* Buttons */
+button, .btn, .btn-primary, .btn-secondary {
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+  transition: all 0.15s ease !important;
+}
+
+button[type="submit"], .btn-primary, a button {
+  background: linear-gradient(135deg, #22c55e, #16a34a) !important;
+  color: #052e16 !important;
+  border: none !important;
+  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3) !important;
+}
+
+button[type="submit"]:hover, .btn-primary:hover {
+  background: linear-gradient(135deg, #4ade80, #22c55e) !important;
+  transform: translateY(-1px) !important;
+}
+
+.btn-secondary {
+  background: #1e2937 !important;
+  color: #e2e8f0 !important;
+  border: 1px solid #334155 !important;
+}
+
+/* Tables */
+table, .data-table, .multi-table {
+  border-radius: 10px !important;
+  overflow: hidden !important;
+}
+
+thead th {
+  background: #1a2230 !important;
+  color: #94a3b8 !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  font-size: 0.7rem !important;
+  letter-spacing: 0.05em !important;
+  border-bottom: 1px solid #2a3544 !important;
+}
+
+tbody tr:hover {
+  background: rgba(34, 197, 94, 0.05) !important;
+}
+
+/* Charts area & activity */
+.kz-activity-widget,
+.kz-dash-side {
+  background: transparent !important;
+}
+
+.kz-activity-item {
+  padding: 0.6rem 0 !important;
+  border-bottom: 1px solid #1e2937 !important;
+}
+
+/* Landing page enhancements */
+.home-hero {
+  background: radial-gradient(ellipse at 70% 20%, rgba(34,197,94,0.15) 0%, transparent 50%),
+              linear-gradient(180deg, #0b0f14 0%, #111820 100%) !important;
+  border-radius: 16px !important;
+  padding: 4rem 2rem !important;
+  margin-bottom: 2rem !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+.hero-title {
+  font-size: clamp(2.4rem, 5vw, 3.6rem) !important;
+  font-weight: 800 !important;
+  line-height: 1.1 !important;
+  background: linear-gradient(135deg, #f8fafc 0%, #4ade80 100%) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+}
+
+.home-kicker {
+  color: #4ade80 !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.1em !important;
+  text-transform: uppercase !important;
+  font-size: 0.75rem !important;
+}
+
+.feature-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)) !important;
+  gap: 1.25rem !important;
+}
+
+.feature-card {
+  padding: 1.5rem !important;
+  text-align: left !important;
+}
+
+.feature-card h3 {
+  color: #f1f5f9 !important;
+  margin: 0.75rem 0 0.5rem !important;
+}
+
+.feature-icon {
+  width: 48px !important;
+  height: 48px !important;
+  background: rgba(34, 197, 94, 0.12) !important;
+  border-radius: 10px !important;
+  display: grid !important;
+  place-items: center !important;
+  color: #4ade80 !important;
+}
+
+/* Status badges */
+.status-ok, .badge-success {
+  background: rgba(34, 197, 94, 0.15) !important;
+  color: #4ade80 !important;
+}
+
+/* Scrollbar refined */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #0b0f14; }
+::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+  .sidebar { width: 100% !important; }
+  .kz-kpi-grid { grid-template-columns: 1fr 1fr !important; }
+}
+
+/* Business Health / special cards */
+.business-health, .pl-strip {
+  background: linear-gradient(135deg, rgba(34,197,94,0.1), transparent) !important;
+  border: 1px solid rgba(34,197,94,0.3) !important;
+  border-radius: 12px !important;
+}
+
+/* Input fields */
+input, select, textarea {
+  background: #1a2230 !important;
+  border: 1px solid #2a3544 !important;
+  color: #f1f5f9 !important;
+  border-radius: 8px !important;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: #22c55e !important;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.15) !important;
+  outline: none !important;
+}
