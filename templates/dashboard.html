@@ -1,6 +1,18 @@
 {% extends "base.html" %}
 {% block charts_js %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>{% endblock %}
 {% block content %}
+<div style="margin-bottom:1.25rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+  <div>
+    <h1 style="margin:0; font-size:1.55rem; font-weight:700; color:#fff;">Good morning, {{ current_user.username }} 👋</h1>
+    <p style="margin:0.2rem 0 0; color:#8fa396; font-size:0.88rem;">Here's what's happening with your business today.</p>
+  </div>
+  <div style="display:flex; gap:0.75rem; align-items:center;">
+    <span style="background:#1a211c; border:1px solid #24302a; padding:0.45rem 0.9rem; border-radius:8px; font-size:0.8rem; color:#8fa396; display:flex; align-items:center; gap:6px;">
+      <i data-lucide="calendar" style="width:14px;height:14px;"></i> May 12 – May 18, 2025
+    </span>
+    <button class="btn-primary" style="padding:0.5rem 1rem; font-size:0.85rem;">Export Report</button>
+  </div>
+</div>
 <style id="kaze-dashboard-4d2">
 .kz-dash-grid {
     display: grid;

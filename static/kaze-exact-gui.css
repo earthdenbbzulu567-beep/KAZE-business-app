@@ -1,0 +1,212 @@
+/* KAZE Exact GUI Match - Dark green modern dashboard
+   Additive overrides only. Preserves all existing functionality. */
+
+:root {
+  --kz-bg: #0b0f0d !important;
+  --kz-surface: #121816 !important;
+  --kz-surface-2: #1a211c !important;
+  --kz-border: #24302a !important;
+  --kz-text: #e8f0ea !important;
+  --kz-text-muted: #8fa396 !important;
+  --kz-text-dim: #5d6e64 !important;
+  --kz-green: #22c55e !important;
+  --kz-green-bright: #4ade80 !important;
+  --kz-green-dim: rgba(34, 197, 94, 0.12) !important;
+  --kz-red: #ef4444 !important;
+  --kz-red-dim: rgba(239, 68, 68, 0.12) !important;
+  --kz-radius: 12px !important;
+}
+
+html.theme-dark, html.theme-dark body,
+html, body {
+  background: #0b0f0d !important;
+  color: #e8f0ea !important;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+}
+
+/* Sidebar match */
+.sidebar {
+  width: 230px !important;
+  background: #0e1411 !important;
+  border-right: 1px solid #1e2a24 !important;
+  box-shadow: none !important;
+}
+
+.sidebar-brand {
+  background: transparent !important;
+  border-bottom: 1px solid #1e2a24 !important;
+  padding: 1.1rem 1rem !important;
+}
+
+.kz-nav-item, .sidebar-nav a {
+  border-radius: 8px !important;
+  margin: 2px 10px !important;
+  padding: 0.6rem 0.85rem !important;
+  color: #8fa396 !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+}
+
+.kz-nav-item:hover, .sidebar-nav a:hover {
+  background: rgba(34, 197, 94, 0.08) !important;
+  color: #4ade80 !important;
+}
+
+.kz-nav-item.active, .sidebar-nav a.active {
+  background: rgba(34, 197, 94, 0.16) !important;
+  color: #4ade80 !important;
+  font-weight: 600 !important;
+}
+
+.kz-nav-item i, .sidebar-nav a i {
+  color: inherit !important;
+  width: 18px !important;
+  height: 18px !important;
+}
+
+/* Topbar */
+.topbar, .kz-topbar {
+  background: #121816 !important;
+  border-bottom: 1px solid #1e2a24 !important;
+  box-shadow: none !important;
+}
+
+.search-form input, .kz-search input {
+  background: #1a211c !important;
+  border: 1px solid #24302a !important;
+  border-radius: 8px !important;
+  color: #e8f0ea !important;
+}
+
+/* Cards & widgets */
+.widget, .kz-card, .kz-stat-card, .kz-kpi, .summary-card, .feature-card,
+.panel, .chart-container, .table-wrapper {
+  background: #161d19 !important;
+  border: 1px solid #24302a !important;
+  border-radius: 12px !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25) !important;
+}
+
+/* KPI / metric style */
+.kz-kpi-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) !important;
+  gap: 1rem !important;
+}
+
+.kz-stat-label, .kz-kpi .kz-stat-label {
+  font-size: 0.7rem !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+  color: #8fa396 !important;
+}
+
+.kz-stat-value, .kz-kpi .kz-stat-value {
+  font-size: 1.5rem !important;
+  font-weight: 700 !important;
+  color: #fff !important;
+  letter-spacing: -0.3px !important;
+}
+
+.kz-stat-delta.up { color: #4ade80 !important; font-weight: 600 !important; }
+.kz-stat-delta.down { color: #f87171 !important; font-weight: 600 !important; }
+
+/* Buttons */
+button, .btn, .btn-primary, .btn-secondary {
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+}
+
+.btn-primary, button[type="submit"], .btn-green {
+  background: #22c55e !important;
+  color: #052e16 !important;
+  border: none !important;
+}
+
+.btn-secondary {
+  background: #1a211c !important;
+  color: #e8f0ea !important;
+  border: 1px solid #2a3a32 !important;
+}
+
+/* Tables */
+table, .data-table, .multi-table {
+  border-radius: 10px !important;
+  overflow: hidden !important;
+}
+
+thead th {
+  background: #1a211c !important;
+  color: #8fa396 !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  font-size: 0.7rem !important;
+  letter-spacing: 0.04em !important;
+  border-bottom: 1px solid #24302a !important;
+  padding: 0.7rem 0.9rem !important;
+}
+
+tbody td {
+  border-bottom: 1px solid #1e2a24 !important;
+  padding: 0.7rem 0.9rem !important;
+  color: #e8f0ea !important;
+}
+
+tbody tr:hover {
+  background: rgba(34, 197, 94, 0.04) !important;
+}
+
+/* Status badges */
+.status-ok, .badge-success, .paid {
+  background: rgba(34, 197, 94, 0.15) !important;
+  color: #4ade80 !important;
+  border-radius: 6px !important;
+  padding: 0.15rem 0.5rem !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+}
+
+/* Activity feed */
+.kz-activity-icon.sale { background: rgba(34, 197, 94, 0.15) !important; color: #4ade80 !important; }
+.kz-activity-icon.expense { background: rgba(239, 68, 68, 0.15) !important; color: #f87171 !important; }
+.kz-activity-icon.stock { background: rgba(59, 130, 246, 0.15) !important; color: #60a5fa !important; }
+.kz-activity-icon.customer { background: rgba(168, 85, 247, 0.15) !important; color: #c084fc !important; }
+
+/* Inputs */
+input, select, textarea {
+  background: #1a211c !important;
+  border: 1px solid #24302a !important;
+  color: #e8f0ea !important;
+  border-radius: 8px !important;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: #22c55e !important;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.15) !important;
+  outline: none !important;
+}
+
+/* Page content spacing */
+.page-content {
+  padding: 1.25rem 1.5rem !important;
+  background: transparent !important;
+}
+
+/* Business health / special */
+.pl-strip, .business-health {
+  background: linear-gradient(135deg, rgba(34,197,94,0.1), transparent) !important;
+  border: 1px solid rgba(34,197,94,0.25) !important;
+  border-radius: 12px !important;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #0b0f0d; }
+::-webkit-scrollbar-thumb { background: #2a3a32; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #3a4a42; }
+
+@media (max-width: 768px) {
+  .sidebar { width: 100% !important; }
+  .kz-kpi-grid { grid-template-columns: 1fr 1fr !important; }
+}
