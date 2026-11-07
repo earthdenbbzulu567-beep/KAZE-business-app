@@ -1,0 +1,26 @@
+KAZE TRADERS — MODERN UI REFRESH
+================================
+
+What changed
+- Added static/kaze-modern.css as a shared visual layer across the application's existing pages.
+- Updated the supplied KAZE logo assets: static/logo_icon.png and static/logo_full.png.
+- Linked the new stylesheet from templates/base.html so the redesign is shared by all pages extending the base template.
+- Refined the sidebar, navigation states, top bar, page spacing, cards, tables, inputs, buttons, dialogs and responsive spacing.
+- Kept the existing Flask routes, template content, form names, JavaScript hooks and business workflows intact.
+
+Design direction
+- Dark charcoal / near-black surfaces
+- Forest-green accents based on the supplied KAZE identity
+- White primary text and muted secondary text
+- Rounded cards, restrained borders and subtle depth
+- Consistent styling across modules
+- Existing light theme remains supported
+
+Validation performed
+- Parsed all 128 top-level HTML templates with Jinja: no parse errors.
+- Compiled core Python modules: passed syntax compilation.
+
+Important
+- This is a visual refresh, not a rewrite of the app's business logic.
+- Dashboard data and feature availability remain driven by the existing application.
+- Please test in a staging deployment and verify key workflows before replacing the live deployment.

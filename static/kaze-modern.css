@@ -1,0 +1,157 @@
+/* KAZE Traders — unified modern interface refresh
+   Additive visual layer: preserves existing routes, forms, tables and interactions. */
+:root {
+  --kz-brand: #16863d !important;
+  --kz-brand-dark: #0d5429 !important;
+  --kz-brand-light: rgba(22,134,61,.14) !important;
+  --kz-brand-glow: rgba(34,197,94,.18) !important;
+  --kz-bg: #080c0a !important;
+  --kz-surface: #0d1310 !important;
+  --kz-surface-hover: #141e18 !important;
+  --kz-border: rgba(151,180,160,.15) !important;
+  --kz-border-strong: rgba(151,180,160,.25) !important;
+  --kz-text: #f2f7f3 !important;
+  --kz-text-muted: #a0afa5 !important;
+  --kz-text-light: #748279 !important;
+  --kz-radius: 16px !important;
+  --kz-radius-sm: 10px !important;
+  --kz-shadow-sm: 0 8px 26px rgba(0,0,0,.18) !important;
+}
+html.theme-dark, html.theme-dark body { background: #080c0a !important; }
+html.theme-dark body::before {
+  background-image: radial-gradient(circle at 10% 0%, rgba(25,120,57,.12), transparent 32%),
+    radial-gradient(circle at 100% 100%, rgba(25,120,57,.07), transparent 30%);
+  animation: none !important;
+}
+html.theme-dark .sidebar {
+  background: linear-gradient(180deg,#0c120e 0%,#080d0a 100%) !important;
+  border-right: 1px solid rgba(128,170,139,.16) !important;
+  box-shadow: 10px 0 35px rgba(0,0,0,.2) !important;
+}
+.sidebar-brand {
+  min-height: 88px;
+  padding: 1rem 1rem !important;
+  gap: .7rem !important;
+  background: linear-gradient(110deg,rgba(27,120,58,.12),transparent 75%) !important;
+}
+.sidebar-brand .brand-mark, .sidebar-brand img {
+  width: 46px !important; height: 46px !important;
+  border-radius: 50% !important;
+  background: #050705 !important;
+  object-fit: contain !important;
+  box-shadow: 0 0 0 1px rgba(56,170,88,.45),0 5px 18px rgba(0,0,0,.35) !important;
+}
+.sidebar-brand .wordmark b { letter-spacing: .14em !important; font-size: 1.18rem !important; }
+.sidebar-brand .wordmark b i { color: #21934a !important; }
+.sidebar-brand .wordmark small { letter-spacing: .28em !important; }
+.sidebar-nav.kz-sidebar { padding: .85rem .7rem !important; }
+.kz-nav-item {
+  border-radius: 10px !important;
+  padding: .68rem .85rem !important;
+  margin: 2px 0 !important;
+  color: #a9b5ac !important;
+  transition: background .18s ease,color .18s ease,transform .18s ease !important;
+}
+.kz-nav-item:hover { background: rgba(255,255,255,.045) !important; color: #fff !important; transform: translateX(2px); }
+.kz-nav-item.active {
+  color: #fff !important;
+  background: linear-gradient(100deg,rgba(22,134,61,.32),rgba(22,134,61,.10)) !important;
+  box-shadow: inset 3px 0 #25a653, inset 0 0 0 1px rgba(42,171,85,.2) !important;
+}
+.kz-nav-item.active i,.kz-nav-item.active svg { color:#65d78a !important; stroke:#65d78a !important; }
+html.theme-dark .main-content { background: transparent !important; }
+.topbar.kz-topbar {
+  min-height: 66px !important;
+  background: rgba(9,14,11,.88) !important;
+  border-bottom: 1px solid rgba(151,180,160,.13) !important;
+  backdrop-filter: blur(16px) !important;
+  padding-inline: clamp(1rem,2vw,2rem) !important;
+}
+.page-content { padding: clamp(1rem,2vw,2rem) !important; max-width: 1800px; margin-inline:auto; }
+/* Consistent cards across every module */
+html.theme-dark .page-content .widget,
+html.theme-dark .page-content .summary-card,
+html.theme-dark .page-content .stat-chip,
+html.theme-dark .page-content .feature-card,
+html.theme-dark .page-content .chart-container,
+html.theme-dark .page-content .kz-card,
+html.theme-dark .page-content .kz-overlay-header,
+html.theme-dark .page-content .table-wrapper {
+  background: linear-gradient(145deg,rgba(17,25,20,.98),rgba(11,17,13,.98)) !important;
+  border: 1px solid rgba(151,180,160,.15) !important;
+  border-radius: 15px !important;
+  box-shadow: 0 8px 26px rgba(0,0,0,.16), inset 0 1px rgba(255,255,255,.018) !important;
+}
+html.theme-dark .page-content .widget:hover,
+html.theme-dark .page-content .summary-card:hover,
+html.theme-dark .page-content .feature-card:hover {
+  border-color: rgba(56,170,88,.3) !important;
+}
+html.theme-dark .page-content h1, html.theme-dark .page-content h2,
+html.theme-dark .page-content h3, html.theme-dark .page-content h4 { color:#f2f7f3; letter-spacing:-.02em; }
+html.theme-dark .page-content p, html.theme-dark .page-content label { color: #aab7ae; }
+/* Data tables */
+html.theme-dark .page-content table { border-collapse: separate !important; border-spacing:0 !important; color:#e8efe9 !important; }
+html.theme-dark .page-content thead th {
+  background:#111a14 !important; color:#9eafa3 !important;
+  border-bottom:1px solid rgba(151,180,160,.18) !important;
+  font-size:.72rem !important; letter-spacing:.055em; text-transform:uppercase;
+}
+html.theme-dark .page-content tbody td { border-bottom:1px solid rgba(151,180,160,.09) !important; }
+html.theme-dark .page-content tbody tr:hover { background:rgba(34,150,70,.07) !important; }
+/* Inputs and selects */
+html.theme-dark .page-content input:not([type=checkbox]):not([type=radio]):not([type=submit]),
+html.theme-dark .page-content select, html.theme-dark .page-content textarea,
+html.theme-dark .kz-input {
+  background:#0a100c !important; color:#eef5ef !important;
+  border:1px solid rgba(151,180,160,.22) !important; border-radius:10px !important;
+}
+html.theme-dark .page-content input:focus, html.theme-dark .page-content select:focus,
+html.theme-dark .page-content textarea:focus {
+  outline:none !important; border-color:#269b4d !important;
+  box-shadow:0 0 0 3px rgba(38,155,77,.14) !important;
+}
+/* Buttons */
+.page-content button:not(.modal-close), .page-content .btn, .page-content .btn-primary,
+.page-content input[type=submit], .page-content a.button {
+  border-radius:10px !important; transition:transform .16s ease,filter .16s ease,box-shadow .16s ease !important;
+}
+.page-content button:hover, .page-content .btn:hover, .page-content input[type=submit]:hover {
+  filter:brightness(1.08); transform:translateY(-1px);
+}
+html.theme-dark .page-content .btn-secondary {
+  background:#111a14 !important; color:#dce8df !important;
+  border:1px solid rgba(151,180,160,.2) !important;
+}
+/* Small status chips and progress */
+html.theme-dark .page-content .badge, html.theme-dark .page-content .status,
+html.theme-dark .page-content .kz-badge { border-radius:999px; }
+html.theme-dark .page-content progress, html.theme-dark .page-content .progress { accent-color:#23a34f; }
+/* Dialogs */
+html.theme-dark .modal-box, html.theme-dark .modal-content {
+  background:#101813 !important; color:#edf5ee !important;
+  border:1px solid rgba(151,180,160,.2) !important; border-radius:18px !important;
+  box-shadow:0 24px 80px rgba(0,0,0,.55) !important;
+}
+/* Dashboard spacing and hierarchy */
+.kz-kpi-grid { gap:1rem !important; }
+.kz-kpi { border-radius:15px !important; }
+.kz-kpi .kz-stat-value { letter-spacing:-.04em !important; }
+.kz-dash-grid { gap:1rem !important; }
+/* Keep the existing light theme usable */
+html.theme-light { --kz-bg:#f4f7f5 !important; --kz-surface:#fff !important; --kz-text:#17221a !important; --kz-text-muted:#607064 !important; }
+html.theme-light .sidebar { background:#fff !important; }
+html.theme-light .topbar.kz-topbar { background:rgba(255,255,255,.92) !important; }
+html.theme-light .page-content .widget, html.theme-light .page-content .summary-card,
+html.theme-light .page-content .chart-container, html.theme-light .page-content .table-wrapper {
+  background:#fff !important; border:1px solid #e2e9e3 !important; border-radius:15px !important;
+  box-shadow:0 6px 22px rgba(20,45,28,.045) !important;
+}
+@media (max-width:900px) {
+  .page-content { padding:1rem .85rem 5.5rem !important; }
+  .sidebar-brand { min-height:76px; }
+  .topbar.kz-topbar { min-height:58px !important; }
+}
+@media (prefers-reduced-motion:reduce) {
+  *,*::before,*::after { animation-duration:.01ms !important; transition-duration:.01ms !important; scroll-behavior:auto !important; }
+}
