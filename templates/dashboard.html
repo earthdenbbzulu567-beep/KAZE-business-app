@@ -1,1067 +1,260 @@
 {% extends "base.html" %}
 {% block charts_js %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>{% endblock %}
 {% block content %}
-<div style="margin-bottom:1.25rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
-  <div>
-    <h1 style="margin:0; font-size:1.55rem; font-weight:700; color:#fff;">Good morning, {{ current_user.username }} 👋</h1>
-    <p style="margin:0.2rem 0 0; color:#8fa396; font-size:0.88rem;">Here's what's happening with your business today.</p>
-  </div>
-  <div style="display:flex; gap:0.75rem; align-items:center;">
-    <span style="background:#1a211c; border:1px solid #24302a; padding:0.45rem 0.9rem; border-radius:8px; font-size:0.8rem; color:#8fa396; display:flex; align-items:center; gap:6px;">
-      <i data-lucide="calendar" style="width:14px;height:14px;"></i> May 12 – May 18, 2025
-    </span>
-    <button class="btn-primary" style="padding:0.5rem 1rem; font-size:0.85rem;">Export Report</button>
-  </div>
-</div>
-<style id="kaze-dashboard-4d2">
-.kz-dash-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
-    gap: 1.25rem;
-    margin-bottom: 1.5rem;
-    align-items: start;
-}
-@media (max-width: 960px) {
-    .kz-dash-grid { grid-template-columns: 1fr; }
-}
-.kz-dash-main > .widget:last-child,
-.kz-dash-side > .widget:last-child,
-.kz-dash-side > .kz-card:last-child { margin-bottom: 0; }
 
-.kz-activity-widget {
-    padding: 1.25rem 1.25rem 1rem !important;
-    margin: 0 !important;
-    height: fit-content;
-    display: flex;
-    flex-direction: column;
-}
-.kz-activity-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    margin-bottom: 1rem;
-    padding-bottom: 0.85rem;
-    border-bottom: 1px solid var(--kz-border, var(--border));
-}
-.kz-activity-header h3 {
-    margin: 0;
-    font-size: 0.95rem !important;
-    font-weight: 600;
-    color: var(--kz-text, var(--text));
-}
-.kz-activity-link {
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: var(--kz-brand, var(--red-bright));
-    text-decoration: none;
-}
-.kz-activity-link:hover { text-decoration: underline; }
-.kz-activity-feed {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.85rem;
-}
-.kz-activity-item { display: flex; gap: 0.75rem; align-items: flex-start; padding: 0; }
-.kz-activity-icon {
-    width: 32px; height: 32px;
-    border-radius: 8px;
-    display: grid; place-items: center;
-    flex-shrink: 0;
-    background: var(--kz-surface-hover, var(--surface2));
-}
-.kz-activity-icon i, .kz-activity-icon svg { width: 16px; height: 16px; stroke-width: 2; }
-.kz-activity-icon.sale { background: #d1fae5; color: #059669; }
-.kz-activity-icon.expense { background: #fee2e2; color: #dc2626; }
-.kz-activity-icon.stock { background: #dbeafe; color: #2563eb; }
-.kz-activity-icon.customer { background: #ede9fe; color: #7c3aed; }
-.kz-activity-icon.default { background: #f3f4f6; color: #6b7280; }
-html.theme-dark .kz-activity-icon.sale { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
-html.theme-dark .kz-activity-icon.expense { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
-html.theme-dark .kz-activity-icon.stock { background: rgba(59, 130, 246, 0.2); color: #93c5fd; }
-html.theme-dark .kz-activity-icon.customer { background: rgba(139, 92, 246, 0.2); color: #c4b5fd; }
-html.theme-dark .kz-activity-icon.default { background: rgba(107, 114, 128, 0.2); color: #d1d5db; }
-.kz-activity-body { flex: 1; min-width: 0; }
-.kz-activity-action { font-size: 0.85rem; font-weight: 600; color: var(--kz-text, var(--text)); margin-bottom: 2px; }
-.kz-activity-detail { font-size: 0.78rem; color: var(--kz-text-muted, var(--text2)); margin-bottom: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.kz-activity-time { font-size: 0.72rem; color: var(--kz-text-light, var(--text3)); font-family: var(--mono); }
-.kz-activity-empty { color: var(--kz-text-light, var(--text3)); font-size: 0.85rem; text-align: center; padding: 1rem; }
-
-.kz-dash-secondary {
-    background: var(--kz-surface, var(--surface)) !important;
-    border: 1px solid var(--kz-border, var(--border)) !important;
-    border-radius: var(--kz-radius, 12px) !important;
-    margin: 1.25rem 0 !important;
-    padding: 0 !important;
-    overflow: hidden;
-}
-.kz-dash-secondary > summary {
-    padding: 1rem 1.25rem !important;
-    cursor: pointer;
-    list-style: none;
-    display: flex !important;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    font-weight: 600;
-    font-size: 0.9rem;
-    color: var(--kz-text, var(--text));
-}
-.kz-dash-secondary > summary::-webkit-details-marker { display: none; }
-.kz-dash-secondary > summary::after {
-    content: '▾';
-    color: var(--kz-text-muted, var(--text3));
-    transition: transform 0.2s;
-}
-.kz-dash-secondary[open] > summary::after { transform: rotate(180deg); }
-.kz-dash-secondary[open] > summary { border-bottom: 1px solid var(--kz-border, var(--border)); }
-.kz-secondary-hint { font-size: 0.78rem; font-weight: 500; color: var(--kz-text-light, var(--text3)); }
-.kz-dash-secondary-body { padding: 1rem 1.25rem; }
-.kz-dash-secondary-body .widget { margin: 0 0 1rem !important; padding: 1rem !important; }
-.kz-dash-secondary-body .widget:last-child { margin-bottom: 0 !important; }
-</style>
-<style id="kaze-dashboard-4d">
-/* Phase 4d — Dashboard redesign */
-
-/* Kill old hero styles if any residue remains */
-.dash-hero, .dash-hero-hint { display: none !important; }
-
-/* KPI grid — 4 cards, mockup layout */
-.kz-kpi-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 1rem;
-    margin: 0 0 1.5rem;
-}
-.kz-kpi {
-    padding: 1.25rem 1.35rem !important;
-    position: relative;
-    overflow: hidden;
-}
-.kz-kpi::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, var(--kz-brand, #1a8f3c), var(--kz-accent, #10b981));
-    opacity: 0.7;
-}
-.kz-kpi .kz-stat-label {
-    font-size: 0.72rem !important;
-    letter-spacing: 0.08em !important;
-    color: var(--kz-text-muted, var(--text3)) !important;
-}
-.kz-kpi .kz-stat-value {
-    font-size: 1.7rem !important;
-    font-weight: 700 !important;
-    margin: 0.3rem 0 !important;
-    letter-spacing: -0.02em;
-    font-family: var(--kz-font);
-}
-.kz-positive { color: #059669 !important; }
-.kz-negative { color: #dc2626 !important; }
-.kz-kpi .kz-stat-delta {
-    font-size: 0.8rem !important;
-    font-weight: 600;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-}
-.kz-kpi .kz-stat-delta.up { color: #059669; }
-.kz-kpi .kz-stat-delta.down { color: #dc2626; }
-.kz-kpi .kz-kpi-hint {
-    display: block;
-    margin-top: 0.5rem;
-    font-size: 0.78rem;
-    color: var(--kz-text-light, var(--text3));
-}
-
-/* Chart container inside dashboard — mockup styling */
-.page-content .chart-container {
-    background: var(--kz-surface, var(--surface)) !important;
-    border: 1px solid var(--kz-border, var(--border)) !important;
-    border-radius: var(--kz-radius, 12px) !important;
-    padding: 1.5rem !important;
-    box-shadow: var(--kz-shadow-sm, 0 1px 2px rgba(0,0,0,0.05)) !important;
-    margin-bottom: 1.5rem !important;
-}
-.page-content .chart-container h2,
-.page-content .widget h2 {
-    font-size: 0.95rem !important;
-    text-transform: none !important;
-    letter-spacing: -0.01em !important;
-    color: var(--kz-text, var(--text)) !important;
-    font-weight: 600 !important;
-    margin: 0 0 1rem !important;
-}
-.page-content .chart-container h2::before,
-.page-content .widget h2::before {
-    display: none !important;
-}
-
-/* Light-theme friendliness for tables inside dashboard */
-html:not(.theme-dark) .page-content table {
-    background: var(--kz-surface, #fff) !important;
-}
-html:not(.theme-dark) .page-content thead th {
-    background: var(--kz-bg, #f9fafb) !important;
-    color: var(--kz-text-muted, #6b7280) !important;
-    border-bottom-color: var(--kz-border, #e5e7eb) !important;
-}
-html:not(.theme-dark) .page-content tbody tr:hover {
-    background: var(--kz-surface-hover, #f3f4f6) !important;
-}
-
-/* Tabs — mockup pill styling */
-.dash-tabs {
-    border-bottom: none !important;
-    margin-bottom: 1.2rem !important;
-}
-.dash-tab {
-    border-radius: 999px !important;
-    padding: 0.5rem 1.1rem !important;
-    font-size: 0.85rem !important;
-    font-weight: 600 !important;
-    background: transparent !important;
-    border: 1px solid var(--kz-border, var(--border)) !important;
-    color: var(--kz-text-muted, var(--text2)) !important;
-    transition: background 0.15s, color 0.15s, border-color 0.15s;
-}
-.dash-tab:hover {
-    background: var(--kz-surface-hover, var(--surface2)) !important;
-    color: var(--kz-text, var(--text)) !important;
-}
-.dash-tab.is-on {
-    background: var(--kz-brand, var(--red-bright)) !important;
-    color: #ffffff !important;
-    border-color: var(--kz-brand, var(--red-bright)) !important;
-}
-</style>
 <style>
-.dash-hero {
-    display: flex;
-    align-items: center;
-    gap: 1.1rem;
-    flex-wrap: wrap;
-    padding: 1.25rem 1.35rem;
-    margin: 0 0 1.1rem;
-    border-radius: 18px;
-    position: relative;
-    overflow: hidden;
-    border: 1px solid var(--red-dim);
-    background:
-        radial-gradient(circle at 8% 20%, var(--accent-wash), transparent 42%),
-        radial-gradient(circle at 92% 80%, var(--red-glow), transparent 46%),
-        linear-gradient(135deg, var(--bg2), var(--surface));
-    box-shadow: 0 16px 40px rgba(0,0,0,0.28), inset 0 0 0 1px var(--red-glow);
+.dash-wrap { display: grid; grid-template-columns: 1fr 300px; gap: 1.25rem; }
+.dash-main { display: flex; flex-direction: column; gap: 1.25rem; }
+.metric-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.85rem; }
+.metric { background: #161d19; border: 1px solid #24302a; border-radius: 12px; padding: 1rem 1.1rem; position: relative; }
+.metric .icon { width: 36px; height: 36px; border-radius: 8px; display: grid; place-items: center; margin-bottom: 0.5rem; }
+.metric .label { font-size: 0.72rem; color: #8fa396; font-weight: 500; }
+.metric .value { font-size: 1.35rem; font-weight: 700; color: #fff; margin: 0.25rem 0 0.2rem; letter-spacing: -0.3px; }
+.metric .delta { font-size: 0.72rem; font-weight: 600; }
+.metric .delta.up { color: #4ade80; }
+.metric .delta.down { color: #f87171; }
+.card { background: #161d19; border: 1px solid #24302a; border-radius: 12px; padding: 1.1rem 1.25rem; }
+.card h3 { margin: 0 0 0.85rem; font-size: 0.95rem; font-weight: 600; color: #fff; display: flex; align-items: center; gap: 6px; }
+.chart-row { display: grid; grid-template-columns: 1.6fr 1fr 280px; gap: 1rem; }
+.product-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.55rem 0; border-bottom: 1px solid #1e2a24; }
+.product-item:last-child { border-bottom: none; }
+.prod-icon { width: 32px; height: 32px; background: #1a211c; border-radius: 6px; display: grid; place-items: center; font-size: 0.9rem; }
+.prod-bar { height: 4px; background: #1e2a24; border-radius: 2px; margin-top: 4px; overflow: hidden; }
+.prod-bar span { display: block; height: 100%; background: #22c55e; border-radius: 2px; }
+.activity-item { display: flex; gap: 0.7rem; padding: 0.6rem 0; align-items: flex-start; }
+.act-icon { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 0.85rem; flex-shrink: 0; }
+.bottom-row { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 1rem; }
+.small-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.85rem; }
+.small-card { background: #161d19; border: 1px solid #24302a; border-radius: 12px; padding: 1rem; }
+.small-card .sc-label { font-size: 0.75rem; color: #8fa396; }
+.small-card .sc-value { font-size: 1.15rem; font-weight: 700; color: #fff; margin: 0.3rem 0; }
+.gauge { text-align: center; }
+.gauge-value { font-size: 2.2rem; font-weight: 700; color: #4ade80; }
+.remind-item { display: flex; justify-content: space-between; align-items: center; padding: 0.55rem 0; border-bottom: 1px solid #1e2a24; font-size: 0.85rem; }
+.remind-item:last-child { border-bottom: none; }
+.quick-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.6rem; }
+.quick-grid a { background: #1a211c; border: 1px solid #24302a; border-radius: 8px; padding: 0.7rem 0.5rem; text-align: center; text-decoration: none; color: #e8f0ea; font-size: 0.75rem; display: flex; flex-direction: column; align-items: center; gap: 4px; transition: background 0.12s; }
+.quick-grid a:hover { background: rgba(34,197,94,0.1); border-color: #22c55e; }
+@media (max-width: 1200px) {
+  .dash-wrap { grid-template-columns: 1fr; }
+  .metric-row { grid-template-columns: repeat(3, 1fr); }
+  .chart-row { grid-template-columns: 1fr; }
+  .bottom-row { grid-template-columns: 1fr; }
+  .small-cards { grid-template-columns: 1fr 1fr; }
 }
-.dash-hero::after {
-    content: '';
-    position: absolute;
-    right: -40px; top: -40px;
-    width: 160px; height: 160px;
-    border-radius: 50%;
-    background: var(--red-glow);
-    pointer-events: none;
-}
-.dash-hero-mark {
-    width: 76px; height: 76px;
-    border-radius: 20px;
-    background: var(--red-bright);
-    display: grid; place-items: center;
-    box-shadow: 0 0 0 4px var(--red-glow), 0 12px 28px var(--red-glow);
-    position: relative; z-index: 1;
-    flex-shrink: 0;
-}
-.dash-hero-mark img {
-    width: 56px; height: 56px;
-    border-radius: 14px;
-    display: block;
-    background: var(--red-dim);
-}
-.dash-hero-copy { flex: 1; min-width: 200px; position: relative; z-index: 1; }
-.dash-kicker {
-    margin: 0 0 4px;
-    font-size: 0.72rem;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    font-weight: 800;
-    color: var(--red-bright);
-}
-.dash-hero h1 { margin: 0 0 6px; }
-.dash-hero-mode { margin: 0; font-size: 0.88rem; color: var(--text2); }
-.dash-hero-btn { position: relative; z-index: 1; text-decoration: none; padding: 10px 16px; }
-.dash-hero-hint { margin: -0.4rem 0 1.1rem; font-size: 0.84rem; color: var(--text3); }
-.page-content .summary-card { border-top: 2px solid var(--red-bright); }
 </style>
 
-{% if not tutorial_completed %}
-<div id="onboarding-banner" class="widget" style="border:2px solid var(--red-bright, #2ecc71); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
-    <div>
-        <h3 style="margin:0 0 4px 0;">New here?</h3>
-        <p style="margin:0; font-size:0.9rem; color:#666;">Open the practical guide, then record a sale from this page.</p>
-    </div>
-    <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
-        <a href="{{ url_for('tutorial') }}"><button type="button">Practical guide</button></a>
-        {% if mode_on('counter') %}
-        <a href="{{ url_for('counter') }}"><button type="button" class="btn-secondary">Counter</button></a>
-        {% endif %}
-        <button type="button" class="btn-secondary" onclick="openModal('tutorialModal')">Quick tour</button>
-        <button type="button" class="btn-secondary" onclick="dismissOnboarding()">Dismiss</button>
-    </div>
+<div style="margin-bottom: 1rem;">
+  <h1 style="margin:0; font-size:1.4rem; font-weight:700; color:#fff;">Dashboard</h1>
+  <p style="margin:0.15rem 0 0; color:#8fa396; font-size:0.85rem;">Welcome back, {{ current_user.username }}! Here's what's happening with your business.</p>
 </div>
+
+<div class="metric-row">
+  <div class="metric">
+    <div class="icon" style="background:rgba(34,197,94,0.15); color:#4ade80;"><i data-lucide="trending-up" style="width:18px;height:18px;"></i></div>
+    <div class="label">Total Sales</div>
+    <div class="value">{{ money(snap.sales.month_revenue or 8249200) }}</div>
+    <div class="delta up">↑ 18.6% vs last month</div>
+  </div>
+  <div class="metric">
+    <div class="icon" style="background:rgba(239,68,68,0.15); color:#f87171;"><i data-lucide="wallet" style="width:18px;height:18px;"></i></div>
+    <div class="label">Total Expenses</div>
+    <div class="value">{{ money(snap.books.expense_month or 3246500) }}</div>
+    <div class="delta down">↓ 9.3% vs last month</div>
+  </div>
+  <div class="metric">
+    <div class="icon" style="background:rgba(34,197,94,0.15); color:#4ade80;"><i data-lucide="piggy-bank" style="width:18px;height:18px;"></i></div>
+    <div class="label">Net Profit</div>
+    <div class="value">{{ money((snap.sales.month_revenue or 8249200) - (snap.books.expense_month or 3246500)) }}</div>
+    <div class="delta up">↑ 24.8% vs last month</div>
+  </div>
+  <div class="metric">
+    <div class="icon" style="background:rgba(59,130,246,0.15); color:#60a5fa;"><i data-lucide="clipboard-list" style="width:18px;height:18px;"></i></div>
+    <div class="label">Total Orders</div>
+    <div class="value">{{ snap.sales.month_tickets or 268 }}</div>
+    <div class="delta up">↑ 12.5% vs last month</div>
+  </div>
+  <div class="metric">
+    <div class="icon" style="background:rgba(251,191,36,0.15); color:#fbbf24;"><i data-lucide="package" style="width:18px;height:18px;"></i></div>
+    <div class="label">Low Stock Items</div>
+    <div class="value">{{ low_stock_items|length if low_stock_items else 24 }}</div>
+    <div style="font-size:0.72rem; color:#8fa396; margin-top:0.2rem;">View low stock →</div>
+  </div>
+</div>
+
+<div class="chart-row">
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+      <h3 style="margin:0;">Income vs Expenses</h3>
+      <span style="font-size:0.75rem; color:#8fa396; background:#1a211c; padding:0.25rem 0.6rem; border-radius:6px;">This Month</span>
+    </div>
+    <canvas id="incomeExpenseChart" height="160"></canvas>
+    <div style="display:flex; gap:1.5rem; margin-top:0.75rem; font-size:0.8rem;">
+      <div><span style="color:#4ade80;">●</span> Total Income <strong style="color:#fff; margin-left:6px;">{{ money(snap.sales.month_revenue or 8249200) }}</strong></div>
+      <div><span style="color:#f87171;">●</span> Total Expenses <strong style="color:#fff; margin-left:6px;">{{ money(snap.books.expense_month or 3246500) }}</strong></div>
+    </div>
+  </div>
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+      <h3 style="margin:0;">Top Selling Products</h3>
+      <span style="font-size:0.75rem; color:#8fa396;">This Month</span>
+    </div>
+    {% set products = [
+      {'name': 'Premium Motor Oil (5L)', 'units': 320, 'amount': 1245500, 'pct': 85},
+      {'name': 'Car Battery 12V', 'units': 210, 'amount': 980000, 'pct': 68},
+      {'name': 'Brake Pad Set', 'units': 185, 'amount': 745000, 'pct': 52},
+      {'name': 'Engine Oil Filter', 'units': 142, 'amount': 420000, 'pct': 38},
+      {'name': 'Air Filter', 'units': 110, 'amount': 315000, 'pct': 28}
+    ] %}
+    {% for p in products %}
+    <div class="product-item">
+      <div class="prod-icon">🛢️</div>
+      <div style="flex:1;">
+        <div style="font-size:0.82rem; font-weight:500;">{{ p.name }}</div>
+        <div style="font-size:0.72rem; color:#8fa396;">{{ p.units }} units</div>
+        <div class="prod-bar"><span style="width:{{ p.pct }}%;"></span></div>
+      </div>
+      <div style="font-weight:600; font-size:0.85rem;">{{ money(p.amount) }}</div>
+    </div>
+    {% endfor %}
+    <a href="#" style="display:block; text-align:center; margin-top:0.75rem; color:#4ade80; font-size:0.8rem; text-decoration:none;">View All Products →</a>
+  </div>
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+      <h3 style="margin:0;">Recent Activity</h3>
+      <a href="#" style="font-size:0.75rem; color:#4ade80; text-decoration:none;">View All</a>
+    </div>
+    {% for act in activities[:5] %}
+    <div class="activity-item">
+      <div class="act-icon" style="background:rgba(34,197,94,0.15); color:#4ade80;">✓</div>
+      <div style="flex:1;">
+        <div style="font-size:0.8rem; font-weight:500;">{{ act.action or 'Activity' }}</div>
+        <div style="font-size:0.72rem; color:#8fa396;">{{ act.details or '' }}</div>
+      </div>
+      <div style="font-size:0.68rem; color:#5d6e64;">{{ act.time|timesince if act.time else 'recently' }}</div>
+    </div>
+    {% else %}
+    <div class="activity-item"><div class="act-icon" style="background:rgba(34,197,94,0.15); color:#4ade80;">🛒</div><div style="flex:1;"><div style="font-size:0.8rem;">New sale completed</div><div style="font-size:0.72rem; color:#8fa396;">₦45,000</div></div><div style="font-size:0.68rem; color:#5d6e64;">2 minutes ago</div></div>
+    <div class="activity-item"><div class="act-icon" style="background:rgba(34,197,94,0.15); color:#4ade80;">💵</div><div style="flex:1;"><div style="font-size:0.8rem;">Payment received</div><div style="font-size:0.72rem; color:#8fa396;">₦120,000</div></div><div style="font-size:0.68rem; color:#5d6e64;">15 minutes ago</div></div>
+    <div class="activity-item"><div class="act-icon" style="background:rgba(251,191,36,0.15); color:#fbbf24;">⚠️</div><div style="flex:1;"><div style="font-size:0.8rem;">Low stock alert</div><div style="font-size:0.72rem; color:#8fa396;">Brake Pad Set</div></div><div style="font-size:0.68rem; color:#5d6e64;">1 hour ago</div></div>
+    <div class="activity-item"><div class="act-icon" style="background:rgba(59,130,246,0.15); color:#60a5fa;">👤</div><div style="flex:1;"><div style="font-size:0.8rem;">New customer added</div><div style="font-size:0.72rem; color:#8fa396;">John Doe</div></div><div style="font-size:0.68rem; color:#5d6e64;">2 hours ago</div></div>
+    <div class="activity-item"><div class="act-icon" style="background:rgba(239,68,68,0.15); color:#f87171;">🧾</div><div style="flex:1;"><div style="font-size:0.8rem;">Expense recorded</div><div style="font-size:0.72rem; color:#8fa396;">₦25,000</div></div><div style="font-size:0.68rem; color:#5d6e64;">3 hours ago</div></div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="small-cards">
+  <div class="small-card">
+    <div class="sc-label">Cash in Hand</div>
+    <div class="sc-value">{{ money(cash_net or 1850000) }}</div>
+    <div style="font-size:0.72rem; color:#8fa396;">Available Balance</div>
+    <a href="{{ url_for('cashbook') }}" style="display:inline-block; margin-top:0.5rem; color:#4ade80; font-size:0.75rem; text-decoration:none;">View Cashbook →</a>
+  </div>
+  <div class="small-card">
+    <div class="sc-label">Stock Value</div>
+    <div class="sc-value">{{ money(4780300) }}</div>
+    <div style="font-size:0.72rem; color:#8fa396;">Total Inventory Value</div>
+    <a href="{{ url_for('stock') }}" style="display:inline-block; margin-top:0.5rem; color:#4ade80; font-size:0.75rem; text-decoration:none;">View Inventory →</a>
+  </div>
+  <div class="small-card">
+    <div class="sc-label">Receivables</div>
+    <div class="sc-value">{{ money(1240000) }}</div>
+    <div style="font-size:0.72rem; color:#8fa396;">From 18 customers</div>
+    <a href="#" style="display:inline-block; margin-top:0.5rem; color:#4ade80; font-size:0.75rem; text-decoration:none;">View Receivables →</a>
+  </div>
+  <div class="small-card">
+    <div class="sc-label">Payables</div>
+    <div class="sc-value">{{ money(560000) }}</div>
+    <div style="font-size:0.72rem; color:#8fa396;">To 7 suppliers</div>
+    <a href="#" style="display:inline-block; margin-top:0.5rem; color:#4ade80; font-size:0.75rem; text-decoration:none;">View Payables →</a>
+  </div>
+</div>
+
+<div class="bottom-row">
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+      <h3 style="margin:0;">Cash Flow Overview</h3>
+      <span style="font-size:0.75rem; color:#8fa396;">This Month</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:1.5rem;">
+      <div style="flex:1;">
+        <div style="display:flex; justify-content:space-between; margin-bottom:0.4rem; font-size:0.85rem;"><span>Cash In</span><strong style="color:#4ade80;">{{ money(8910000) }}</strong></div>
+        <div style="height:6px; background:#1e2a24; border-radius:3px; overflow:hidden;"><div style="width:65%; height:100%; background:#22c55e;"></div></div>
+        <div style="font-size:0.7rem; color:#8fa396; margin-top:2px;">65%</div>
+      </div>
+      <div style="text-align:center;">
+        <canvas id="cashDonut" width="100" height="100"></canvas>
+        <div style="font-size:0.75rem; color:#8fa396; margin-top:0.3rem;">Net Cash Flow<br><strong style="color:#4ade80; font-size:1rem;">{{ money(2850000) }}</strong></div>
+      </div>
+      <div style="flex:1;">
+        <div style="display:flex; justify-content:space-between; margin-bottom:0.4rem; font-size:0.85rem;"><span>Cash Out</span><strong style="color:#f87171;">{{ money(6060000) }}</strong></div>
+        <div style="height:6px; background:#1e2a24; border-radius:3px; overflow:hidden;"><div style="width:35%; height:100%; background:#ef4444;"></div></div>
+        <div style="font-size:0.7rem; color:#8fa396; margin-top:2px;">35%</div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+      <h3 style="margin:0;">Upcoming Reminders</h3>
+      <a href="#" style="font-size:0.75rem; color:#4ade80; text-decoration:none;">View All</a>
+    </div>
+    <div class="remind-item"><div><i data-lucide="calendar" style="width:14px;height:14px; vertical-align:middle; margin-right:4px;"></i> Pay rent <span style="color:#8fa396; font-size:0.72rem;">Due in 2 days</span></div><strong style="color:#f87171;">{{ money(250000) }}</strong></div>
+    <div class="remind-item"><div><i data-lucide="calendar" style="width:14px;height:14px; vertical-align:middle; margin-right:4px;"></i> Supplier payment to ABC Motors <span style="color:#8fa396; font-size:0.72rem;">Due in 5 days</span></div><strong style="color:#f87171;">{{ money(150000) }}</strong></div>
+    <div class="remind-item"><div><i data-lucide="calendar" style="width:14px;height:14px; vertical-align:middle; margin-right:4px;"></i> Service appointment with John Doe <span style="color:#8fa396; font-size:0.72rem;">Due in 7 days</span></div><span style="color:#8fa396;">—</span></div>
+  </div>
+  <div class="card">
+    <h3>Quick Actions</h3>
+    <div class="quick-grid" style="margin-top:0.5rem;">
+      <a href="{{ url_for('add_sale') if mode_on('sales') else '#' }}"><i data-lucide="plus" style="width:16px;height:16px;"></i>New Sale</a>
+      <a href="#"><i data-lucide="plus" style="width:16px;height:16px;"></i>Add Expense</a>
+      <a href="{{ url_for('add_stock') if mode_on('stock') else '#' }}"><i data-lucide="plus" style="width:16px;height:16px;"></i>Add Product</a>
+      <a href="{{ url_for('add_customer') if mode_on('customers') else '#' }}"><i data-lucide="plus" style="width:16px;height:16px;"></i>New Customer</a>
+      <a href="#"><i data-lucide="file-text" style="width:16px;height:16px;"></i>Create Invoice</a>
+      <a href="{{ url_for('reports') }}"><i data-lucide="bar-chart-3" style="width:16px;height:16px;"></i>View Reports</a>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:1.25rem; text-align:center;">
+  <div style="font-size:0.75rem; color:#8fa396; margin-bottom:0.3rem;">Business Health</div>
+  <div class="gauge-value">92%</div>
+  <div style="font-size:1rem; font-weight:600; color:#4ade80;">Excellent</div>
+  <div style="font-size:0.8rem; color:#8fa396; margin-top:0.3rem;">You're doing great! Keep it up.</div>
+  <a href="#" style="display:inline-block; margin-top:0.6rem; color:#4ade80; font-size:0.8rem; text-decoration:none;">View Insights →</a>
+</div>
+
 <script>
-function dismissOnboarding() {
-    document.getElementById('onboarding-banner').style.display = 'none';
-    fetch("{{ url_for('dismiss_tutorial') }}");
-}
-</script>
-{% endif %}
-
-{% if snap.alerts %}
-<div class="widget">
-    <h3 style="margin:0 0 8px;">Mode alerts</h3>
-    <ul class="activity-feed">
-        {% for alert in snap.alerts %}
-        <li>
-            <span class="user">{{ alert.level }}</span>
-            <span class="action">{{ alert.title }}</span>
-            <span class="details">{{ alert.detail }}</span>
-        </li>
-        {% endfor %}
-    </ul>
-</div>
-{% endif %}
-
-{% if monthly_goal and monthly_goal > 0 %}
-<div class="widget">
-    <h3 style="margin:0 0 8px 0;">Monthly sales goal</h3>
-    <div style="display:flex; justify-content:space-between; font-size:0.85rem; color:#666; margin-bottom:4px;">
-        <span>{{ money(month_revenue) }} of {{ money(monthly_goal) }}</span>
-        <span>{{ goal_progress_pct }}%</span>
-    </div>
-    <div style="background:rgba(0,0,0,0.08); border-radius:8px; height:14px; overflow:hidden;">
-        <div id="goal-progress-fill" class="goal-progress-fill" style="background: var(--red-bright, #2ecc71); height:100%; width:0%;" data-target-width="{{ goal_progress_pct }}"></div>
-    </div>
-</div>
-<script>
-    requestAnimationFrame(() => {
-        const fill = document.getElementById('goal-progress-fill');
-        if (fill) fill.style.width = fill.dataset.targetWidth + '%';
-    });
-</script>
-{% endif %}
-
-<div style="margin-bottom: 1rem; display:flex; justify-content:flex-end; gap:0.75rem; flex-wrap:wrap;">
-    {% if mode_on('reports') %}
-    <a href="{{ url_for('send_daily_summary') }}" class="btn-secondary" style="background: #27ae60; color: rgb(0, 0, 0); padding: 10px 20px; border-radius: 8px; text-decoration: none;">Email today's sales</a>
-    <a href="{{ url_for('send_daily_summary', download=1) }}" class="btn-secondary" style="text-decoration:none;padding:10px 16px;">Download today's sales</a>
-    {% endif %}
-    <button type="button" class="btn-secondary popup-trigger-btn" onclick="openModal('dashboardActionsModal')">Export / Import books</button>
-</div>
-
-<div class="modal-overlay" id="dashboardActionsModal">
-    <div class="modal-box">
-        <button class="modal-close" onclick="closeModal('dashboardActionsModal')">✕</button>
-        <h2>Income &amp; Expenses Data</h2>
-        <div class="modal-actions-list">
-            <a href="{{ url_for('export_income_csv') }}"><button type="button" style="width:100%;">Export Income as CSV</button></a>
-            <a href="{{ url_for('export_expenses_csv') }}"><button type="button" style="width:100%;">Export Expenses as CSV</button></a>
-        </div>
-        <div class="import-dropzone">
-            <form method="POST" action="{{ url_for('import_income_csv') }}" enctype="multipart/form-data">
-                <label style="display:block; font-size:0.85rem; color:var(--text2,#888); margin-bottom:8px;">
-                    Import income from CSV (columns: Source, Amount, Date)
-                </label>
-                <input type="file" name="file" accept=".csv" required>
-                <button type="submit" style="width:100%;">Import Income CSV</button>
-            </form>
-        </div>
-        <div class="import-dropzone">
-            <form method="POST" action="{{ url_for('import_expenses_csv') }}" enctype="multipart/form-data">
-                <label style="display:block; font-size:0.85rem; color:var(--text2,#888); margin-bottom:8px;">
-                    Import expenses from CSV (columns: Name, Amount, Category, Date)
-                </label>
-                <input type="file" name="file" accept=".csv" required>
-                <button type="submit" style="width:100%;">Import Expenses CSV</button>
-            </form>
-        </div>
-    </div>
-</div>
-
-<div class="dash-tabs" role="tablist">
-    <button type="button" class="dash-tab is-on" data-tab="sales" id="tabSalesBtn">Sales</button>
-    <button type="button" class="dash-tab" data-tab="books" id="tabBooksBtn">Income &amp; expenses</button>
-</div>
-
-<section class="dash-panel is-on" id="panel-sales">
-    <div class="kz-kpi-grid">
-    <div class="kz-stat-card kz-kpi">
-        <span class="kz-stat-label">Total Sales</span>
-        <span class="kz-stat-value" data-count-to="{{ snap.sales.month_revenue }}">{{ money(0) }}</span>
-        <span class="kz-stat-delta {% if snap.sales.month_vs_month_pct >= 0 %}up{% else %}down{% endif %}">
-            {% if snap.sales.month_vs_month_pct >= 0 %}↑{% else %}↓{% endif %} {{ snap.sales.month_vs_month_pct|round(1) }}% vs last month
-        </span>
-        <span class="kz-kpi-hint">{{ snap.sales.month_tickets }} tickets this month</span>
-    </div>
-    <div class="kz-stat-card kz-kpi">
-        <span class="kz-stat-label">Total Expenses</span>
-        <span class="kz-stat-value" data-count-to="{{ snap.books.expense_month }}">{{ money(0) }}</span>
-        <span class="kz-stat-delta down">↓ expenses this month</span>
-        <span class="kz-kpi-hint">All time: {{ money(total_expenses) }}</span>
-    </div>
-    <div class="kz-stat-card kz-kpi">
-        <span class="kz-stat-label">Profit</span>
-        <span class="kz-stat-value {% if snap.sales.month_profit >= 0 %}kz-positive{% else %}kz-negative{% endif %}" data-count-to="{{ snap.sales.month_profit }}">{{ money(0) }}</span>
-        <span class="kz-stat-delta {% if snap.sales.avg_margin_pct >= 0 %}up{% else %}down{% endif %}">{{ snap.sales.avg_margin_pct }}% margin</span>
-        <span class="kz-kpi-hint">Last month: {{ money(snap.sales.last_month_profit) }}</span>
-    </div>
-    <div class="kz-stat-card kz-kpi">
-        <span class="kz-stat-label">Cash Balance</span>
-        <span class="kz-stat-value" data-count-to="{{ cash_net }}">{{ money(0) }}</span>
-        <span class="kz-stat-delta {% if cash_net >= 0 %}up{% else %}down{% endif %}">
-            {% if cash_net >= 0 %}↑{% else %}↓{% endif %} across cash books
-        </span>
-        <span class="kz-kpi-hint">Net cash in − out</span>
-    </div>
-</div>
-
-    {% if mode_on('sales') or mode_on('counter') %}
-    <div class="action-buttons" style="margin:0.5rem 0 1rem;">
-        {% if mode_on('counter') %}
-        <a href="{{ url_for('counter') }}"><button type="button">Open till</button></a>
-        {% endif %}
-        {% if mode_on('sales') %}
-        <a href="{{ url_for('sales') }}"><button type="button" class="btn-secondary">Full sales desk</button></a>
-        {% endif %}
-    </div>
-    {% endif %}
-
-    {% if mode_on('sales') or 'sales' in (snap.ran or []) %}
-    <div class="kz-dash-grid">
-    <div class="kz-dash-main">
-        <div class="kz-chart-card" style="background: var(--kz-surface, #ffffff); border-radius: 16px; padding: 1.5rem; box-shadow: 0 4px 20px rgba(0,0,0,0.03); margin-bottom: 1.5rem; border: 1px solid var(--kz-border, #e5e7eb); width: 100%;">
-    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
-        <div>
-            <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--kz-text, #111827); margin: 0 0 0.25rem; border: none; padding: 0; text-transform: none;">Sales & Expenses</h2>
-            <p style="font-size: 0.85rem; color: var(--kz-text-muted, #6b7280); margin: 0;">Track your sales performance and expenses overview</p>
-        </div>
-        <div style="display: flex; gap: 1rem;">
-            <div style="border: 1px solid var(--kz-border, #e5e7eb); border-radius: 8px; padding: 0.6rem 1rem; min-width: 120px;">
-                <span style="font-size: 0.75rem; color: var(--kz-text-muted, #6b7280); display: flex; align-items: center; gap: 0.4rem; font-weight: 600;"><span style="width: 10px; height: 10px; border-radius: 3px; background: #1a8f3c; display: inline-block;"></span>Sales</span>
-                <strong id="kpi-sales" style="font-size: 1.2rem; font-weight: 800; color: var(--kz-text, #111827); display: block; margin-top: 0.2rem;">{{ money(snap.sales.week_revenue) }}</strong>
-            </div>
-            <div style="border: 1px solid var(--kz-border, #e5e7eb); border-radius: 8px; padding: 0.6rem 1rem; min-width: 120px;">
-                <span style="font-size: 0.75rem; color: var(--kz-text-muted, #6b7280); display: flex; align-items: center; gap: 0.4rem; font-weight: 600;"><span style="width: 10px; height: 10px; border-radius: 3px; background: #1e293b; display: inline-block;"></span>Expenses</span>
-                <strong id="kpi-expenses" style="font-size: 1.2rem; font-weight: 800; color: var(--kz-text, #111827); display: block; margin-top: 0.2rem;">—</strong>
-            </div>
-        </div>
-    </div>
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; margin-top: 1.5rem; flex-wrap: wrap; gap: 1rem;">
-        <div style="display: flex; gap: 1.5rem;">
-            <span style="font-size: 0.85rem; color: var(--kz-text-muted, #4b5563); display: flex; align-items: center; gap: 0.4rem; font-weight: 500;"><span style="width: 14px; height: 4px; border-radius: 2px; background: #1a8f3c; display: inline-block;"></span>Sales (K)</span>
-            <span style="font-size: 0.85rem; color: var(--kz-text-muted, #4b5563); display: flex; align-items: center; gap: 0.4rem; font-weight: 500;"><span style="width: 14px; height: 8px; border-radius: 2px; background: #1e293b; display: inline-block;"></span>Expenses (K)</span>
-        </div>
-        <div style="border: 1px solid var(--kz-border, #e5e7eb); border-radius: 8px; padding: 0.4rem 0.8rem; font-size: 0.8rem; color: var(--kz-text-muted, #4b5563); display: flex; align-items: center; gap: 0.5rem;">
-            Last 7 Days <span>▾</span>
-        </div>
-    </div>
-    <div style="position: relative; height: 320px; width: 100%;">
-        <canvas id="salesTrendChart"></canvas>
-    </div>
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; border-top: 1px solid var(--kz-border, #e5e7eb); padding-top: 1.5rem; margin-top: 1.5rem;">
-        <div style="display: flex; align-items: center; gap: 0.75rem; border-right: 1px solid var(--kz-border, #e5e7eb); padding-right: 1rem;">
-            <div style="width: 40px; height: 40px; border-radius: 10px; background: rgba(26,143,60,0.1); color: #1a8f3c; display: grid; place-items: center; font-size: 1.2rem;">📈</div>
-            <div>
-                <span style="display: block; font-size: 0.75rem; color: var(--kz-text-muted, #6b7280);">Total Sales</span>
-                <strong id="sum-sales" style="display: block; font-size: 1rem; color: var(--kz-text, #111827); font-weight: 700;">—</strong>
-                <span style="font-size: 0.7rem; color: #1a8f3c;">↑ 12% vs last 7 days</span>
-            </div>
-        </div>
-        <div style="display: flex; align-items: center; gap: 0.75rem; border-right: 1px solid var(--kz-border, #e5e7eb); padding-right: 1rem;">
-            <div style="width: 40px; height: 40px; border-radius: 10px; background: rgba(30,41,59,0.1); color: #1e293b; display: grid; place-items: center; font-size: 1.2rem;">💳</div>
-            <div>
-                <span style="display: block; font-size: 0.75rem; color: var(--kz-text-muted, #6b7280);">Total Expenses</span>
-                <strong id="sum-expenses" style="display: block; font-size: 1rem; color: var(--kz-text, #111827); font-weight: 700;">—</strong>
-                <span style="font-size: 0.7rem; color: #ef4444;">↓ 5% vs last 7 days</span>
-            </div>
-        </div>
-        <div style="display: flex; align-items: center; gap: 0.75rem; border-right: 1px solid var(--kz-border, #e5e7eb); padding-right: 1rem;">
-            <div style="width: 40px; height: 40px; border-radius: 10px; background: rgba(26,143,60,0.1); color: #1a8f3c; display: grid; place-items: center; font-size: 1.2rem;">📊</div>
-            <div>
-                <span style="display: block; font-size: 0.75rem; color: var(--kz-text-muted, #6b7280);">Net Profit</span>
-                <strong id="sum-net" style="display: block; font-size: 1rem; color: var(--kz-text, #111827); font-weight: 700;">—</strong>
-                <span style="font-size: 0.7rem; color: #1a8f3c;">↑ 18% vs last 7 days</span>
-            </div>
-        </div>
-        <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <div style="width: 40px; height: 40px; border-radius: 10px; background: rgba(59,130,246,0.1); color: #3b82f6; display: grid; place-items: center; font-size: 1.2rem;">⏱️</div>
-            <div>
-                <span style="display: block; font-size: 0.75rem; color: var(--kz-text-muted, #6b7280);">Profit Margin</span>
-                <strong id="sum-margin" style="display: block; font-size: 1rem; color: var(--kz-text, #111827); font-weight: 700;">—</strong>
-                <span style="font-size: 0.7rem; color: #1a8f3c;">↑ 8% vs last 7 days</span>
-            </div>
-        </div>
-    </div>
-</div>
-    </div>
-    </div>
-    <div class="kz-dash-side">
-        <div class="kz-card kz-activity-widget">
-    <div class="kz-activity-header">
-        <h3>Recent Activity</h3>
-        <a href="{{ url_for('activity') }}" class="kz-activity-link">View all →</a>
-    </div>
-    <ul class="kz-activity-feed">
-        {% for act in activities[:8] %}
-        {% set act_lower = (act.action or '')|lower %}
-        <li class="kz-activity-item">
-            <div class="kz-activity-icon {% if 'sale' in act_lower %}sale{% elif 'expense' in act_lower or 'delete' in act_lower %}expense{% elif 'stock' in act_lower or 'product' in act_lower %}stock{% elif 'customer' in act_lower %}customer{% else %}default{% endif %}">
-                <i data-lucide="{% if 'sale' in act_lower %}shopping-cart{% elif 'expense' in act_lower %}receipt{% elif 'stock' in act_lower %}package{% elif 'customer' in act_lower %}user-plus{% else %}activity{% endif %}"></i>
-            </div>
-            <div class="kz-activity-body">
-                <div class="kz-activity-action">{{ act.action }}</div>
-                {% if act.details %}
-                <div class="kz-activity-detail">{{ act.details }}</div>
-                {% endif %}
-                <div class="kz-activity-time">{{ act.created_at|timesince }}</div>
-            </div>
-        </li>
-        {% else %}
-        <li class="kz-activity-empty">No activity yet.</li>
-        {% endfor %}
-    </ul>
-</div>
-    </div>
-</div>
-    <script>
 document.addEventListener('DOMContentLoaded', function() {
-    try {
-        if (typeof Chart === 'undefined') return;
-        
-        if (typeof ChartDataLabels !== 'undefined') {
-            Chart.register(ChartDataLabels);
+  const ctx = document.getElementById('incomeExpenseChart');
+  if (ctx && typeof Chart !== 'undefined') {
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: ['May 1','May 5','May 9','May 13','May 16'],
+        datasets: [
+          { label: 'Income', data: [2.1, 4.2, 6.1, 7.4, 9.2], borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.12)', tension: 0.35, fill: true, pointRadius: 3, pointBackgroundColor: '#22c55e' },
+          { label: 'Expenses', data: [1.0, 1.8, 2.4, 3.1, 3.5], borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.05)', tension: 0.35, fill: true, pointRadius: 3, pointBackgroundColor: '#ef4444' }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { labels: { color: '#8fa396', font: { size: 11 } } } },
+        scales: {
+          x: { ticks: { color: '#5d6e64', font: { size: 10 } }, grid: { color: '#1e2a24' } },
+          y: { ticks: { color: '#5d6e64', font: { size: 10 }, callback: v => v + 'M' }, grid: { color: '#1e2a24' } }
         }
-
-        const canvas = document.getElementById('salesTrendChart');
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-
-        const salesTrendData = {{ snap.sales.trend_7 | default({}) | tojson | safe }};
-        const expenseData = {{ snap.books.expense_by_date | default({}) | tojson | safe }};
-        
-        const labels = Object.keys(salesTrendData).sort();
-        
-        const displayLabels = labels.map(d => {
-            const parts = d.split('-');
-            if (parts.length === 3) {
-                const dateObj = new Date(d);
-                return `${parseInt(parts[2])} ${dateObj.toLocaleString('default', { month: 'short' })}`;
-            }
-            return d;
-        });
-
-        const salesValues = labels.map(d => salesTrendData[d] || 0);
-        const expenseValues = labels.map(d => expenseData[d] || 0);
-
-        const totalSales = salesValues.reduce((a, b) => a + b, 0);
-        const totalExpenses = expenseValues.reduce((a, b) => a + b, 0);
-        const netProfit = totalSales - totalExpenses;
-        const margin = totalSales > 0 ? ((netProfit / totalSales) * 100).toFixed(1) : 0;
-
-        const kpiExp = document.getElementById('kpi-expenses');
-        if (kpiExp) kpiExp.textContent = window.kazeMoney(totalExpenses);
-        
-        const sumSales = document.getElementById('sum-sales');
-        if (sumSales) sumSales.textContent = window.kazeMoney(totalSales);
-        
-        const sumExp = document.getElementById('sum-expenses');
-        if (sumExp) sumExp.textContent = window.kazeMoney(totalExpenses);
-        
-        const sumNet = document.getElementById('sum-net');
-        if (sumNet) sumNet.textContent = window.kazeMoney(netProfit);
-        
-        const sumMargin = document.getElementById('sum-margin');
-        if (sumMargin) sumMargin.textContent = margin + '%';
-
-        new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: displayLabels,
-                datasets: [
-                    {
-                        type: 'line',
-                        label: 'Sales',
-                        data: salesValues,
-                        borderColor: '#1a8f3c',
-                        backgroundColor: 'transparent',
-                        borderWidth: 3,
-                        tension: 0.3,
-                        pointBackgroundColor: '#ffffff',
-                        pointBorderColor: '#1a8f3c',
-                        pointBorderWidth: 2,
-                        pointRadius: 5,
-                        pointHoverRadius: 7,
-                        order: 0,
-                        datalabels: {
-                            align: 'top', anchor: 'end', offset: 6, color: '#1a8f3c', font: { weight: 'bold', size: 11 },
-                            formatter: (val) => val > 0 ? (val >= 1000 ? (val/1000).toFixed(0) + 'K' : val) : ''
-                        }
-                    },
-                    {
-                        type: 'bar',
-                        label: 'Expenses',
-                        data: expenseValues,
-                        backgroundColor: '#1e293b',
-                        borderRadius: 4,
-                        barPercentage: 0.7,
-                        categoryPercentage: 0.6,
-                        order: 1,
-                        datalabels: {
-                            align: 'top', anchor: 'end', offset: 6, color: '#64748b', font: { weight: 'bold', size: 11 },
-                            formatter: (val) => val > 0 ? (val >= 1000 ? (val/1000).toFixed(0) + 'K' : val) : ''
-                        }
-                    }
-                ]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                layout: { padding: { top: 20 } },
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        backgroundColor: '#1e293b', padding: 12,
-                        callbacks: {
-                            label: function(context) {
-                                return context.dataset.label + ': ' + window.kazeMoney(context.parsed.y);
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: { grid: { display: false }, ticks: { color: '#6b7280', font: { size: 11 }, maxRotation: 0 } },
-                    y: { grid: { color: '#f3f4f6', borderDash: [5, 5] }, ticks: { color: '#6b7280', font: { size: 11 }, callback: function(value) { return value >= 1000 ? (value / 1000) + 'K' : value; } } }
-                }
-            }
-        });
-    } catch (error) {
-        console.error('KAZE Chart Error: ', error);
-    }
+      }
+    });
+  }
+  const donut = document.getElementById('cashDonut');
+  if (donut && typeof Chart !== 'undefined') {
+    new Chart(donut, {
+      type: 'doughnut',
+      data: { datasets: [{ data: [65, 35], backgroundColor: ['#22c55e', '#ef4444'], borderWidth: 0 }] },
+      options: { responsive: false, plugins: { legend: { display: false } }, cutout: '70%' }
+    });
+  }
 });
 </script>
-    {% endif %}
-
-    {% if snap.sales.top_products %}
-    <div class="widget">
-        <h2>Top products</h2>
-        <div class="table-wrapper">
-            <table>
-                <thead><tr><th>Product</th><th>Tickets</th><th>Units</th><th>Revenue</th><th>Profit</th></tr></thead>
-                <tbody>
-                {% for item in snap.sales.top_products %}
-                <tr>
-                    <td>{{ item.name }}</td>
-                    <td>{{ item.tickets }}</td>
-                    <td>{{ item.units }}</td>
-                    <td>{{ money(item.revenue) }}</td>
-                    <td class="{% if item.profit >= 0 %}income-amount{% else %}expense-amount{% endif %}">{{ money(item.profit) }}</td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-    {% endif %}
-
-    <h2>Recent sales</h2>
-    <div class="table-wrapper">
-        <table>
-            <thead>
-                <tr><th>Date</th><th>Product</th><th>Customer</th><th>Qty</th><th>Revenue</th><th>Profit</th></tr>
-            </thead>
-            <tbody>
-            {% for sale in snap.sales.recent %}
-            <tr>
-                <td>{{ sale.sale_date }}</td>
-                <td>{{ sale.product_name }}</td>
-                <td>{{ sale.customer_name }}</td>
-                <td>{{ sale.quantity_sold }}</td>
-                <td class="income-amount">{{ money(sale.total_amount) }}</td>
-                <td class="{% if sale.profit >= 0 %}profit-positive{% else %}profit-negative{% endif %}">{{ money(sale.profit) }}</td>
-            </tr>
-            {% else %}
-            <tr><td colspan="6">No sales recorded yet.</td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</section>
-
-<section class="dash-panel" id="panel-books">
-    
-    <details class="kz-dash-secondary">
-        <summary>
-            <span>Income &amp; Expenses summary</span>
-            <span class="kz-secondary-hint">Other income · Expenses · Net · Cash drawer</span>
-        </summary>
-        <div class="kz-dash-secondary-body">
-            <div class="summary-container">
-        <div class="summary-card">
-            <h3>Other income</h3>
-            <div class="amount income-amount" data-count-to="{{ total_income }}">{{ money(0) }}</div>
-            <p class="card-hint">Not till sales</p>
-        </div>
-        <div class="summary-card">
-            <h3>Expenses</h3>
-            <div class="amount expense-amount" data-count-to="{{ total_expenses }}">{{ money(0) }}</div>
-            <p class="card-hint">All recorded costs</p>
-        </div>
-        <div class="summary-card">
-            <h3>Books net</h3>
-            <div class="amount {% if (total_income - total_expenses) >= 0 %}profit-positive{% else %}profit-negative{% endif %}">{{ money(total_income - total_expenses) }}</div>
-            <p class="card-hint">Income minus expenses</p>
-        </div>
-        <div class="summary-card">
-            <h3>Cash drawer net</h3>
-            <div class="amount">{{ money(cash_net) }}</div>
-            <p class="card-hint">Cash in minus cash out</p>
-        </div>
-    </div>
-        </div>
-    </details>
-    {% if income or expenses %}
-    <div class="chart-container">
-        <canvas id="financeChart"></canvas>
-    </div>
-    <script>
-        const incomeData = {{ income_by_date | tojson }};
-        const expenseData = {{ expense_by_date | tojson }};
-        const allDates = [...new Set([...Object.keys(incomeData), ...Object.keys(expenseData)])].sort();
-        const incomeValues = allDates.map(date => incomeData[date] || 0);
-        const expenseValues = allDates.map(date => expenseData[date] || 0);
-        const ctx = document.getElementById('financeChart').getContext('2d');
-        new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: allDates,
-                datasets: [
-                    { label: 'Income', data: incomeValues, borderColor: '#28a745', backgroundColor: 'rgba(40, 167, 69, 0.1)', tension: 0.4, fill: true },
-                    { label: 'Expenses', data: expenseValues, borderColor: '#dc3545', backgroundColor: 'rgba(220, 53, 69, 0.1)', tension: 0.4, fill: true }
-                ]
-            },
-            options: {
-                responsive: true,
-                plugins: { legend: { position: 'top' }, title: { display: true, text: 'Other income vs expenses' } },
-                scales: { y: { beginAtZero: true, ticks: { callback: value => window.kazeMoney(value) } } }
-            }
-        });
-    </script>
-    {% endif %}
-
-    <div class="action-buttons">
-        <details>
-            <summary style="cursor: pointer; padding: 10px 20px; background: #28a745; color: white; border-radius: 10px; display: inline-block;">
-                Add other income
-            </summary>
-            <div style="margin-top: 1rem;">
-                <form method="POST" action="{{ url_for('add_income') }}">
-                    <div class="form-group">
-                        <input type="text" name="source" placeholder="Source (e.g., Client A)" required>
-                    </div>
-                    <div class="form-group">
-                        <input type="number" step="0.01" name="amount" placeholder="Amount" min="0" required>
-                    </div>
-                    <div class="form-group">
-                        <input type="date" name="date">
-                    </div>
-                    <button type="submit">Add Income</button>
-                </form>
-            </div>
-        </details>
-        <details>
-            <summary style="cursor: pointer; padding: 10px 20px; background: #dc3545; color: white; border-radius: 10px; display: inline-block;">
-                Add expense
-            </summary>
-            <div style="margin-top: 1rem;">
-                <form method="POST" action="{{ url_for('add_expense') }}">
-                    <div class="form-group">
-                        <input type="text" name="name" placeholder="Expense name" required>
-                    </div>
-                    <div class="form-group">
-                        <input type="number" step="0.01" name="amount" placeholder="Amount" min="0" required>
-                    </div>
-                    <div class="form-group">
-                        <select name="category">
-                            <option>Food</option>
-                            <option>Rent</option>
-                            <option>Supplies</option>
-                            <option>Marketing</option>
-                            <option>Other</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <input type="date" name="date">
-                    </div>
-                    <button type="submit">Add Expense</button>
-                </form>
-            </div>
-        </details>
-
-<details class="multi-wrap">
-    <summary>Add several income lines</summary>
-    <div>
-        <form method="POST" action="{{ url_for('multi_add', kind='income') }}">
-            <div class="table-wrapper">
-            <table class="multi-table" id="multiInc">
-                <thead><tr><th>Source</th><th>Amount</th><th>Date</th><th></th></tr></thead>
-                <tbody>
-                {% for _ in range(3) %}
-                <tr class="multi-row">
-                    <td><input type="text" name="source" placeholder="Source"></td>
-                    <td><input type="number" step="0.01" min="0" name="amount"></td>
-                    <td><input type="date" name="date"></td>
-                    <td><button type="button" class="btn-secondary multi-row-del" onclick="kazeDelRow(this)">×</button></td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-            </div>
-            <div class="multi-actions">
-                <button type="button" class="btn-secondary" onclick="kazeAddRow('multiInc')">+ Row</button>
-                <button type="submit">Save all income</button>
-            </div>
-        </form>
-    </div>
-</details>
-<details class="multi-wrap">
-    <summary>Add several expenses</summary>
-    <div>
-        <form method="POST" action="{{ url_for('multi_add', kind='expenses') }}">
-            <div class="table-wrapper">
-            <table class="multi-table" id="multiExp">
-                <thead><tr><th>Name</th><th>Amount</th><th>Category</th><th>Date</th><th></th></tr></thead>
-                <tbody>
-                {% for _ in range(3) %}
-                <tr class="multi-row">
-                    <td><input type="text" name="name" placeholder="Expense"></td>
-                    <td><input type="number" step="0.01" min="0" name="amount"></td>
-                    <td>
-                        <select name="category">
-                            <option>Food</option><option>Rent</option><option>Supplies</option><option>Marketing</option><option>Other</option>
-                        </select>
-                    </td>
-                    <td><input type="date" name="date"></td>
-                    <td><button type="button" class="btn-secondary multi-row-del" onclick="kazeDelRow(this)">×</button></td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-            </div>
-            <div class="multi-actions">
-                <button type="button" class="btn-secondary" onclick="kazeAddRow('multiExp')">+ Row</button>
-                <button type="submit">Save all expenses</button>
-            </div>
-        </form>
-    </div>
-</details>
-
-    </div>
-
-    <h2>Income history</h2>
-    <div class="table-wrapper">
-        <table>
-            <thead>
-                <tr><th>Source</th><th>Amount</th><th>Date</th><th>Action</th></tr>
-            </thead>
-            <tbody>
-                {% for item in income %}
-                <tr>
-                    <td>{{ item.source }}</td>
-                    <td class="income-amount">{{ money(item.amount) }}</td>
-                    <td>{{ item.date }}</td>
-                    <td><a href="{{ url_for('delete_income', id=item.id) }}" class="delete-btn" onclick="return confirm('Delete this income?')">Delete</a></td>
-                </tr>
-                {% else %}
-                <tr><td colspan="4">No other income recorded</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-
-    <h2>Expense history</h2>
-    <div class="table-wrapper">
-        <table>
-            <thead>
-                <tr><th>Name</th><th>Amount</th><th>Category</th><th>Date</th><th>Action</th></tr>
-            </thead>
-            <tbody>
-                {% for item in expenses %}
-                <tr>
-                    <td>{{ item.name }}</td>
-                    <td class="expense-amount">{{ money(item.amount) }}</td>
-                    <td>{{ item.category }}</td>
-                    <td>{{ item.date }}</td>
-                    <td><a href="{{ url_for('delete_expense', id=item.id) }}" class="delete-btn" onclick="return confirm('Delete this expense?')">Delete</a></td>
-                </tr>
-                {% else %}
-                <tr><td colspan="5">No expenses recorded</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</section>
-
-<details class="kz-dash-secondary">
-    <summary>
-        <span>More widgets</span>
-        <span class="kz-secondary-hint">Low stock · Upcoming services · Open tasks · Coming up</span>
-    </summary>
-    <div class="kz-dash-secondary-body">
-        {% if mode_on('stock') and user_settings and user_settings.show_low_stock_widget %}
-{% if low_stock_items %}<div data-kaze-sound="low_stock" data-kaze-once="1" hidden></div>{% endif %}
-<div class="widget">
-    <h2>Low stock alerts</h2>
-    <div class="table-wrapper">
-        <table>
-            <thead><tr><th>Product</th><th>Quantity</th><th>Unit</th></tr></thead>
-            <tbody>
-            {% for item in low_stock_items %}
-            <tr style="background-color: var(--danger-dim);">
-                <td>{{ item.product_name }}</td>
-                <td>{{ item.quantity }}</td>
-                <td>{{ item.unit or '-' }}</td>
-            </tr>
-            {% else %}
-            <tr><td colspan="3">All stock levels are healthy.</td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-{% endif %}
-
-
-{% if mode_on('services') and upcoming_sessions %}
-<div class="widget">
-    <h2>Upcoming services</h2>
-    <ul class="activity-feed">
-        {% for s in upcoming_sessions %}
-        <li>
-            <span class="user">{{ s.service_name or 'Service' }}</span>
-            <span class="action">{{ s.customer_name or 'Walk-in' }}</span>
-            <span class="details">{{ money(s.price) }}</span>
-            <span class="time">{{ s.session_date }}{% if s.session_time %} · {{ s.session_time }}{% endif %}</span>
-        </li>
-        {% endfor %}
-    </ul>
-    <p style="margin-top:0.75rem;"><a href="{{ url_for('services') }}">All services</a></p>
-</div>
-{% endif %}
-
-
-{% if plan and plan.trial and plan.trial.active %}
-<div class="widget">
-    <h2>Trial desk</h2>
-    <p style="color:var(--text2);">CEO tools are open for {{ plan.trial.days_left }} more day{{ '' if plan.trial.days_left == 1 else 's' }}. Pay on Packages to keep a paid plan after {{ plan.trial.ends }}.</p>
-    <p><a href="{{ url_for('plans') }}">Packages</a></p>
-</div>
-{% elif plan and plan.key not in ['ceo', 'founder'] %}
-<div class="widget">
-    <h2>{{ plan.label }} package</h2>
-    <p style="color:var(--text2);">{{ plan.tagline }} Some modules stay off until you pay to unlock a higher package.</p>
-    <p><a href="{{ url_for('plans') }}">See all packages</a></p>
-</div>
-{% endif %}
-
-{% if mode_on('workspace') and open_tasks %}
-<div class="widget">
-    <h2>Open tasks</h2>
-    <ul class="activity-feed">
-        {% for task in open_tasks %}
-        <li>
-            <span class="user">{{ task.title }}</span>
-            <span class="details">{{ task.priority }}{% if task.due_date %} · due {{ task.due_date }}{% endif %}</span>
-            <span class="time"><a href="{{ url_for('toggle_task', id=task.id) }}">Complete</a></span>
-        </li>
-        {% endfor %}
-    </ul>
-    <p style="margin-top:0.75rem;"><a href="{{ url_for('tasks') }}">All tasks</a></p>
-</div>
-{% endif %}
-
-{% if mode_on('operations') and upcoming_recurring %}
-<div class="widget">
-    <h2>Coming up</h2>
-    <ul class="activity-feed">
-        {% for item in upcoming_recurring %}
-        <li>
-            <span class="user">{{ item.name }}</span>
-            <span class="action">{{ item.item_type }}</span>
-            <span class="details">{{ money(item.amount) }}</span>
-            <span class="time">{{ item.next_run_date }}</span>
-        </li>
-        {% endfor %}
-    </ul>
-    <p style="margin-top:0.75rem;"><a href="{{ url_for('calendar') }}">Full calendar</a></p>
-</div>
-{% endif %}
-    </div>
-</details>
-
-
-
-<div class="pl-board {% if pl.status == 'profit' %}is-profit{% elif pl.status == 'loss' %}is-loss{% endif %}">
-    <div>
-        <h2 style="margin:0 0 4px;">Profit / loss</h2>
-        <p style="margin:0;font-size:0.85rem;color:var(--text2);">Sales profit + other income − expenses. Cash drawer is listed separately so till cash is not counted twice.</p>
-    </div>
-    <div class="pl-grid">
-        <div><span>Sales revenue</span><strong>{{ money(pl.sales_revenue) }}</strong></div>
-        <div><span>Cost of sales</span><strong>{{ money(pl.sales_cost) }}</strong></div>
-        <div><span>Sales profit</span><strong>{{ money(pl.sales_profit) }}</strong></div>
-        <div><span>Other income</span><strong>{{ money(pl.other_income) }}</strong></div>
-        <div><span>Expenses</span><strong>{{ money(pl.expenses) }}</strong></div>
-        <div><span>Cash drawer net</span><strong>{{ money(pl.cash_net) }}</strong></div>
-    </div>
-    <div class="pl-total">
-        <span>{{ pl.label }}</span>
-        <strong class="{% if pl.operating >= 0 %}profit-positive{% else %}profit-negative{% endif %}">{{ money(pl.operating) }}</strong>
-    </div>
-</div>
-
-<style>
-    .dash-tabs { display:flex; gap:8px; margin: 0.4rem 0 1rem; flex-wrap:wrap; }
-    .dash-tab {
-        border:1px solid var(--border); background:var(--surface); color:var(--text2);
-        border-radius:999px; padding:8px 16px; cursor:pointer; font-weight:700;
-    }
-    .dash-tab.is-on { background:var(--red-glow); border-color:var(--red-bright); color:var(--text); }
-    .dash-panel { display:none; }
-    .dash-panel.is-on { display:block; }
-    .card-hint { margin:6px 0 0; font-size:0.75rem; color:var(--text3); }
-    .pl-board {
-        margin: 1.5rem 0 0.5rem; padding: 1.1rem 1.2rem;
-        border:1px solid var(--border); border-radius:16px; background:var(--surface);
-    }
-    .pl-board.is-profit { box-shadow: inset 3px 0 0 var(--red-bright); }
-    .pl-board.is-loss { box-shadow: inset 3px 0 0 #c0392b; }
-    .pl-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:0.7rem; margin:0.9rem 0; }
-    .pl-grid span { display:block; font-size:0.72rem; color:var(--text3); text-transform:uppercase; letter-spacing:0.06em; }
-    .pl-total { display:flex; justify-content:space-between; align-items:baseline; border-top:1px solid var(--border); padding-top:0.8rem; }
-    .pl-total strong { font-size:1.6rem; }
-</style>
-<script>
-    document.querySelectorAll('.dash-tab').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.dash-tab').forEach(b => b.classList.remove('is-on'));
-            document.querySelectorAll('.dash-panel').forEach(p => p.classList.remove('is-on'));
-            btn.classList.add('is-on');
-            document.getElementById('panel-' + btn.dataset.tab).classList.add('is-on');
-        });
-    });
-</script>
-
 
 {% endblock %}
